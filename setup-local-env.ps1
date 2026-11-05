@@ -1,6 +1,7 @@
 param(
     [switch]$ResetLogin,
     [switch]$SetProviderKeys,
+    [switch]$SetReverseImageSearchKey,
     [string]$Username,
     [string]$Password
 )
@@ -52,6 +53,7 @@ if (-not $sessionSecret) {
 
 $groqKey = Read-ExistingSetting "GROQ_API_KEY"
 $geminiKey = Read-ExistingSetting "GEMINI_API_KEY"
+$serpApiKey = Read-ExistingSetting "SERPAPI_KEY"
 if ($SetProviderKeys) {
     $groqSecure = Read-Host "Enter GROQ_API_KEY" -AsSecureString
     $groqPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($groqSecure)
@@ -59,6 +61,11 @@ if ($SetProviderKeys) {
     $geminiSecure = Read-Host "Enter GEMINI_API_KEY" -AsSecureString
     $geminiPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($geminiSecure)
     try { $geminiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($geminiPtr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($geminiPtr) }
+}
+if ($SetReverseImageSearchKey) {
+    $serpSecure = Read-Host "Enter SERPAPI_KEY from your SerpApi account" -AsSecureString
+    $serpPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($serpSecure)
+    try { $serpApiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($serpPtr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($serpPtr) }
 }
 $groqModel = Read-ExistingSetting "GROQ_MODEL"
 $geminiModel = Read-ExistingSetting "GEMINI_MODEL"
@@ -73,6 +80,7 @@ $content = @(
     "GROQ_MODEL=$groqModel"
     "GEMINI_API_KEY=$geminiKey"
     "GEMINI_MODEL=$geminiModel"
+    "SERPAPI_KEY=$serpApiKey"
     "OLLAMA_BASE_URL=http://127.0.0.1:11434"
     "OLLAMA_MODEL=qwen2.5:14b"
     "OLLAMA_VISION_MODEL=gemma3:4b"

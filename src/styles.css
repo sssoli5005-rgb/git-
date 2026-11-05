@@ -1424,6 +1424,22 @@ body {
 .egypt-section#discover {
   margin-top: 24px;
 }
+.egypt-quick-start:not(.has-open-info) {
+  margin-bottom: clamp(320px, 40vh, 400px);
+}
+.egypt-quick-start.has-open-info {
+  margin-bottom: 24px;
+}
+.egypt-quick-start.has-open-info + .egypt-about-section,
+.egypt-quick-start.has-open-info + .egypt-how {
+  margin-top: 0;
+  margin-bottom: 56px;
+  padding-block: clamp(36px, 6vh, 56px);
+}
+.egypt-about-section + .egypt-section#discover,
+.egypt-how + .egypt-section#discover {
+  margin-top: 24px;
+}
 .egypt-scan-result {
   max-height: 48vh;
   font-size: 15px;

@@ -855,6 +855,9 @@ export const scannerCopy = {
       "المصادر المؤسسية ونتائج البحث مرتبطة بكلمات الصورة، لكنها لا تؤكد أن الصورة للقطعة نفسها.",
     institutionalSource: "مصدر مؤسسي مرتبط بكلمات البحث",
     noSources: "لم نعثر على مراجع مناسبة. نتيجة النموذج تظل تخمينًا أوليًا غير موثق.",
+    reverseImageSearchUnavailable: "البحث العكسي عن الصورة غير مفعّل؛ الوصف التالي ملاحظات بصرية فقط وليس تعريفًا مؤكدًا.",
+    reverseImageSearchNoMatch: "البحث البصري اشتغل، لكن ما لقيناش تطابقًا مؤكدًا في سجل وزارة السياحة والآثار؛ الوصف التالي ملاحظات بصرية فقط.",
+    reverseImageSearchFailed: "تعذر إكمال البحث العكسي عن الصورة؛ الوصف التالي ملاحظات بصرية فقط وليس تعريفًا مؤكدًا.",
   },
   en: {
     confidenceTitle: "Estimated confidence by detail",
@@ -874,6 +877,9 @@ export const scannerCopy = {
     institutionalSource: "Institutional source related to the search terms",
     noSources:
       "No relevant references were found. The model's result remains an unverified initial guess.",
+    reverseImageSearchUnavailable: "Reverse-image search is not configured; the following is a visual observation, not a confirmed identification.",
+    reverseImageSearchNoMatch: "Visual search ran but found no confirmed match in the Ministry of Tourism and Antiquities catalog; the following is a visual observation only.",
+    reverseImageSearchFailed: "Reverse-image search could not be completed; the following is a visual observation, not a confirmed identification.",
   },
   fr: {
     confidenceTitle: "Niveau de confiance estimé par détail",
@@ -893,6 +899,9 @@ export const scannerCopy = {
     institutionalSource: "Source institutionnelle liée aux termes recherchés",
     noSources:
       "Aucune référence pertinente n’a été trouvée. Le résultat reste une hypothèse non vérifiée.",
+    reverseImageSearchUnavailable: "La recherche inversée d’image n’est pas configurée ; la suite est une observation visuelle, pas une identification confirmée.",
+    reverseImageSearchNoMatch: "La recherche visuelle n’a trouvé aucune correspondance confirmée dans le catalogue du ministère ; la suite est une observation visuelle uniquement.",
+    reverseImageSearchFailed: "La recherche inversée d’image a échoué ; la suite est une observation visuelle, pas une identification confirmée.",
   },
   es: {
     confidenceTitle: "Confianza estimada por dato",
@@ -912,6 +921,9 @@ export const scannerCopy = {
     institutionalSource: "Fuente institucional relacionada con los términos de búsqueda",
     noSources:
       "No se encontraron referencias pertinentes. El resultado sigue siendo una hipótesis sin verificar.",
+    reverseImageSearchUnavailable: "La búsqueda inversa de imágenes no está configurada; lo siguiente es una observación visual, no una identificación confirmada.",
+    reverseImageSearchNoMatch: "La búsqueda visual no encontró una coincidencia confirmada en el catálogo del ministerio; lo siguiente es solo una observación visual.",
+    reverseImageSearchFailed: "No se pudo completar la búsqueda inversa; lo siguiente es una observación visual, no una identificación confirmada.",
   },
   it: {
     confidenceTitle: "Attendibilità stimata per dettaglio",
@@ -931,6 +943,9 @@ export const scannerCopy = {
     institutionalSource: "Fonte istituzionale collegata ai termini di ricerca",
     noSources:
       "Non sono stati trovati riferimenti pertinenti. Il risultato resta un’ipotesi non verificata.",
+    reverseImageSearchUnavailable: "La ricerca inversa delle immagini non è configurata; quanto segue è un’osservazione visiva, non un’identificazione confermata.",
+    reverseImageSearchNoMatch: "La ricerca visiva non ha trovato una corrispondenza confermata nel catalogo del ministero; quanto segue è solo un’osservazione visiva.",
+    reverseImageSearchFailed: "La ricerca inversa delle immagini non è riuscita; quanto segue è un’osservazione visiva, non un’identificazione confermata.",
   },
   de: {
     confidenceTitle: "Geschätzte Sicherheit je Angabe",
@@ -950,6 +965,9 @@ export const scannerCopy = {
     institutionalSource: "Institutionelle Quelle zu den Suchbegriffen",
     noSources:
       "Es wurden keine passenden Quellen gefunden. Das Ergebnis bleibt eine ungeprüfte Vermutung.",
+    reverseImageSearchUnavailable: "Die Rückwärtssuche nach Bildern ist nicht eingerichtet; das Folgende ist eine visuelle Beobachtung, keine bestätigte Identifikation.",
+    reverseImageSearchNoMatch: "Die visuelle Suche fand keinen bestätigten Treffer im Ministeriumskatalog; das Folgende ist nur eine visuelle Beobachtung.",
+    reverseImageSearchFailed: "Die Rückwärtssuche nach Bildern konnte nicht abgeschlossen werden; das Folgende ist eine visuelle Beobachtung, keine bestätigte Identifikation.",
   },
   ru: {
     confidenceTitle: "Оценка уверенности по каждому пункту",
@@ -968,6 +986,9 @@ export const scannerCopy = {
       "Источники учреждений и результаты поиска связаны с поисковыми словами изображения, но не подтверждают совпадение.",
     institutionalSource: "Источник учреждения по поисковым словам",
     noSources: "Подходящие источники не найдены. Результат остается непроверенным предположением.",
+    reverseImageSearchUnavailable: "Обратный поиск по изображению не настроен; далее приведено только визуальное наблюдение, а не подтвержденная идентификация.",
+    reverseImageSearchNoMatch: "Визуальный поиск не нашел подтвержденного совпадения в каталоге министерства; далее приведено только визуальное наблюдение.",
+    reverseImageSearchFailed: "Не удалось выполнить обратный поиск по изображению; далее приведено только визуальное наблюдение, а не подтвержденная идентификация.",
   },
   ja: {
     confidenceTitle: "項目ごとの推定信頼度",
@@ -985,6 +1006,9 @@ export const scannerCopy = {
       "機関の情報や検索結果は画像の検索語に関連するもので、写っている品との一致を確認するものではありません。",
     institutionalSource: "検索語に関連する機関の情報",
     noSources: "関連する資料は見つかりませんでした。モデルの結果は未検証の初期推定です。",
+    reverseImageSearchUnavailable: "画像の逆検索が設定されていません。以下は視覚的な観察であり、確定した識別ではありません。",
+    reverseImageSearchNoMatch: "画像検索で省庁のカタログに確認済みの一致は見つかりませんでした。以下は視覚的な観察のみです。",
+    reverseImageSearchFailed: "画像の逆検索を完了できませんでした。以下は視覚的な観察であり、確定した識別ではありません。",
   },
   zh: {
     confidenceTitle: "各项信息的估计置信度",
@@ -1001,6 +1025,9 @@ export const scannerCopy = {
     referenceDisclaimer: "机构资料和搜索结果与图像搜索词相关，但不能确认图中就是该文物。",
     institutionalSource: "与搜索词相关的机构来源",
     noSources: "未找到相关参考资料。模型结果仍是未经核实的初步猜测。",
+    reverseImageSearchUnavailable: "尚未配置图片反向搜索；以下仅为视觉观察，并非已确认的识别结果。",
+    reverseImageSearchNoMatch: "视觉搜索未在主管部门目录中找到已确认的匹配项；以下仅为视觉观察。",
+    reverseImageSearchFailed: "图片反向搜索未能完成；以下仅为视觉观察，并非已确认的识别结果。",
   },
 } as const;
 

@@ -16,6 +16,14 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("ask one short, friendly clarification");
   });
 
+  it("corrects mistaken premises and keeps answering instead of refusing or stopping", () => {
+    const prompt = buildChatSystemInstruction("ar");
+    expect(prompt).toContain("If a premise is factually wrong, gently correct it and explain the supported account");
+    expect(prompt).toContain("infer the likely intended meaning");
+    expect(prompt).toContain("provide the best supported answer");
+    expect(prompt).toContain("do not stop with a generic refusal");
+  });
+
   it("prioritizes archaeological accuracy and labels uncertainty", () => {
     const prompt = buildChatSystemInstruction("en");
     expect(prompt).toContain("Never invent an artifact's identity");
@@ -131,6 +139,14 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     const prompt = buildChatSystemInstruction("ar");
     expect(prompt).toContain("A photograph alone does not establish an object's identity");
     expect(prompt).toContain("never present a guessed reading as a confirmed translation");
+  });
+
+  it("distinguishes artistic color conventions from real skin tone and avoids overclaiming for Nefertiti", () => {
+    const prompt = buildChatSystemInstruction("ar");
+    expect(prompt).toContain("artistic color conventions");
+    expect(prompt).toContain("idealized depiction");
+    expect(prompt).toContain("Do not treat a painted Egyptian mask or statue as evidence of a person’s real skin tone");
+    expect(prompt).toContain("Nefertiti");
   });
 
   it("distinguishes a hieroglyph's reading, sound value, function, and conventional sign counts", () => {

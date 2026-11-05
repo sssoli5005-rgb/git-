@@ -91,7 +91,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
     }
   });
 
-  it("dispatches image scans with the Cloudflare AI binding", async () => {
+  it("does not return an AI artifact guess without reverse-image search", async () => {
     vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OLLAMA_BASE_URL", "");
     const run = vi.fn().mockResolvedValue({
@@ -113,9 +113,11 @@ describe("ATHARA API dispatch in the production server entry", () => {
     expect(response?.status).toBe(200);
     await expect(response?.json()).resolves.toMatchObject({
       ok: true,
-      resultType: "ai_guess",
+      analysis: "",
+      resultType: "unverified",
+      reverseImageSearchStatus: "unavailable",
     });
-    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("leaves unrelated routes to TanStack Start", () => {

@@ -2,6 +2,7 @@ const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
 const FALLBACK_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const MAX_IMAGE_CHARS = 8_500_000;
+const MAX_LENS_IMAGE_BYTES = 500_000;
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
@@ -404,7 +405,27 @@ async function runGoogleLens(imageUrl, imageBytes, apiKey) {
   if (typeof imageUrl === "string" && /^https?:\/\//i.test(imageUrl)) {
     url.searchParams.set("url", imageUrl);
   } else if (Array.isArray(imageBytes) && imageBytes.length) {
-    url.searchParams.set("image_content", bytesToBase64(imageBytes));
+    if (imageBytes.length > MAX_LENS_IMAGE_BYTES) {
+      throw new Error("SerpApi image upload exceeds the 500 KB limit.");
+    }
+    const formData = new FormData();
+    formData.set(
+      "image",
+      new Blob([Uint8Array.from(imageBytes)], { type: detectImageMimeType(imageBytes) }),
+      "scan-image",
+    );
+    formData.set("api_key", apiKey.trim());
+    const uploadResponse = await fetch("https://serpapi.com/image", {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!uploadResponse.ok) throw new Error(`SerpApi image upload returned HTTP ${uploadResponse.status}`);
+    const uploadData = await uploadResponse.json();
+    if (typeof uploadData?.image_id !== "string" || !uploadData.image_id) {
+      throw new Error("SerpApi image upload did not return an image_id.");
+    }
+    url.searchParams.set("image_id", uploadData.image_id);
   } else {
     return null;
   }
@@ -521,6 +542,12 @@ function applyKnownArtifactCorrections(observation, recognitionEngines = []) {
     publicationDate: "",
     historicalVerification: "معلومات الاكتشاف والكتابة والتاريخ يجب التحقق منها ضد سجل المتحف البريطاني والمنشورات الأكاديمية المتخصصة.",
     sourceConflicts: "",
+    possibilities: [],
+    periodClues: [],
+    writingHistory: "",
+    objectOrTextPurpose: "",
+    printedTextTranslation: "",
+    translation: "",
   };
 }
 
@@ -543,32 +570,20 @@ function applyExternalRecognitionHints(observation, recognitionEngines) {
   };
 }
 
-function applyEvidenceGuard(observation, recognitionEngines) {
-  if (observation.verifiedLocation === true) return observation;
-  const hasRecognitionMatch = recognitionEngines.some((engine) =>
-    [
-          engine.bestGuess,
-          engine.landmarks?.[0]?.name,
-          engine.matches?.[0]?.title,
-          ...(engine.matches?.map((match) => match.title) || []),
-          ...(engine.matches?.map((match) => match.source) || []),
-        ].filter(Boolean).join(" ")
-          && /abu simbel|أبو سمبل|karnak|الكرنك|rosetta stone|حجر رشيد|great pyramid|الأهرامات/i.test(
-            [
-              engine.bestGuess,
-              engine.landmarks?.[0]?.name,
-              engine.matches?.[0]?.title,
-              ...(engine.matches?.map((match) => match.title) || []),
-              ...(engine.matches?.map((match) => match.source) || []),
-            ].filter(Boolean).join(" "),
-          ),
-  );
-  if (hasRecognitionMatch) return { ...observation, historicalEvidenceConfirmed: true };
+function applyEvidenceGuard(observation, hasOfficialVisualMatch) {
+  if (hasOfficialVisualMatch) return observation;
   return {
     ...observation,
     identity: "",
     identityEvidence: "",
     historicalEvidenceConfirmed: false,
+    verifiedLocation: false,
+    country: "",
+    city: "",
+    place: "",
+    siteLocation: "",
+    placeEvidence: "",
+    placeType: "",
     period: "",
     builder: "",
     creator: "",
@@ -586,6 +601,194 @@ function applyEvidenceGuard(observation, recognitionEngines) {
     historicalVerification: "",
     sourceConflicts: "",
   };
+}
+
+function canonicalOfficialArchiveUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !/(^|\.)egymonuments\.gov\.eg$/i.test(url.hostname)) return "";
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.search = "";
+    url.hash = "";
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function findOfficialVisualMatch(catalog, recognitionEngines, mode) {
+  const visualResults = recognitionEngines.flatMap((engine) => {
+    const results = engine.engine === "google_vision"
+      ? engine.pages || []
+      : engine.engine === "google_lens"
+        ? engine.matches || []
+        : [];
+    return results.map((result) => ({
+      url: canonicalOfficialArchiveUrl(result.url),
+      engine: engine.engine,
+    }));
+  }).filter((result) => result.url);
+
+  for (const result of visualResults) {
+    const item = catalog.find((record) => {
+      if (record.mode !== mode && record.mode !== "both") return false;
+      const officialRecordUrl = canonicalOfficialArchiveUrl(record.sourceUrl);
+      if (!officialRecordUrl) return false;
+      const recordUrls = [officialRecordUrl, ...(record.imageUrls || [])]
+        .map(canonicalOfficialArchiveUrl)
+        .filter(Boolean);
+      return recordUrls.includes(result.url);
+    });
+    if (item) return { item, ...result };
+  }
+  return null;
+}
+
+const GENERIC_IMAGE_SEARCH_TERMS = new Set([
+  "مصر", "مصرية", "مصري", "اثار", "اثر", "قديم", "قديمة", "فرعوني", "حجر", "تمثال", "معبد", "نقش",
+  "egypt", "egyptian", "ancient", "artifact", "statue", "temple", "stone", "tomb", "monument",
+]);
+
+function rankOfficialCatalogCandidates(catalog, observation) {
+  const queryText = [
+    observation.visualDescription,
+    observation.sceneDescription,
+    observation.objectType,
+    observation.printedLabels,
+    observation.visibleText,
+    ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation.keywords) ? observation.keywords : []),
+  ].filter(Boolean).join(" ");
+  const queryTerms = normalizeSearchTerms(queryText)
+    .filter((term) => !GENERIC_IMAGE_SEARCH_TERMS.has(term));
+  if (queryTerms.length < 2) return [];
+
+  return catalog
+    .filter((record) => {
+      if (record.mode !== "objects" && record.mode !== "both") return false;
+      if (!canonicalOfficialArchiveUrl(record.sourceUrl)) return false;
+      return (record.imageUrls || []).some((imageUrl) => {
+        const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
+        return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
+      });
+    })
+    .map((record) => {
+      const titleTerms = new Set(normalizeSearchTerms(
+        [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),
+      ));
+      const descriptionTerms = new Set(normalizeSearchTerms(record.description));
+      const titleMatches = queryTerms.filter((term) => titleTerms.has(term));
+      const descriptionMatches = queryTerms.filter((term) => descriptionTerms.has(term));
+      const score = titleMatches.length * 4 + descriptionMatches.length;
+      return { record, score, titleMatches, descriptionMatches };
+    })
+    .filter((candidate) => candidate.titleMatches.length > 0 || candidate.descriptionMatches.length >= 2)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4);
+}
+
+async function findCachedOfficialImage(record) {
+  const officialImageUrls = (record.imageUrls || []).filter((imageUrl) => {
+    const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
+    return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
+  });
+  const localImageUrls = Array.isArray(record.localImageUrls) ? record.localImageUrls : [];
+  for (const imageUrl of officialImageUrls) {
+    const imageIndex = record.imageUrls.indexOf(imageUrl);
+    if (record.imageUrls.length === localImageUrls.length && localImageUrls[imageIndex]) {
+      return { imageUrl, localUrl: localImageUrls[imageIndex] };
+    }
+    if (!globalThis.crypto?.subtle) continue;
+    const digest = await globalThis.crypto.subtle.digest(
+      "SHA-1",
+      new TextEncoder().encode(imageUrl),
+    );
+    const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const localUrl = `/egypt-monuments-images/${hash}.jpg`;
+    if (localImageUrls.includes(localUrl)) return { imageUrl, localUrl };
+  }
+  return null;
+}
+
+async function loadOfficialCandidateImages(candidates, assets) {
+  const loaded = [];
+  for (const candidate of candidates) {
+    const reference = await findCachedOfficialImage(candidate.record);
+    if (!reference) continue;
+    let response;
+    if (typeof assets?.fetch === "function") {
+      try {
+        response = await assets.fetch(new URL(reference.localUrl, "https://athara.local").toString());
+      } catch {
+        response = null;
+      }
+    }
+    if (!response?.ok) {
+      try {
+        response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
+      } catch {
+        response = null;
+      }
+    }
+    if (!response?.ok) continue;
+    const buffer = await response.arrayBuffer();
+    if (!buffer.byteLength || buffer.byteLength > 1_500_000) continue;
+    loaded.push({
+      label: `R${loaded.length + 1}`,
+      item: candidate.record,
+      imageBytes: Array.from(new Uint8Array(buffer)),
+    });
+    if (loaded.length === 3) break;
+  }
+  return loaded;
+}
+
+async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, model) {
+  if (!apiKey || !candidates.length || imageBytes.length > 2_000_000) return null;
+  const parts = [
+    {
+      text: "الصورة الأولى هي صورة الزائر. الصور التالية صور مرجعية من كتالوج وزارة السياحة والآثار، ولكل صورة رمز قصير قبلها. قارن الصور بصريًا فقط. اختر مرجعًا إذا أظهرت الصور نفس الأثر أو المبنى المميز بوضوح، حتى لو اختلفت زاوية التصوير. لا تعتبر التشابه العام أو كونها آثارًا مصرية تطابقًا. لا تستخدم معرفتك السابقة بالأسماء أو العصور، ولا تخمّن. عند عدم وجود تطابق واضح أعد matchId=none. أعد JSON فقط بالشكل: {\"matchId\":\"R1 أو R2 أو R3 أو none\",\"matchStrength\":\"high أو uncertain أو none\",\"visualEvidence\":[\"علامة مرئية مميزة أولى\",\"علامة مرئية مميزة ثانية\"]}. استخدم high فقط عند وجود علامتين بصريتين مميزتين على الأقل.",
+    },
+    { inlineData: { mimeType: detectImageMimeType(imageBytes), data: bytesToBase64(imageBytes) } },
+  ];
+  for (const candidate of candidates) {
+    parts.push({ text: `الصورة المرجعية ${candidate.label}:` });
+    parts.push({
+      inlineData: {
+        mimeType: detectImageMimeType(candidate.imageBytes),
+        data: bytesToBase64(candidate.imageBytes),
+      },
+    });
+  }
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Gemini catalog comparison returned HTTP ${response.status}`);
+  const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join("") || "";
+  const jsonText = text.match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) return null;
+  let result;
+  try {
+    result = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  if (result.matchStrength !== "high" || !Array.isArray(result.visualEvidence) || result.visualEvidence.length < 2) {
+    return null;
+  }
+  const matched = candidates.find((candidate) => candidate.label === result.matchId);
+  return matched ? { item: matched.item, url: matched.item.sourceUrl, engine: "Gemini official catalog comparison" } : null;
 }
 
 function confidenceLevel(value) {
@@ -737,6 +940,7 @@ async function searchHeritageSources(query, language = "ar") {
   const responses = await Promise.allSettled(
     urls.map((url) => fetch(url, { headers, signal: AbortSignal.timeout(4500) })),
   );
+  const officialSources = await searchOfficialMonumentsArchive(q);
   const results = [];
   const trustedCandidates = [];
   let wikipediaAvailable = responses[0].status === "fulfilled" && responses[0].value.ok;
@@ -887,9 +1091,14 @@ async function searchHeritageSources(query, language = "ar") {
       });
     }
   }
+  const dedupedSources = [...new Map([
+    ...officialSources.map((source) => [source.url, { ...source, trusted: true }]),
+    ...trustedSources.map((source) => [source.url, source]),
+    ...results.map((source) => [source.url, source]),
+  ].filter(([, value]) => Boolean(value?.url))).values()].slice(0, 8);
   return {
-    sources: [...trustedSources, ...results].slice(0, 8),
-    trustedSourcesAvailable: trustedSources.length > 0,
+    sources: dedupedSources,
+    trustedSourcesAvailable: trustedSources.length > 0 || officialSources.length > 0,
     wikipediaAvailable,
   };
 }
@@ -901,6 +1110,83 @@ function relatedSourceSummary(sources, language) {
     SOURCE_EVIDENCE_LABELS[language] || SOURCE_EVIDENCE_LABELS.en,
     ...trustedSources.map((source) => "- " + source.title + ": " + (source.supportedClaim || source.snippet || "")),
   ].join("\n");
+}
+
+function normalizeSearchTerms(value) {
+  return String(value || "")
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(/\s+/)
+    .filter((term) => term.length > 2)
+    .filter((term, index, terms) => terms.indexOf(term) === index);
+}
+
+async function searchOfficialMonumentsArchive(query) {
+  const terms = normalizeSearchTerms(query);
+  if (!terms.length) return [];
+  const egyptianSignals = /مصر|فرعون|هرم|معبد|تمثال|مقبرة|نقش|اثر|آثار|اثار|سقارة|الاقصر|اسوان|أبو سمبل|دهشور|ابو سمبل|متحف|pyramid|temple|statue|tomb|artifact|egypt|pharaoh|hieroglyph|obelisk|mummy/i;
+  if (!egyptianSignals.test(query)) return [];
+  const fetchOptions = {
+    headers: { accept: "text/html,application/xhtml+xml", "user-agent": "ATHARA-Heritage-Guide/1.0" },
+    signal: AbortSignal.timeout(6000),
+  };
+  const pageUrls = [
+    "https://egymonuments.gov.eg/ar/monuments",
+    "https://egymonuments.gov.eg/ar/archaeological-sites",
+    "https://egymonuments.gov.eg/ar/museums",
+  ];
+  const results = new Map();
+  for (const pageUrl of pageUrls) {
+    try {
+      const response = await fetch(pageUrl, fetchOptions);
+      if (!response.ok) continue;
+      const html = await response.text();
+      const anchors = [...html.matchAll(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+      for (const match of anchors) {
+        const href = String(match[1] || "").trim();
+        const label = String(match[2] || "")
+          .replace(/<[^>]*>/g, " ")
+          .replace(/&nbsp;/gi, " ")
+          .replace(/&amp;/gi, "&")
+          .replace(/&quot;/gi, '"')
+          .replace(/&#39;|&apos;/gi, "'")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!href || !label) continue;
+        let resolvedUrl = href;
+        if (!/^https?:\/\//i.test(href)) {
+          resolvedUrl = href.startsWith("/") ? "https://egymonuments.gov.eg" + href : href;
+        }
+        try {
+          const nextUrl = new URL(resolvedUrl);
+          if (!/egymonuments\.gov\.eg$/i.test(nextUrl.hostname) && !nextUrl.hostname.endsWith(".egymonuments.gov.eg")) continue;
+          const normalizedLabel = normalizeSearchTerms(label).join(" ");
+          const labelMatches = terms.filter((term) => normalizedLabel.includes(term));
+          if (!labelMatches.length && !terms.some((term) => nextUrl.pathname.toLowerCase().includes(term))) continue;
+          const snippet = label.length > 180 ? label.slice(0, 180) : label;
+          if (!results.has(nextUrl.href)) {
+            results.set(nextUrl.href, {
+              title: label,
+              url: nextUrl.href,
+              snippet,
+              source: "egymonuments.gov.eg",
+              trusted: true,
+            });
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  return [...results.values()].slice(0, 6);
 }
 
 async function readLimitedHtml(response, maxBytes) {
@@ -928,6 +1214,8 @@ export default {
     if (url.pathname === "/api/health" && request.method === "GET") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const googleVisionConfigured = typeof env.GOOGLE_VISION_API_KEY === "string" && Boolean(env.GOOGLE_VISION_API_KEY.trim());
+      const googleLensConfigured = typeof env.SERPAPI_KEY === "string" && Boolean(env.SERPAPI_KEY.trim());
       return json({
         ok: true,
         service: "ATHARA",
@@ -938,6 +1226,11 @@ export default {
           { name: "Qwen2.5-VL", configured: typeof env.OLLAMA_BASE_URL === "string" && Boolean(env.OLLAMA_BASE_URL.trim()), model: env.QWEN_VISION_MODEL || "qwen2.5vl:7b", license: "Apache-2.0" },
           { name: "InternVL3", configured: typeof env.OLLAMA_BASE_URL === "string" && Boolean(env.OLLAMA_BASE_URL.trim()), model: env.INTERNVL_VISION_MODEL || "internvl3:8b", license: "Apache-2.0/Qwen license" },
         ],
+        reverseImageSearch: {
+          googleVision: googleVisionConfigured,
+          googleLens: googleLensConfigured,
+          officialCatalogGemini: geminiConfigured,
+        },
         visionModel: geminiConfigured
           ? env.GEMINI_VISION_MODEL || "gemini-2.5-flash"
           : localOllama
@@ -1029,12 +1322,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
     if (url.pathname === "/api/scan" && request.method === "POST") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
-      if (!env.AI && !localOllama && !geminiConfigured) {
-        return json(
-          { error: "ماسح الصور يحتاج ربط Cloudflare Workers AI. تأكد من إعداد ربط AI في Worker." },
-          503,
-        );
-      }
       let body;
       try {
         body = await request.json();
@@ -1046,6 +1333,15 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
+      const googleVisionConfigured = typeof env.GOOGLE_VISION_API_KEY === "string" && Boolean(env.GOOGLE_VISION_API_KEY.trim());
+      const googleLensConfigured = typeof env.SERPAPI_KEY === "string" && Boolean(env.SERPAPI_KEY.trim());
+      const reverseImageSearchConfigured = googleVisionConfigured || googleLensConfigured || geminiConfigured;
+      if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
+        return json(
+          { error: "ماسح الصور يحتاج ربط خدمة تحليل صور. تأكد من إعداد Gemini أو Workers AI." },
+          503,
+        );
+      }
       const documentImage = mode === "hieroglyphs" ? body?.documentImage : undefined;
       if (typeof image !== "string")
         return json({ error: "ابعت صورة بصيغة JPG أو PNG أو WebP." }, 400);
@@ -1097,6 +1393,33 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         return json({ error: "ملف الصورة تالف أو غير صالح." }, 400);
       }
       if (!imageBytes.length) return json({ error: "الصورة فاضية." }, 400);
+      if (mode === "objects" && !reverseImageSearchConfigured) {
+        return json({
+          ok: true,
+          analysis: "",
+          resultType: "unverified",
+          reverseImageSearchStatus: "unavailable",
+          sources: [],
+          trustedSourcesAvailable: false,
+          wikipediaAvailable: null,
+        });
+      }
+      let lensImageBytes = imageBytes.length <= MAX_LENS_IMAGE_BYTES ? imageBytes : null;
+      if (body?.searchImage !== undefined) {
+        if (typeof body.searchImage !== "string" || body.searchImage.length > 700_000) {
+          return json({ error: "نسخة البحث البصري غير صالحة أو كبيرة." }, 400);
+        }
+        const searchImageMatch = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(body.searchImage);
+        if (!searchImageMatch) return json({ error: "نسخة البحث البصري بصيغة غير مدعومة." }, 400);
+        try {
+          lensImageBytes = Array.from(atob(searchImageMatch[2]), (character) => character.charCodeAt(0));
+        } catch {
+          return json({ error: "نسخة البحث البصري تالفة أو غير صالحة." }, 400);
+        }
+        if (!lensImageBytes.length || lensImageBytes.length > MAX_LENS_IMAGE_BYTES) {
+          return json({ error: "نسخة البحث البصري يجب ألا تتجاوز 500 كيلوبايت." }, 413);
+        }
+      }
       const recognitionEngines = [];
       const recognitionErrors = [];
       try {
@@ -1106,7 +1429,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         recognitionErrors.push({ engine: "google_vision", reason: String(error?.message || error).slice(0, 180) });
       }
       try {
-        const googleLens = await runGoogleLens(body?.image_url ?? body?.imageUrl, imageBytes, env.SERPAPI_KEY);
+        const googleLens = await runGoogleLens(body?.image_url ?? body?.imageUrl, lensImageBytes, env.SERPAPI_KEY);
         if (googleLens) recognitionEngines.push(googleLens);
       } catch (error) {
         recognitionErrors.push({ engine: "google_lens", reason: String(error?.message || error).slice(0, 180) });
@@ -1132,10 +1455,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         }
       }
       try {
-        const parsed =
-          typeof env.ATHARA_CATALOG_JSON === "string" ? JSON.parse(env.ATHARA_CATALOG_JSON) : [];
-        if (Array.isArray(parsed))
-          catalog = parsed
+        const parsed = typeof env.ATHARA_CATALOG_JSON === "string"
+          ? JSON.parse(env.ATHARA_CATALOG_JSON)
+          : null;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const catalogOverride = parsed
             .filter(
               (item) =>
                 item &&
@@ -1146,24 +1470,62 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 typeof item.sourceUrl === "string" &&
                 /^https:\/\//i.test(item.sourceUrl),
             );
+          if (catalogOverride.length > 0) catalog = catalogOverride;
+        }
       } catch {
         // Keep the official built-in catalog if the optional environment catalog is invalid.
       }
 
-      const normalize = (value) =>
-        String(value || "")
-          .toLocaleLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[أإآ]/g, "ا")
-          .replace(/ى/g, "ي")
-          .replace(/ة/g, "ه")
-          .replace(/[^\p{L}\p{N}]+/gu, " ")
-          .trim();
-      const tokens = (value) =>
-        normalize(value)
-          .split(/\s+/)
-          .filter((word) => word.length > 2);
+      if (mode === "objects") {
+        const officialVisualMatch = findOfficialVisualMatch(catalog, recognitionEngines, mode);
+        if (!officialVisualMatch && !geminiConfigured) {
+          return json({
+            ok: true,
+            analysis: "",
+            resultType: "unverified",
+            reverseImageSearchStatus: recognitionEngines.length > 0 ? "no_match" : "failed",
+            sources: [],
+            trustedSourcesAvailable: false,
+            wikipediaAvailable: null,
+          });
+        }
+
+        if (officialVisualMatch) {
+          const item = officialVisualMatch.item;
+          const sources = [{
+            title: item.sourceTitle,
+            url: item.sourceUrl,
+            snippet: item.description || "",
+            source: item.sourceTitle,
+            trusted: true,
+          }];
+          const answer = [
+            "مرشح تطابق بصري من سجل وزارة السياحة والآثار؛ المعلومات التالية من السجل الرسمي.",
+            "السجل الرسمي: " + item.title,
+            item.period ? "العصر/التاريخ: " + item.period : "",
+            item.description || "",
+          ].filter(Boolean).join("\n");
+          return json({
+            ok: true,
+            analysis: answer,
+            sources,
+            trustedSourcesAvailable: true,
+            wikipediaAvailable: null,
+            resultType: "reference_match",
+            confidence: "medium",
+            confidenceByField: {
+              identity: "medium",
+              place: "low",
+              period: item.period ? "medium" : "low",
+            },
+            referenceId: item.id,
+            referenceImages: Array.isArray(item.localImageUrls) ? item.localImageUrls : [],
+            matchedOfficialUrl: officialVisualMatch.url,
+            model: "ATHARA Official Visual Search",
+          });
+        }
+      }
+
       const visionPrompt =
         mode === "hieroglyphs"
           ? `أنت محلل متخصص في الكتابات والآثار المصرية القديمة؛ استفد من معرفتك الداخلية والتاريخية، حتى لو لم تتوفر مراجع على الإنترنت. اتبع هذا الترتيب: (1) حدّد هل الصورة كتابة مصرية فعلًا أم لغة/خط آخر، وميّز الهيروغليفية عن الهيراطيقية والديموطيقية واليونانية والقبطية إن أمكن؛ لا تسمّ كل كتابة قديمة هيروغليفية. (2) صف العلامات واتجاه القراءة، واقرأ فقط ما يظهر بوضوح، ثم قدّم نقلًا صوتيًا وترجمة حرفية ومعنى النص عند توافر القرائن، واذكر هل يبدو النص دينيًا أو ملكيًا أو جنائزيًا أو إداريًا أو غير ذلك ولماذا. (3) رشّح أقرب نص أو أثر معروف فقط كاحتمال مع قرينة محددة؛ لا تدّعِ تطابقًا بصريًا. (4) لا تذكر اسم موقع محدد إلا إذا كانت هناك قرينة فريدة ومقروءة في الصورة؛ الرمز الشائع أو الأسلوب الفني أو نتيجة البحث النصي لا يثبت الموقع. وإلا اترك place فارغًا واكتفِ بنوع عام مثل معبد أو مقبرة أو لوحة، مع التنبيه أن الموقع غير مؤكد. لا تخلط مكان التصوير أو العثور بمكان العرض. (5) افصل النص الظاهر عن التحقق التاريخي المستقل؛ انقل العنوان المطبوع حرفيًا في printedLabels وترجم معناه بدقة في printedTextTranslation، ولا تعتبر تاريخًا أو ملكًا مدونًا في الصورة نهائيًا قبل مقارنته بالدراسات الحديثة. افحص أسماء الملوك والأسر والمواقع من المصادر المتخصصة؛ لا تصف جبانة بأنها مدينة. اشرح وظيفة المنظر والنقش وسياقه بدقة. عند تعارض المراجع اذكر الاختلاف دون تحيز. لا تخترع قراءة أو اسمًا أو تاريخًا أو مكانًا. أنشئ searchTerms قصيرة ودقيقة، وقدّم تهجئة عربية ولاتينية للاسم فقط إذا ظهرت قرينة واضحة. أخرج JSON فقط بالشكل: {"visualDescription":"وصف ما يظهر","scriptType":"نوع اللغة أو الخط، أو غير محسوم","visibleText":"العلامات المقروءة فقط أو فارغ","printedLabels":"العنوان أو بيانات القطعة المطبوعة حرفيًا، أو فارغ","printedTextTranslation":"ترجمة دقيقة للنص الظاهر أو فارغ","transliteration":"النقل الصوتي أو فارغ","translation":"الترجمة الحرفية أو فارغ","interpretation":"المعنى والسياق المقترح أو فارغ","objectOrTextPurpose":"الغرض الوظيفي والسياق المقيد بالأدلة أو غير محسوم","identity":"أقرب نص أو أثر معروف، أو فارغ","identityEvidence":"قرينة الترشيح أو سبب تعذر المطابقة","historicalVerification":"ما ثبت تاريخيًا من المصادر المستقلة وما يُفصل عن النص الظاهر","sourceConflicts":"اختلاف موثق بين المصادر أو فارغ","place":"الموقع المحدد أو فارغ","placeType":"نوع المكان العام، لا اسم موقع، أو غير محسوم","placeEvidence":"قرينة مرئية محددة أو سبب عدم كفايتها","period":"الفترة المحتملة أو فارغ","contextualStory":"سياق تاريخي عام لا ينسب النقش إلى موقع غير مؤكد","writingHistory":"تاريخ الخط واستخداماته","siteHistory":"تاريخ نوع المكان فقط، دون ادعاء تاريخ موقع محدد غير مثبت","searchTerms":["مصطلحات قصيرة ومميزة للبحث"],"confidence":"high أو medium أو low","confidenceByField":{"inscription":"high أو medium أو low","translation":"high أو medium أو low","place":"high أو medium أو low"},"keywords":["موضوعات ظاهرة"],"periodClues":[]}. لا تدّع إجراء بحث خارجي أو ترجمة أكاديمية مؤكدة.`
@@ -1178,6 +1540,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ICONOGRAPHY_RULES +
           "\n\n" +
           visionPrompt +
+          (mode === "objects"
+            ? "\n\nتجاوز أي تعليمات سابقة تطلب تحديد الهوية أو التاريخ. هذه الجولة لوصف سمات مرئية فقط لتكوين كلمات بحث: لا تسمِّ أثرًا أو موقعًا ولا تذكر قصة أو حقبة أو اسم شخصية. أخرج وصفًا بصريًا محايدًا، نصًا مقروءًا حرفيًا إن وجد، وكلمات بحث من الأشكال والسمات الظاهرة فقط. اترك identity وplace وperiod وcontextualStory وsignificance فارغة."
+            : "") +
           "\nOutput language: " +
           LANGUAGES[language];
         const imageForAnalysis = documentImageBytes || enhancedImageBytes || imageBytes;
@@ -1332,112 +1697,81 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ),
           recognitionEngines,
         );
+        let officialVisualMatch = findOfficialVisualMatch(catalog, recognitionEngines, mode);
         const observation = mode === "objects"
-          ? applyEvidenceGuard(correctedObservation, recognitionEngines)
+          ? applyEvidenceGuard(correctedObservation, Boolean(officialVisualMatch))
           : correctedObservation;
-        const getObservedText = () =>
-          [
-            observation.visualDescription,
-            observation.sceneDescription,
-            observation.objectType,
-            observation.printedLabels,
-            observation.identity,
-            observation.visibleText,
-            observation.transliteration,
-            observation.translation,
-            observation.interpretation,
-            observation.scriptType,
-            observation.objectOrTextPurpose,
-            observation.identityEvidence,
-            observation.place,
-            observation.period,
-            observation.contextualStory,
-            observation.writingHistory,
-            observation.placeType,
-            observation.placeEvidence,
-            observation.siteHistory,
-            ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
-            observation.foodAssessment,
-            ...(Array.isArray(observation.keywords) ? observation.keywords : []),
-            ...(Array.isArray(observation.periodClues) ? observation.periodClues : []),
-          ]
-            .filter(Boolean)
-            .join(" ");
-        const observedText = getObservedText();
-        const observedTokens = new Set(tokens(observedText));
-        const candidates = catalog
-          .filter((item) => item.mode === mode || item.mode === "both")
-          .map((item) => {
-            const keys = (Array.isArray(item.keywords) ? item.keywords : []).flatMap(tokens);
-            const matched = [...new Set(keys.filter((key) => observedTokens.has(key)))];
-            const score = keys.length ? matched.length / Math.min(keys.length, 8) : 0;
-            return { item, matched, score };
-          })
-          .sort((a, b) => b.score - a.score);
-        const best = candidates[0];
-
-        // لا نسمّي النتيجة "مطابقة" إلا عند حد محافظ ومع وجود مصدر موثق.
-        if (best && best.score >= 0.55 && best.matched.length >= 3) {
-          const item = best.item;
-          const {
-            sources: searchSources,
-            trustedSourcesAvailable,
-            wikipediaAvailable,
-          } = await searchHeritageSources(
-            item.title + " " + (item.keywords || []).slice(0, 4).join(" "),
-            language,
-          );
-          const sources = [
-            {
-              title: item.sourceTitle,
-              url: item.sourceUrl,
-              snippet: item.description || "",
-              source: item.sourceTitle,
-              trusted: TRUSTED_SOURCE_DOMAINS.some((domain) =>
-                new URL(item.sourceUrl, "https://athara.local").hostname
-                  .endsWith("." + domain) ||
-                new URL(item.sourceUrl, "https://athara.local").hostname === domain
-              ),
-            },
-            ...searchSources.filter((source) => source.url !== item.sourceUrl),
-          ];
+        let geminiCatalogComparisonFailed = false;
+        if (mode === "objects" && !officialVisualMatch && geminiConfigured) {
+          const candidates = rankOfficialCatalogCandidates(catalog, observation);
+          const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
+          if (candidateImages.length) {
+            try {
+              const referenceImage = lensImageBytes || imageBytes;
+              officialVisualMatch = await compareWithOfficialCatalogPhotos(
+                referenceImage,
+                candidateImages,
+                typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "",
+                geminiVisionModels[0],
+              );
+            } catch (error) {
+              geminiCatalogComparisonFailed = true;
+              visionAttempts.push({
+                model: "Gemini official catalog comparison",
+                reason: String(error?.message || error).slice(0, 180),
+              });
+            }
+          }
+        }
+        if (officialVisualMatch) {
+          const item = officialVisualMatch.item;
+          const sources = [{
+            title: item.sourceTitle,
+            url: item.sourceUrl,
+            snippet: item.description || "",
+            source: item.sourceTitle,
+            trusted: true,
+          }];
           const answer = [
-            "مطابقة مرجعية محتملة — وليست إثباتًا نهائيًا لهوية القطعة.",
-            "الاسم المرجعي: " + item.title,
+            "مرشح تطابق بصري من أرشيف وزارة السياحة والآثار؛ راجع الرابط للتأكد من أن السجل يخص الصورة نفسها.",
+            "السجل الرسمي: " + item.title,
             item.period ? "العصر/التاريخ: " + item.period : "",
             item.description || "",
-            "سبب الترشيح: تشابه وصفي نصي في " +
-              best.matched.length +
-              " كلمات مفتاحية، وليس مقارنة بصرية.",
-            observation.visualDescription ? "الوصف المرئي: " + observation.visualDescription : "",
-            observation.sceneDescription ? "وصف المشهد: " + observation.sceneDescription : "",
-            observation.printedLabels
-              ? "العنوان أو البيانات المطبوعة: " + observation.printedLabels
-              : "",
-            observation.visibleText ? "العلامات المقروءة: " + observation.visibleText : "",
-            observation.translation ? "الترجمة الحرفية المقترحة: " + observation.translation : "",
-            observation.contextualStory ? "حكاية وسياق تاريخي: " + observation.contextualStory : "",
-            "الموقع غير مؤكد بدقة؛ السجل النصي لا يثبت مكان القطعة المصوّرة.",
-            relatedSourceSummary(sources, language),
-          ]
-            .filter(Boolean)
-            .join("\n");
+            "مصدر نتيجة البحث البصري: " + officialVisualMatch.engine,
+          ].filter(Boolean).join("\n");
           return json({
             ok: true,
             analysis: answer,
             sources,
-            trustedSourcesAvailable,
-            wikipediaAvailable,
+            trustedSourcesAvailable: true,
+            wikipediaAvailable: null,
             resultType: "reference_match",
-            confidence: best.score,
+            confidence: "medium",
             confidenceByField: {
               identity: "medium",
               place: "low",
-              period: "low",
+              period: item.period ? "medium" : "low",
             },
             referenceId: item.id,
             referenceImages: Array.isArray(item.localImageUrls) ? item.localImageUrls : [],
-            model: "ATHARA Hybrid Matching",
+            matchedOfficialUrl: officialVisualMatch.url,
+            model: "ATHARA Official Visual Search",
+          });
+        }
+
+        if (mode === "objects") {
+          return json({
+            ok: true,
+            analysis: "",
+            resultType: "unverified",
+            reverseImageSearchStatus: !reverseImageSearchConfigured
+              ? "unavailable"
+              : geminiCatalogComparisonFailed && recognitionEngines.length === 0
+                ? "failed"
+                : "no_match",
+            sources: [],
+            trustedSourcesAvailable: false,
+            wikipediaAvailable: null,
           });
         }
 
@@ -1522,6 +1856,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           trustedSourcesAvailable,
           wikipediaAvailable,
           resultType: "ai_guess",
+          reverseImageSearchStatus: !reverseImageSearchConfigured
+            ? "unavailable"
+            : recognitionEngines.length > 0
+              ? "no_match"
+              : "failed",
           confidence: observation.confidence || "غير محسوبة",
           confidenceByField,
           model: independentObservations.length > 1

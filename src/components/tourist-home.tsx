@@ -250,11 +250,26 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           imageData.data.set(enhanceImageContrast(imageData.data));
           enhancedContext.putImageData(imageData, 0, 0);
           const enhancedImage = enhancedCanvas.toDataURL("image/jpeg", 0.88);
+          const searchCanvas = document.createElement("canvas");
+          let searchScale = Math.min(1, 1200 / Math.max(sourceWidth, sourceHeight));
+          let searchImage: string | undefined;
+          for (let attempt = 0; attempt < 6; attempt++) {
+            searchCanvas.width = Math.max(1, Math.round(sourceWidth * searchScale));
+            searchCanvas.height = Math.max(1, Math.round(sourceHeight * searchScale));
+            const searchContext = searchCanvas.getContext("2d");
+            if (!searchContext) break;
+            searchContext.drawImage(source, 0, 0, searchCanvas.width, searchCanvas.height);
+            searchImage = searchCanvas.toDataURL("image/jpeg", 0.65);
+            if (searchImage.length <= 640_000) break;
+            searchScale *= 0.75;
+          }
+          if (searchImage && searchImage.length > 640_000) searchImage = undefined;
           const response = await fetch("/api/scan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               image,
+              ...(searchImage ? { searchImage } : {}),
               enhancedImage,
               ...(documentImage ? { documentImage } : {}),
               language: lang,
@@ -277,8 +292,18 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             confidenceByField?: ScanConfidence;
             wikipediaAvailable?: boolean;
             visionDiagnostics?: ScanDiagnostics;
+            reverseImageSearchStatus?: "unavailable" | "no_match" | "failed";
           };
-          if (!response.ok || !data.ok || !data.analysis) {
+          const reverseSearchNotice = scanMode !== "objects"
+            ? ""
+            : data.reverseImageSearchStatus === "unavailable"
+              ? scanCopy.reverseImageSearchUnavailable
+              : data.reverseImageSearchStatus === "no_match"
+                ? scanCopy.reverseImageSearchNoMatch
+                : data.reverseImageSearchStatus === "failed"
+                  ? scanCopy.reverseImageSearchFailed
+                  : "";
+          if (!response.ok || !data.ok || (!data.analysis && !reverseSearchNotice)) {
             const providerFailures = (data.visionDiagnostics?.attempts || []).map(
               ({ model, reason }) => `${model}: ${reason}`,
             );
@@ -287,7 +312,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             );
           }
           if (!cancelled) {
-            setScanResult(data.analysis);
+            setScanResult([reverseSearchNotice, data.analysis].filter(Boolean).join("\n\n"));
             setScanSources(Array.isArray(data.sources) ? data.sources : []);
             setScanConfidence(data.confidenceByField ?? null);
             setScanWikipediaAvailable(data.wikipediaAvailable ?? null);
