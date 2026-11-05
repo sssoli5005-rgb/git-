@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" id="app-html">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, ">
+    <title>أثَرة | ATHARA - تجربة تراثية</title>
+    <meta name="description" content="نموذج تجريبي لاستكشاف قطع من التراث المصري."/>
+    <!-- مكتبة Tailwind CSS للتصميم الفاخر والمتجاوب -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap');
+        
+        * { box-sizing: border-box; font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+        /* تصميم الكارت الزجاجي الفاخر Frosted Glassmorphism */
+        .glass-card {
+            background: rgba(15, 15, 15, 0.88);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        /* تأثير خط الليزر المضيء للماسح الضوئي */
+        @keyframes scanLaser {
+            0% { top: 2%; opacity: 0.3; }
+            50% { opacity: 1; filter: drop-shadow(0 0 10px #d4af37); }
+            100% { top: 96%; opacity: 0.3; }
+        }
+
+        .laser-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #d4af37, #fff, #d4af37, transparent);
+            box-shadow: 0 0 15px #d4af37;
+            animation: scanLaser 2.2s ease-in-out infinite alternate;
+            z-index: 10;
+        }
+
+        .fade-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }\n
+        .scan-result { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .scan-result a { color: #d4af37; text-decoration: underline; }
+
+    
+        /* تحسين قابلية القراءة في كل محتوى أثَرة */
+        body { font-size: 16px; line-height: 1.85; }
+        #contentBox, #scanResult, #symbolResult {
+            font-size: 16px !important;
+            line-height: 2 !important;
+            font-weight: 500;
+            letter-spacing: 0;
+            overflow-wrap: anywhere;
+            text-align: start;
+        }
+        #contentBox p, #scanResult p, #symbolResult p { margin: 0 0 0.9em; }
+        #contentBox p:last-child, #scanResult p:last-child { margin-bottom: 0; }
+        #contentBox ul, #scanResult ul { padding-inline-start: 1.4rem; margin: .5rem 0; }
+        #contentBox li, #scanResult li { margin: .35rem 0; }
+        #contentBox strong, #scanResult strong { color: #f3d77b; font-weight: 800; }
+        #scanResult { white-space: normal; }
+        #scanResult .result-paragraph { margin: 0 0 .85em; }
+        #scanResult .result-heading { color: #f3d77b; font-size: 1.08em; font-weight: 800; margin: .8em 0 .35em; }
+        #scanResult .result-list { padding-inline-start: 1.4rem; margin: .35rem 0 .8rem; }
+        #scanResult .result-list li { margin: .35rem 0; }
+        #imageStatus, #scannerText { font-size: 13px !important; line-height: 1.8 !important; }
+        button, select { line-height: 1.6; }
+        @media (max-width: 480px) {
+            #contentBox, #scanResult, #symbolResult { font-size: 16px !important; line-height: 2.05 !important; }
+        }
+
+    </style>
+</head>
+<body class="bg-[#060606] text-[#f3f4f6] min-h-screen flex flex-col items-center justify-between p-3 md:p-6 selection:bg-[#d4af37] selection:text-black">
+
+    <!-- شريط التحكم العلوي المزدوج (الهوية واللغات والمفضلة) -->
+    <header class="w-full max-w-md md:max-w-xl flex justify-between items-center py-3 border-b border-[#d4af37]/25 mb-3">
+        <div class="flex items-center gap-2">
+            <span class="text-xl">🏛️</span>
+            <h1 class="text-lg md:text-xl font-extrabold tracking-widest text-[#d4af37]">أثَرة | ATHARA</h1>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <!-- قائمة اختيار اللغات العالمية الشاملة (9 لغات) -->
+            <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-[#121212] text-[#d4af37] border border-[#d4af37]/40 text-xs md:text-sm rounded-xl px-2.5 py-1.5 focus:outline-none cursor-pointer">
+                <option value="ar">العربية (Arabic)</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+                <option value="it">Italiano</option>
+                <option value="de">Deutsch</option>
+                <option value="ru">Русский</option>
+                <option value="ja">日本語 (Japanese)</option>
+                <option value="zh">中文 (Chinese)</option>
+            </select>
+            <!-- زر الحفظ في المفضلة -->
+            <button onclick="toggleFavorite()" id="favBtn" class="bg-[#121212] border border-[#d4af37]/40 text-[#d4af37] text-base px-2.5 py-1 rounded-xl transition hover:scale-105 active:scale-95">🤍</button>
+        </div>
+    </header>
+
+    <!-- شريط التبديل بين الآثار المختلفة للاختبار -->
+    <div class="w-full max-w-md md:max-w-xl flex gap-2 mb-3">
+        <button onclick="switchArtifact('narmer')" id="btnArtifact0" class="flex-1 py-1.5 px-2 bg-[#d4af37] text-black font-bold text-xs rounded-lg transition shadow-md">لوحة نارمر</button>
+        <button onclick="switchArtifact('tut')" id="btnArtifact1" class="flex-1 py-1.5 px-2 bg-[#1a1a1a] text-[#d4af37] border border-[#d4af37]/30 font-semibold text-xs rounded-lg transition">قناع توت</button>
+        <button onclick="switchArtifact('hatshepsut')" id="btnArtifact2" class="flex-1 py-1.5 px-2 bg-[#1a1a1a] text-[#d4af37] border border-[#d4af37]/30 font-semibold text-xs rounded-lg transition">حاتشبسوت</button>
+    </div>
+
+    <!-- واجهة التفاعل الرئيسية والماسح الضوئي -->
+    <main class="w-full max-w-md md:max-w-xl flex flex-col gap-4">
+        <p class="text-center text-[11px] leading-6 text-amber-200/80">لما تختار صورة، أثَرة بيبعتها لنموذج ذكاء اصطناعي عشان يحلل شكلها مبدئيًا. لكن قراءة الكتابة الهيروغليفية واستخراجها من الصورة لسه مش متاحين.</p>
+        
+        <!-- إطار الكاميرا والماسح الضوئي مع الصور والرمز الهيروغليفي -->
+        <div class="relative w-full h-56 md:h-68 rounded-2xl border-2 border-[#d4af37]/60 overflow-hidden flex items-center justify-center bg-black/80 shadow-2xl">
+            <!-- صورة الأثر الحقيقية -->
+            <img id="artifactImg" src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Narmer_Palette.jpg" alt="Artifact" class="absolute inset-0 w-full h-full object-cover opacity-70 fade-transition">
+            
+            <!-- عنصر فيديو الكاميرا الحية -->
+            <video id="cameraVideo" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-cover"></video>
+            
+            <!-- شعاع الليزر المضيء -->
+            <div id="laserScanner" class="laser-line"></div>
+
+            <!-- الرمز الهيروغليفي المكتشف التفاعلي -->
+            <div class="absolute top-3 left-3 z-20 bg-black/80 border border-[#d4af37] px-3 py-1.5 rounded-xl backdrop-blur-md flex items-center gap-1.5 shadow-lg">
+                <span class="text-xs text-gray-400">رموز توضيحية:</span>
+                <span id="hieroglyphBadge" class="text-sm font-bold text-[#d4af37] tracking-widest">𓂆 𓃒</span>
+            </div>
+            
+            <!-- زر التبديل فتح/إغلاق الكاميرا الحية -->
+            <div class="absolute top-3 right-3 z-20">
+                <button onclick="toggleRealCamera()" id="camToggleBtn" class="bg-black/70 text-[#d4af37] border border-[#d4af37]/50 text-[11px] px-2.5 py-1 rounded-lg backdrop-blur-md">📷 فتح الكاميرا الحية</button>
+            </div>
+
+            <!-- نص حالة التعرف والمسح الضوئي -->
+            <div class="absolute bottom-3 bg-black/80 px-4 py-1 rounded-full border border-[#d4af37]/40 z-20">
+                <p id="scannerText" class="text-xs text-[#d4af37] tracking-wider animate-pulse font-bold">نموذج تجريبي — اختار قطعة عشان تعرف عنها أكتر</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+            <button id="captureBtn" onclick="capturePhoto()" class="hidden w-full bg-[#d4af37] text-black font-extrabold py-2.5 rounded-xl text-sm">
+                📸 التقط الصورة
+            </button>
+            <button id="uploadImageBtn" onclick="document.getElementById('imageUpload').click()" class="w-full bg-[#1a1a1a] text-[#d4af37] border border-[#d4af37]/50 font-bold py-2.5 rounded-xl text-sm">
+                🖼️ اختار صورة من الجهاز
+            </button>
+        </div>
+        <input id="imageUpload" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+        <p id="imageStatus" class="text-center text-[11px] text-gray-400" aria-live="polite">صوّر قطعة أو نقش أو مومياء أو أداة من التراث المصري، أو اختار صورة من جهازك.</p>
+        <button id="analyzeBtn" type="button" onclick="analyzeArtifact()" disabled class="w-full bg-[#d4af37] text-black font-extrabold py-3 rounded-xl text-sm disabled:opacity-40 disabled:cursor-not-allowed">✨ حلّل الصورة بالذكاء الاصطناعي</button>
+        <section id="scanResultCard" class="hidden glass-card p-4 rounded-2xl" aria-live="polite">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 class="text-sm font-bold text-[#d4af37]">نتيجة الفحص الأولي</h2>
+            <span id="scanStatus" class="text-[10px] text-amber-200">تحليل بصري</span>
+          </div>
+          <div id="scanResult" class="scan-result text-xs leading-7 text-gray-100"></div>
+          <p class="mt-3 text-[10px] text-amber-200/80">خلي بالك: دي نتيجة مبدئية من نموذج ذكاء اصطناعي، مش توثيق أثري نهائي. ما تعتمدش على اسم القطعة أو تاريخها غير لما تراجع مصدر متحفي أو أكاديمي.</p>
+        </section>
+        <canvas id="snapshotCanvas" class="hidden"></canvas>
+
+
+        <!-- معجم الرموز: اختيار يدوي وليس تعرّفاً آلياً من الصورة -->
+        <section class="glass-card p-4 rounded-2xl flex flex-col gap-3">
+            <div>
+                <h2 class="text-sm font-bold text-[#d4af37]">🔎 علامات من الكتابة الهيروغليفية</h2>
+                <p class="text-[11px] text-gray-400 mt-1">اختار علامة من اللي تحت عشان تعرف اسمها أو صوتها التقريبي. دي أمثلة للتوضيح بتختارها بنفسك؛ أثَرة لسه مش بتستخرج العلامات دي من الصور.</p>
+            </div>
+            <div class="grid grid-cols-4 gap-2">
+                <button type="button" onclick="translateSymbol('𓇋𓏠𓈖','آمون','Amun')" class="p-2 bg-black/60 border border-[#d4af37]/30 rounded-xl text-xl hover:bg-[#d4af37]/20">𓇋𓏠𓈖<span class="block text-[9px] text-gray-400 mt-1">آمون</span></button>
+                <button type="button" onclick="translateSymbol('𓉐','بر / بيت','pr / house')" class="p-2 bg-black/60 border border-[#d4af37]/30 rounded-xl text-xl hover:bg-[#d4af37]/20">𓉐<small class="block text-[9px] text-gray-400 mt-1">بيت</small></button>
+                <button type="button" onclick="translateSymbol('𓂀','عين وجات (عين حورس)','Wedjat eye')" class="p-2 bg-black/60 border border-[#d4af37]/30 rounded-xl text-xl hover:bg-[#d4af37]/20">𓂀<small class="block text-[9px] text-gray-400 mt-1">عين وجات</small></button>
+                <button type="button" onclick="translateSymbol('𓅓','م / بومة (صوت m)','m / owl sign')" class="p-2 bg-black/60 border border-[#d4af37]/30 rounded-xl text-xl hover:bg-[#d4af37]/20">𓅓<small class="block text-[9px] text-gray-400 mt-1">صوت م</small></button>
+            </div>
+            <div id="symbolResult" class="rounded-xl bg-black/50 border border-[#d4af37]/20 p-3 text-xs leading-6 text-gray-200" aria-live="polite">اختار علامة من الجدول عشان تظهر معلوماتها.</div>
+        </section>
+
+        <!-- الكارت الزجاجي الفاخر للمعلومات وحكاية الأثر -->
+        <div class="glass-card p-4 md:p-5 rounded-2xl shadow-2xl flex flex-col gap-3 fade-transition">
+            
+            <!-- تبويبات العرض (معلومات القطعة vs حكاية الأثر) -->
+            <div class="flex border-b border-gray-800 pb-2 gap-4">
+                <button onclick="switchTab('official')" id="tabOfficial" class="text-xs md:text-sm font-bold text-[#d4af37] border-b-2 border-[#d4af37] pb-1 transition-all">معلومات القطعة</button>
+                <button onclick="switchTab('story')" id="tabStory" class="text-xs md:text-sm font-semibold text-gray-400 pb-1 transition-all">حكاية الأثر</button>
+            </div>
+
+            <!-- صندوق المحتوى والنصوص -->
+            <div id="contentBox" class="text-xs md:text-sm leading-relaxed text-gray-200 min-h-[75px] font-light fade-transition">
+                <!-- يتم التعبئة تلقائياً حسب الأثر واللغة -->
+            </div>
+
+            <!-- زر القراءة الصوتية بلغة الزائر (Web Speech API) -->
+            <button onclick="speakText()" class="w-full bg-gradient-to-r from-[#d4af37] via-[#f3e5ab] to-[#b89728] text-black font-extrabold py-2.5 rounded-xl text-xs md:text-sm transition hover:opacity-95 active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg">
+                <span>🔊</span> <span id="speakBtnText">اسمع حكاية الأثر بصوت المرشد</span>
+            </button>
+        </div>
+
+    </main>
+
+    <section class="glass-card w-full max-w-md md:max-w-xl mt-4 p-4 rounded-2xl text-xs md:text-sm leading-7">
+        <h2 class="text-[#d4af37] font-extrabold text-base mb-2">عن مشروع أثَرة</h2>
+        <p>أثَرة مشروع بيحاول يسهّل على الزائر اكتشاف التراث المصري وفهم القطع الأثرية والنقوش والحكايات المرتبطة بيها بطريقة تفاعلية.</p>
+        <p class="mt-2"><strong class="text-[#d4af37]">صاحبة التصميم:</strong> إنصاف سليمان (Ansaf Soliman).</p>
+        <p><strong class="text-[#d4af37]">توثيق تصميم الواجهة:</strong> مصر — 1 نوفمبر 2026، الساعة 4:39 مساءً بتوقيت مصر.</p>
+        <p class="text-gray-400 mt-1">التاريخ ده لتوثيق تصميم الواجهة بس، مش تاريخ بداية فكرة المشروع؛ تاريخ البداية الأصلي مش متسجل.</p>
+    </section>
+
+    <!-- تذييل الصفحة ورؤية المشروع -->
+    <footer class="text-[10px] md:text-xs text-gray-500 mt-3 text-center">
+        © 2026 ATHARA «أثَرة» - نموذج تجريبي
+    </footer>
+
+    <!-- السكربت البرمجي الكامل لإدارة البيانات، اللغات، الهيروغليفي، الصوت، والكاميرا -->
+    <script>
+        // قاعدة البيانات الشاملة والموثقة للقطع الأثرية، اللغات، والرموز الهيروغليفية
+        const database = {
+            narmer: {
+                img: "https://upload.wikimedia.org/wikipedia/commons/6/6f/Narmer_Palette.jpg",
+                glyph: "𓂆 𓃒",
+                ar: {
+                    scanner: "دي معاينة تجريبية للوحة نعرمر؛ التعرف الآلي على الصورة مش متاح هنا",
+                    officialTab: "معلومات القطعة", storyTab: "حكاية الأثر",
+                    officialText: "دي لوحة نعرمر الاحتفالية، المصنوعة من حجر رسوبي دقيق (سيلتستون). اتلاقت في هيراكونبوليس، وبتتأرخ لحوالي 3000 قبل الميلاد. مناظرها بتتفسر غالبًا على إنها مرتبطة بتوحيد مصر، لكن تفاصيل المشاهد ومعانيها لسه محل نقاش بين الباحثين.",
+                    storyText: "تخيّل إنك قدام قطعة عمرها حوالي خمسة آلاف سنة. دي مش لوحة للزينة وبس؛ دي لوحة احتفالية عليها مناظر ملكية ورموز مهمة من بدايات الدولة المصرية. والباحثين بيقروا مشاهدها باعتبارها مرتبطة بمرحلة توحيد مصر، مع إن تفسير كل تفصيلة مش محسوم.",
+                    speak: "اسمع حكاية الأثر بصوت المرشد", langCode: "ar-EG"
+                },
+                en: {
+                    scanner: "Narmer preview — image recognition is not enabled",
+                    officialTab: "Artifact information", storyTab: "Storyteller Legends",
+                    officialText: "The Narmer Palette: Documents the unification of Upper and Lower Egypt (c. 3100 BC). The hieroglyphic symbols represent the king's royal name and power.",
+                    storyText: "Legend has it... behind this majestic stone tablet lies the profound secret of a historic victory that forever shaped human civilization.",
+                    speak: "Listen to Guide Audio", langCode: "en-US"
+                },
+                fr: {
+                    scanner: "Aperçu de Narmer — la reconnaissance d’image n’est pas activée",
+                    officialTab: "Informations sur l’objet", storyTab: "Légendes du conteur",
+                    officialText: "La palette de Narmer : Documente l'unification de l'Égypte vers 3100 av. J-C. Les hiéroglyphes expriment le pouvoir royal.",
+                    storyText: "La légende raconte... derrière cette stèle se cache le secret d'une victoire historique.",
+                    speak: "Écouter le guide audio", langCode: "fr-FR"
+                },
+                de: {
+                    scanner: "Narmer-Vorschau — Bilderkennung ist nicht aktiviert",
+                    officialTab: "Informationen zum Objekt", storyTab: "Geschichten des Erzählers",
+                    officialText: "Die Narmer-Palette: Dokumentiert die Vereinigung Ägyptens (ca. 3100 v. Chr.). Die Hieroglyphen zeigen den königlichen Namen.",
+                    storyText: "Der Legende nach... verbirgt sich hinter dieser Steintafel das Geheimnis eines historischen Triumphes.",
+                    speak: "Audio-Guide anhören", langCode: "de-DE"
+                },
+                es: {
+                    scanner: "Vista previa de Narmer — el reconocimiento de imágenes no está activado",
+                    officialTab: "Información del objeto", storyTab: "Leyendas del cuentista",
+                    officialText: "La Paleta de Narmer: Documenta la unificación de Egipto c. 3100 a. C. Los símbolos jeroglíficos representan la realeza.",
+                    storyText: "Cuenta la leyenda... detrás de esta losa se esconde el secreto de una victoria épica.",
+                    speak: "Escuchar audioguía", langCode: "es-ES"
+                },
+                it: {
+                    scanner: "Anteprima di Narmer — il riconoscimento delle immagini non è attivo",
+                    officialTab: "Informazioni sull’oggetto", storyTab: "Leggende del cantastorie",
+                    officialText: "La tavoletta di Narmer: documenta l'unificazione dell'Egitto c. 3100 a.C. I geroglifici indicano il nome regale.",
+                    storyText: "La leggenda narra... dietro questa pietra si cela il segreto di una vittoria leggendaria.",
+                    speak: "Ascolta la guida audio", langCode: "it-IT"
+                },
+                ru: {
+                    scanner: "Предпросмотр Нармера — распознавание изображений не включено",
+                    officialTab: "Сведения об артефакте", storyTab: "Легенды сказителя",
+                    officialText: "Палетка Нармера: документирует объединение Египта ок. 3100 г. до н.э. Иероглифы символизируют имя царя.",
+                    storyText: "Легенда гласит... за этой каменной плитой скрывается тайна великой победы.",
+                    speak: "Прослушать аудиогид", langCode: "ru-RU"
+                },
+                zh: {
+                    scanner: "纳尔美尔预览 — 图像识别尚未启用",
+                    officialTab: "文物信息", storyTab: "讲故事者的传说",
+                    officialText: "纳尔mer调色板：记录上下埃及统一（约公元前3100年）。象形文字符号代表法老的 royal 名称。",
+                    storyText: "传说……在这块雄伟的石碑背后，隐藏着一段改写人类文明史的伟大胜利秘辛。",
+                    speak: "收听语音导游", langCode: "zh-CN"
+                },
+                ja: {
+                    scanner: "ナルメルのプレビュー — 画像認識は有効になっていません",
+                    officialTab: "遺物の情報", storyTab: "語り部の伝説",
+                    officialText: "ナルメルのパレット：上下エジプトの統一を記録（紀元前3100年頃）。ヒエログリフは王の名を表します。",
+                    storyText: "伝説によると…この壮大な石板の裏には、人類の歴史を変えた偉大な勝利の秘密が隠されています。",
+                    speak: "音声ガイドを聞く", langCode: "ja-JP"
+                }
+            },
+            tut: {
+                img: "https://upload.wikimedia.org/wikipedia/commons/e/e1/Tutankhamun_mask_-_Egyptian_Museum.jpg",
+                glyph: "𓇋 𓏠 𓈖 𓏏 𓅱 𓏏",
+                ar: {
+                    scanner: "دي معاينة تجريبية لقناع توت عنخ آمون؛ التعرف الآلي على الصورة مش متاح هنا",
+                    officialTab: "معلومات القطعة", storyTab: "حكاية الأثر",
+                    officialText: "ده القناع الذهبي الجنائزي للملك توت عنخ آمون من الأسرة الـ18. اتلاقى فوق رأس وكتفين المومياء، واتعمل من الذهب ومواد تانية زي الزجاج واللازورد والعقيق. وعلى ضهره نص ديني هدفه حماية الملك، بحسب وصف المتحف المصري الكبير.",
+                    storyText: "بص على تفاصيل الوش والعينين والحواجب والغطاء الملكي. القناع مش مجرد غطاء للوجه؛ كان جزء من تجهيزات الدفن، وارتبط بمعتقدات المصريين القدماء عن حماية جسد الملك ورحلته للعالم الآخر.",
+                    speak: "اسمع حكاية الأثر بصوت المرشد", langCode: "ar-EG"
+                },
+                en: {
+                    scanner: "Tutankhamun preview — image recognition is not enabled",
+                    officialTab: "Artifact information", storyTab: "Storyteller Legends",
+                    officialText: "Mask of Tutankhamun: Funerary mask of the golden pharaoh (c. 1323 BC). The hieroglyphs spell out his royal cartouche names.",
+                    storyText: "The Secret of Eternity... A sacred spiritual gateway inscribed with protective hieroglyphic spells to guard the king.",
+                    speak: "Listen to Guide Audio", langCode: "en-US"
+                },
+                fr: {
+                    scanner: "Aperçu de Toutânkhamon — la reconnaissance d’image n’est pas activée",
+                    officialTab: "Informations sur l’objet", storyTab: "Légendes du conteur",
+                    officialText: "Masque de Toutânkhamon : Masque funéraire (v. 1323 av. J.-C.). Les hiéroglyphes portent son nom royal.",
+                    storyText: "Le secret de l'éternité... Une passerelle spirituelle gravée de sorts protecteurs.",
+                    speak: "Écouter le guide audio", langCode: "fr-FR"
+                },
+                de: {
+                    scanner: "Tutanchamun-Vorschau — Bilderkennung ist nicht aktiviert",
+                    officialTab: "Informationen zum Objekt", storyTab: "Geschichten des Erzählers",
+                    officialText: "Maske des Tutanchamun: Totenmaske (ca. 1323 v. Chr.). Die Hieroglyphen zeigen seinen königlichen Namen.",
+                    storyText: "Das Geheimnis der Ewigkeit... Ein spirituelles Tor mit schützenden Hieroglyphen.",
+                    speak: "Audio-Guide anhören", langCode: "de-DE"
+                },
+                es: {
+                    scanner: "Vista previa de Tutankamón — el reconocimiento de imágenes no está activado",
+                    officialTab: "Información del objeto", storyTab: "Leyendas del cuentista",
+                    officialText: "Máscara de Tutankamón: Máscara funeraria (c. 1323 a. C.). Los jeroglíficos muestran su cartucho real.",
+                    storyText: "El secreto de la eternidad... Un portal espiritual con hechizos protectores.",
+                    speak: "Escuchar audioguía", langCode: "es-ES"
+                },
+                it: {
+                    scanner: "Anteprima di Tutankhamon — il riconoscimento delle immagini non è attivo",
+                    officialTab: "Informazioni sull’oggetto", storyTab: "Leggende del cantastorie",
+                    officialText: "Maschera di Tutankhamun: maschera funeraria (c. 1323 a.C.). I geroglifici riportano il nome reale.",
+                    storyText: "Il segreto dell'eternità... Un portale spirituale inciso con formule protettive.",
+                    speak: "Ascolta la guida audio", langCode: "it-IT"
+                },
+                ru: {
+                    scanner: "Предпросмотр Тутанхамона — распознавание изображений не включено",
+                    officialTab: "Сведения об артефакте", storyTab: "Легенды сказителя",
+                    officialText: "Посмертная маска Тутанхамона (ок. 1323 г. до н.э.). Иероглифы начертаны в его картуше.",
+                    storyText: "Тайна вечности... Священный портал с защитными иероглифическими заклинаниями.",
+                    speak: "Прослушать аудиогид", langCode: "ru-RU"
+                },
+                zh: {
+                    scanner: "图坦卡蒙预览 — 图像识别尚未启用",
+                    officialTab: "文物信息", storyTab: "讲故事者的传说",
+                    officialText: "图坦卡蒙面具（约公元前1323年）。象形文字拼写出他的王室 cartouche 名字。",
+                    storyText: "永恒的秘密……雕刻有保护性象形文字的神圣灵性之门。",
+                    speak: "收听语音导游", langCode: "zh-CN"
+                },
+                ja: {
+                    scanner: "ツタンカーメンのプレビュー — 画像認識は有効になっていません",
+                    officialTab: "遺物の情報", storyTab: "語り部の伝説",
+                    officialText: "ツタンカーメンのマスク（紀元前1323年頃）。ヒエログリフで王名が記されています。",
+                    storyText: "永遠の秘密…王を守るための神聖なヒエログリフの呪文が刻まれた霊的ゲートウェイ。",
+                    speak: "音声ガイドを聞く", langCode: "ja-JP"
+                }
+            },
+            hatshepsut: {
+                img: "https://upload.wikimedia.org/wikipedia/commons/8/8f/Hatshepsut_Metropolitan_Museum.jpg",
+                glyph: "𓇋 𓏠 𓈖 𓐍 𓈖 𓡃",
+                ar: {
+                    scanner: "دي معاينة تجريبية لتمثال حتشبسوت؛ التعرف الآلي على الصورة مش متاح هنا",
+                    officialTab: "معلومات القطعة", storyTab: "حكاية الأثر",
+                    officialText: "دي حتشبسوت، ملكة من الأسرة الـ18 وصلت للحكم بلقب فرعون. حكمت تقريبًا من 1473 لحد 1458 قبل الميلاد، ومن أهم آثار عصرها معبدها الجنائزي في الدير البحري غرب الأقصر.",
+                    storyText: "معبد حتشبسوت في الدير البحري متصمم على ثلاث مستويات، وفيه صفوف أعمدة وساحات وتماثيل للملكة في هيئة أوزير. والمعبد ماكانش مخصص ليها وحدها؛ كان فيه كمان أماكن لعبادة آمون وحاتحور وأنوبيس ورع حور آختي.",
+                    speak: "اسمع حكاية الأثر بصوت المرشد", langCode: "ar-EG"
+                },
+                en: {
+                    scanner: "Hatshepsut preview — image recognition is not enabled",
+                    officialTab: "Artifact information", storyTab: "Storyteller Legends",
+                    officialText: "Queen Hatshepsut: Builder of Deir el-Bahari (c. 1458 BC). Her hieroglyphic name translates to 'Foremost of Noble Ladies'.",
+                    storyText: "An Extraordinary Queen... She carved her hieroglyphic name into stone monuments that defied time and oblivion.",
+                    speak: "Listen to Guide Audio", langCode: "en-US"
+                },
+                fr: {
+                    scanner: "Aperçu d’Hatchepsout — la reconnaissance d’image n’est pas activée",
+                    officialTab: "Informations sur l’objet", storyTab: "Légendes du conteur",
+                    officialText: "Reine Hatshepsout (v. 1458 av. J.-C.). Son nom hiéroglyphique signifie 'La première des dames nobles'.",
+                    storyText: "Une reine extraordinaire... Elle a gravé son nom hiéroglyphique dans la pierre pour l'éternité.",
+                    speak: "Écouter le guide audio", langCode: "fr-FR"
+                },
+                de: {
+                    scanner: "Hatschepsut-Vorschau — Bilderkennung ist nicht aktiviert",
+                    officialTab: "Informationen zum Objekt", storyTab: "Geschichten des Erzählers",
+                    officialText: "Königin Hatschepsut (ca. 1458 v. Chr.). Ihr Hieroglyphenname bedeutet 'Erste der adeligen Damen'.",
+                    storyText: "Eine außergewöhnliche Königin... Sie verewigte ihren Namen in Stein.",
+                    speak: "Audio-Guide anhören", langCode: "de-DE"
+                },
+                es: {
+                    scanner: "Vista previa de Hatshepsut — el reconocimiento de imágenes no está activado",
+                    officialTab: "Información del objeto", storyTab: "Leyendas del cuentista",
+                    officialText: "Reina Hatshepsut (c. 1458 a. C.). Su nombre jeroglífico significa 'La primera de las damas nobles'.",
+                    storyText: "Una reina extraordinaria... Grabó su nombre en monumentos de piedra para siempre.",
+                    speak: "Escuchar audioguía", langCode: "es-ES"
+                },
+                it: {
+                    scanner: "Anteprima di Hatshepsut — il riconoscimento delle immagini non è attivo",
+                    officialTab: "Informazioni sull’oggetto", storyTab: "Leggende del cantastorie",
+                    officialText: "Regina Hatshepsut (c. 1458 a.C.). Il suo nome in geroglifici significa 'La prima delle nobili signore'.",
+                    storyText: "Una regina straordinaria... Ha inciso il suo nome nella pietra.",
+                    speak: "Ascolta la guida audio", langCode: "it-IT"
+                },
+                ru: {
+                    scanner: "Предпросмотр Хатшепсут — распознавание изображений не включено",
+                    officialTab: "Сведения об артефакте", storyTab: "Легенды сказителя",
+                    officialText: "Царица Хатшепсут (ок. 1458 г. до н.э.). Ее иероглифическое имя означает 'Первая из благородных дам'.",
+                    storyText: "Необыкновенная царица... Она навеки вписала свое иероглифическое имя в историю.",
+                    speak: "Прослушать аудиогид", langCode: "ru-RU"
+                },
+                zh: {
+                    scanner: "哈特谢普苏特预览 — 图像识别尚未启用",
+                    officialTab: "文物信息", storyTab: "讲故事者的传说",
+                    officialText: "哈特谢普苏特女王（约公元前1458年）。她的象形文字名字意为“贵族女性之首”。",
+                    storyText: "非凡的女王……她将自己的象形文字名字永远镌刻在石头古迹上。",
+                    speak: "收听语音导游", langCode: "zh-CN"
+                },
+                ja: {
+                    scanner: "ハトシェプストのプレビュー — 画像認識は有効になっていません",
+                    officialTab: "遺物の情報", storyTab: "語り部の伝説",
+                    officialText: "ハトシェプスト女王（紀元前1458年頃）。ヒエログリフの名前は「高貴な女性の筆頭」を意味します。",
+                    storyText: "並外れた女王…時を超えて石のモニュメントに自分のヒエログリフを刻み込みました。",
+                    speak: "音声ガイドを聞く", langCode: "ja-JP"
+                }
+            }
+        };
+
+        let currentArtifactKey = 'narmer';
+        let currentLang = 'ar';
+        let currentMode = 'official';
+        let isCameraActive = false;
+        let selectedImageData = null;
+        let scanInProgress = false;
+
+        // دالة التبديل بين القطع الأثرية
+        function switchArtifact(key) {
+            currentArtifactKey = key;
+            ['narmer', 'tut', 'hatshepsut'].forEach((k, index) => {
+                const btn = document.getElementById(`btnArtifact${index}`);
+                if (k === key) {
+                    btn.className = "flex-1 py-1.5 px-2 bg-[#d4af37] text-black font-bold text-xs rounded-lg transition shadow-md";
+                } else {
+                    btn.className = "flex-1 py-1.5 px-2 bg-[#1a1a1a] text-[#d4af37] border border-[#d4af37]/30 font-semibold text-xs rounded-lg transition";
+                }
+            });
+
+            document.getElementById('artifactImg').src = database[key].img;
+            document.getElementById('hieroglyphBadge').innerText = database[key].glyph;
+            loadFavoriteState();
+            updateUIContent();
+        }
+
+        // تبديل اللغة مع إعادة توليد الشرح بالذكاء الاصطناعي.
+        function changeLanguage(lang) {
+            currentLang = lang;
+            const htmlTag = document.getElementById('app-html');
+            htmlTag.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+            htmlTag.setAttribute('lang', lang);
+            updateUIContent();
+        }
+
+        // تغيير التبويب يطلب محتوى جديداً من نموذج الذكاء الاصطناعي.
+        function switchTab(mode) {
+            currentMode = mode;
+            document.getElementById('tabOfficial').className = mode === 'official' ? "text-xs md:text-sm font-bold text-[#d4af37] border-b-2 border-[#d4af37] pb-1 transition-all" : "text-xs md:text-sm font-semibold text-gray-400 pb-1 transition-all";
+            document.getElementById('tabStory').className = mode === 'story' ? "text-xs md:text-sm font-bold text-[#d4af37] border-b-2 border-[#d4af37] pb-1 transition-all" : "text-xs md:text-sm font-semibold text-gray-400 pb-1 transition-all";
+            updateUIContent();
+        }
+
+        const generatedGuideCache = new Map();
+        let guideRequestId = 0;
+        async function updateUIContent() {
+            const artifact = database[currentArtifactKey];
+            const data = artifact[currentLang] || artifact['en'];
+            document.getElementById('scannerText').innerText = data.scanner;
+            document.getElementById('tabOfficial').innerText = data.officialTab;
+            document.getElementById('tabStory').innerText = data.storyTab;
+            document.getElementById('speakBtnText').innerText = data.speak;
+            document.getElementById('hieroglyphBadge').innerText = artifact.glyph;
+
+            const box = document.getElementById('contentBox');
+            const requestId = ++guideRequestId;
+            const cacheKey = [currentArtifactKey, currentLang, currentMode].join(':');
+            if (generatedGuideCache.has(cacheKey)) {
+                box.textContent = generatedGuideCache.get(cacheKey);
+                return;
+            }
+
+            box.textContent = currentLang === 'ar' ? "ثواني، أثَرة بتحضّر الشرح ليك..." : "Preparing your guide explanation...";
+            const arReference = artifact.ar || {};
+            const reference = [
+                "معلومات القطعة: " + (arReference.officialText || ""),
+                "شرح القطعة: " + (arReference.storyText || "")
+            ].join("\n");
+            try {
+                const response = await fetch("/api/guide", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        artifact: currentArtifactKey === 'narmer' ? 'لوحة نعرمر' : currentArtifactKey === 'tut' ? 'قناع توت عنخ آمون' : 'حتشبسوت',
+                        mode: currentMode,
+                        language: currentLang,
+                        reference
+                    })
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.error || "تعذر توليد الشرح.");
+                if (requestId !== guideRequestId) return;
+                const answer = String(payload.answer || "").trim();
+                if (!answer) throw new Error("الذكاء الاصطناعي رجّع رد فاضي.");
+                generatedGuideCache.set(cacheKey, answer);
+                box.textContent = answer;
+            } catch (error) {
+                if (requestId !== guideRequestId) return;
+                box.textContent = currentLang === 'ar'
+                    ? "مش قادرين نجهّز الشرح دلوقتي. اتأكدي إن نسخة أثَرة الجديدة منشورة، وجربي تاني.\\n" + (error.message || "")
+                    : "The guide is temporarily unavailable. Check the deployment and try again.";
+            }
+        }
+
+        // دالة التشغيل الصوتي المباشر Web Speech API
+        function speakText() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const textToSpeak = document.getElementById('contentBox').innerText;
+                const artifact = database[currentArtifactKey];
+                const data = artifact[currentLang] || artifact['en'];
+                
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                utterance.lang = data.langCode;
+                utterance.rate = 0.92;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("ميزة القراءة الصوتية مش مدعومة على الجهاز ده.");
+            }
+        }
+
+        // تشغيل الكاميرا على الكمبيوتر والموبايل، مع تجربة الكاميرا الافتراضية أولاً ثم fallback.
+        async function toggleRealCamera() {
+            const video = document.getElementById("cameraVideo");
+            const img = document.getElementById("artifactImg");
+            const btn = document.getElementById("camToggleBtn");
+            const captureBtn = document.getElementById("captureBtn");
+            const scannerText = document.getElementById("scannerText");
+
+            if (isCameraActive) {
+                closeCamera();
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "⏳ جاري فتح الكاميرا...";
+            scannerText.textContent = "بنحاول تشغيل كاميرا الجهاز...";
+
+            try {
+                if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+                    throw new Error("افتح أثَرة من رابط HTTPS آمن، واتأكد إنك بتستخدم Chrome حديث.");
+                }
+
+                let stream;
+                try {
+                    // جرّبي الكاميرا الخلفية على الموبايل، من غير فرضها على اللابتوب.
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: "environment" } },
+                        audio: false
+                    });
+                } catch (firstError) {
+                    // بعض كاميرات اللابتوب أو تعريفاتها لا تقبل facingMode.
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false
+                    });
+                }
+
+                video.pause();
+                video.srcObject = stream;
+                video.muted = true;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.setAttribute("playsinline", "");
+                video.setAttribute("webkit-playsinline", "");
+                video.style.display = "block";
+                video.style.visibility = "visible";
+                video.style.opacity = "1";
+                video.classList.remove("hidden");
+                img.classList.add("hidden");
+
+                await new Promise((resolve, reject) => {
+                    let settled = false;
+                    const finish = (error) => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        video.removeEventListener("loadedmetadata", checkReady);
+                        video.removeEventListener("loadeddata", checkReady);
+                        video.removeEventListener("error", onError);
+                        error ? reject(error) : resolve();
+                    };
+                    const checkReady = () => {
+                        if (video.videoWidth > 0 && video.videoHeight > 0) finish();
+                    };
+                    const onError = () => finish(new Error("الكاميرا اتصلت لكن المتصفح مش قادر يقرأ الصورة."));
+                    const timer = setTimeout(() => finish(new Error("الكاميرا اتفتحت لكن مفيش صورة وصلت خلال 10 ثواني. اقفلي أي برنامج بيستخدمها وجربي تاني.")), 10000);
+                    video.addEventListener("loadedmetadata", checkReady);
+                    video.addEventListener("loadeddata", checkReady);
+                    video.addEventListener("error", onError);
+                    checkReady();
+                });
+
+                await video.play();
+                isCameraActive = true;
+                btn.innerText = "إغلاق الكاميرا";
+                captureBtn.classList.remove("hidden");
+                scannerText.textContent = "الكاميرا شغالة. وجّهيها نحو القطعة واضغطي التقاط الصورة.";
+            } catch (err) {
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+                video.classList.add("hidden");
+                img.classList.remove("hidden");
+                captureBtn.classList.add("hidden");
+                isCameraActive = false;
+                scannerText.textContent = "مش قادرين نعرض صورة الكاميرا دلوقتي.";
+                const message = err?.name === "NotAllowedError"
+                    ? "إذن الكاميرا مرفوض. اسمح لـ Chrome يستخدم الكاميرا من إعدادات الموقع."
+                    : err?.name === "NotFoundError"
+                        ? "مش لاقيين كاميرا متاحة على الجهاز."
+                        : err?.name === "NotReadableError"
+                            ? "الكاميرا مشغولة في برنامج تاني. اقفلي Camera أو Zoom أو Teams وجربي."
+                            : (err?.message || "حصلت مشكلة أثناء تشغيل الكاميرا.");
+                alert(message);
+            } finally {
+                btn.disabled = false;
+                if (!isCameraActive) btn.innerText = "📷 افتح الكاميرا";
+            }
+        }
+
+        function closeCamera() {
+            const video = document.getElementById("cameraVideo");
+            const img = document.getElementById("artifactImg");
+            const btn = document.getElementById("camToggleBtn");
+            const captureBtn = document.getElementById("captureBtn");
+            if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+            video.classList.add("hidden");
+            img.classList.remove("hidden");
+            btn.innerText = "📷 افتح الكاميرا";
+            captureBtn.classList.add("hidden");
+            isCameraActive = false;
+        }
+
+        function setImagePreview(src, statusAr, statusEn) {
+            selectedImageData = src;
+            const analyzeBtn = document.getElementById("analyzeBtn");
+            if (analyzeBtn) analyzeBtn.disabled = false;
+            const resultCard = document.getElementById("scanResultCard");
+            if (resultCard) resultCard.classList.add("hidden");
+            const img = document.getElementById("artifactImg");
+            img.src = src;
+            img.classList.remove("hidden");
+            document.getElementById("cameraVideo").classList.add("hidden");
+            const message = currentLang === "ar" ? statusAr : statusEn;
+            document.getElementById("scannerText").innerText = message;
+            document.getElementById("imageStatus").innerText = message;
+            document.getElementById("hieroglyphBadge").innerText = currentLang === "ar"
+                ? "لم يتم استخراج رموز"
+                : "No signs extracted";
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith("image/")) {
+                alert(currentLang === "ar" ? "اختار صورة بصيغة صحيحة." : "Please choose a valid image file.");
+                event.target.value = "";
+                return;
+            }
+            if (file.size > 12 * 1024 * 1024) {
+                alert(currentLang === "ar" ? "الصورة حجمها كبير. اختار صورة أقل من 12 ميجابايت." : "Image is too large. Choose an image under 12 MB.");
+                event.target.value = "";
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                setImagePreview(reader.result,
+                    "تم تحميل الصورة — اضغط تحليل الصورة لبدء الفحص",
+                    "Image loaded — tap Analyze image to start");
+            };
+            reader.onerror = () => alert(currentLang === "ar" ? "ما قدرناش نقرأ الصورة. جرّب صورة تانية." : "Could not read this image. Try another one.");
+            reader.readAsDataURL(file);
+            if (isCameraActive) closeCamera();
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById("cameraVideo");
+            const canvas = document.getElementById("snapshotCanvas");
+            if (!isCameraActive || !video.videoWidth) {
+                alert("استنى لحد ما صورة الكاميرا تظهر، وبعدها التقط الصورة.");
+                return;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+            setImagePreview(canvas.toDataURL("image/jpeg", 0.82),
+                "تم التقاط الصورة — اضغط تحليل الصورة لبدء الفحص",
+                "Photo captured — tap Analyze image to start");
+            closeCamera();
+        }
+
+
+
+
+        // تصغير الصورة قبل إرسالها حتى لا تتجاوز حد الطلب في Worker.
+        async function compressImageForScan(dataUrl) {
+            const image = new Image();
+            image.src = dataUrl;
+            await new Promise((resolve, reject) => {
+                image.onload = resolve;
+                image.onerror = () => reject(new Error("مش قادرين نجهز الصورة للتحليل. جرّب صورة تانية."));
+            });
+            const maxSide = 1600;
+            const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas.getContext("2d", { alpha: false }).drawImage(image, 0, 0, canvas.width, canvas.height);
+            let compressed = canvas.toDataURL("image/jpeg", 0.78);
+            if (compressed.length > 8_000_000) compressed = canvas.toDataURL("image/jpeg", 0.62);
+            if (compressed.length > 8_400_000) throw new Error("الصورة لسه كبيرة بعد التصغير. اختار صورة أصغر أو قص الجزء المهم منها.");
+            return compressed;
+        }
+
+        // عرض ردود التحليل في فقرات وعناوين وقوائم واضحة، مع إبقاء النص آمناً.
+        function renderReadableResult(container, rawText) {
+            container.replaceChildren();
+            const lines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n");
+            let list = null;
+            let paragraph = [];
+            const flushParagraph = () => {
+                if (!paragraph.length) return;
+                const p = document.createElement("p");
+                p.className = "result-paragraph";
+                p.textContent = paragraph.join(" ");
+                container.appendChild(p);
+                paragraph = [];
+            };
+            const closeList = () => { list = null; };
+            for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line) { flushParagraph(); closeList(); continue; }
+                const heading = line.match(/^#{1,3}\s+(.+)$/) || line.match(/^\*\*(.+)\*\*$/);
+                if (heading) {
+                    flushParagraph(); closeList();
+                    const h = document.createElement("h3");
+                    h.className = "result-heading";
+                    h.textContent = heading[1].replace(/\*\*/g, "");
+                    container.appendChild(h);
+                    continue;
+                }
+                const item = line.match(/^(?:[-*•]|\d+[.)])\s+(.+)$/);
+                if (item) {
+                    flushParagraph();
+                    if (!list) {
+                        list = document.createElement("ul");
+                        list.className = "result-list";
+                        container.appendChild(list);
+                    }
+                    const li = document.createElement("li");
+                    li.textContent = item[1].replace(/\*\*/g, "");
+                    list.appendChild(li);
+                    continue;
+                }
+                closeList();
+                paragraph.push(line.replace(/\*\*/g, ""));
+            }
+            flushParagraph();
+        }
+
+        // تحليل بصري عام للتراث المصري عبر Cloudflare Workers AI.
+        // النتيجة استكشافية ولا تُعرض كحقيقة أثرية موثقة.
+        async function analyzeArtifact() {
+            if (!selectedImageData || scanInProgress) return;
+            const btn = document.getElementById("analyzeBtn");
+            const card = document.getElementById("scanResultCard");
+            const output = document.getElementById("scanResult");
+            const status = document.getElementById("scanStatus");
+            const imageStatus = document.getElementById("imageStatus");
+            scanInProgress = true;
+            btn.disabled = true;
+            btn.innerText = "⏳ جاري فحص الصورة...";
+            card.classList.remove("hidden");
+            renderReadableResult(output, "بنحلل شكل القطعة والعلامات اللي باينة... استنى لحظة.");
+            status.textContent = "جارٍ التحليل";
+            try {
+                const response = await fetch("/api/scan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: await compressImageForScan(selectedImageData), language: currentLang })
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.error || "مش قادرين نحلل الصورة دلوقتي.");
+                renderReadableResult(output, payload.analysis || payload.result || "النموذج مرجّعش نتيجة نقدر نعرضها.");
+                status.textContent = payload.model || "Cloudflare AI";
+                imageStatus.textContent = "التحليل الأولي خلص. راجع درجة التأكد، وطابق النتيجة مع مصدر متحفي أو أكاديمي قبل ما تعتمدها.";
+            } catch (error) {
+                renderReadableResult(output, "ما عرفناش نحلل الصورة دلوقتي. " + (error.message || "حاول مرة تانية."));
+                status.textContent = "تعذر التحليل";
+                imageStatus.textContent = "التحليل ما اشتغلش. اتأكد إن نسخة Worker منشورة وإن خدمة الذكاء الاصطناعي متفعّلة.";
+            } finally {
+                scanInProgress = false;
+                btn.disabled = !selectedImageData;
+                btn.innerText = "✨ حلّل الصورة بالذكاء الاصطناعي";
+            }
+        }
+
+        // معجم مختصر للرموز المختارة يدوياً؛ لا يستخرج الرموز من الصور.
+        let lastSymbolSpeech = "اختار علامة من الجدول عشان تظهر معلوماتها.";
+        function translateSymbol(symbol, arText, enText) {
+            const isArabic = currentLang === "ar";
+            lastSymbolSpeech = isArabic
+                ? "الرمز " + symbol + ". " + arText + ". ده شرح مرجعي مختصر، ومعنى العلامة ممكن يتغير حسب مكانها والكلام اللي حواليها في النقش."
+                : "Sign " + symbol + ". " + enText + ". This is a brief reference gloss; interpretation can depend on inscription context.";
+            document.getElementById("symbolResult").innerText = lastSymbolSpeech;
+        }
+
+        // دالة التحكم في حفظ المفضلة
+        let isFav = false;
+        function loadFavoriteState() {
+            isFav = localStorage.getItem('athara_favorite_' + currentArtifactKey) === 'true';
+            document.getElementById('favBtn').innerText = isFav ? "❤️" : "🤍";
+        }
+        function toggleFavorite() {
+            isFav = !isFav;
+            document.getElementById('favBtn').innerText = isFav ? "❤️" : "🤍";
+            localStorage.setItem('athara_favorite_' + currentArtifactKey, String(isFav));
+        }
+
+        // تهيئة التطبيق عند فتح الصفحة
+        window.onload = function() {
+            loadFavoriteState();
+            updateUIContent();
+        }
+    </script>
+</body>
+</html>

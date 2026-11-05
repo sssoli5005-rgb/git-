@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "fa915237-9cbe-4524-b82a-552d946b195d"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.heba.ekhtaberha",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
