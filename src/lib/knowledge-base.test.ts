@@ -83,6 +83,60 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("uses sourced Abu Simbel facts without inventing the small temple facade details", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content:
+          "اشرح الفرق بين معبد أبو سمبل الكبير ومعبد نفرتاري الصغير: اتبنى كل واحد لمين وليه؟",
+      },
+    ]);
+
+    expect(answer.directAnswer).toContain("أربعة تماثيل ضخمة جالسة");
+    expect(answer.directAnswer).toContain("مكرس لحتحور والملكة نفرتاري");
+    expect(answer.directAnswer).toContain("لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها");
+    expect(answer.directAnswer).not.toContain("ثلاثة لرمسيس وثلاثة لنفرتاري");
+    expect(answer.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organization: "Egyptian Ministry of Tourism and Antiquities",
+          url: "https://egymonuments.gov.eg/en/archaeological-sites/abu-simbel/",
+        }),
+        expect.objectContaining({
+          organization: "UNESCO World Heritage Centre",
+          url: "https://whc.unesco.org/en/list/88/",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps Abu Simbel evidence for contextual follow-ups without repeating a canned answer", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content:
+          "اشرح الفرق بين معبد أبو سمبل الكبير ومعبد نفرتاري الصغير: اتبنى كل واحد لمين وليه؟",
+      },
+      {
+        role: "assistant",
+        content: "المعبد الصغير مكرس لحتحور ونفرتاري، وتماثيلها بمقياس تماثيل الملك.",
+      },
+      {
+        role: "user",
+        content: "هل ده يثبت إن نفرتاري كان ليها نفس السلطة السياسية لرمسيس؟",
+      },
+    ]);
+
+    expect(answer.directAnswer).toBeUndefined();
+    expect(answer.content).toContain("المعبد الصغير شماله فهو مكرس لحتحور والملكة نفرتاري");
+    expect(answer.content).toContain("لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://egymonuments.gov.eg/en/archaeological-sites/abu-simbel/",
+      }),
+    );
+  });
+
   it.each([
     ["هل أكلوا المومياوات كدواء؟", "استخدام ما سُمّي أوروبيًا «موميا» كدواء"],
     ["هل نابليون كسر أنف أبو الهول؟", "يُظهر الأنف مفقودًا قبل الحملة الفرنسية"],

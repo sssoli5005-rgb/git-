@@ -142,6 +142,35 @@ const KNOWLEDGE: KnowledgeEntry[] = [
     ],
   },
   {
+    id: "abu-simbel-great-and-small-temples",
+    title: "معبدا أبو سمبل الكبير والصغير",
+    directResponse: true,
+    keywords: [
+      "أبو سمبل",
+      "معبد أبو سمبل",
+      "معبد رمسيس الثاني الكبير",
+      "معبد نفرتاري الصغير",
+      "معبد نفرتاري",
+      "تماثيل أبو سمبل",
+      "واجهة أبو سمبل",
+      "أبو سمبل الكبير والصغير",
+    ],
+    content:
+      "في أبو سمبل معبدان منحوتان في الصخر بناهما رمسيس الثاني. المعبد الكبير، الذي يرجع بناؤه إلى نحو 1264 ق.م بحسب وزارة السياحة والآثار المصرية، تهيمن على واجهته أربعة تماثيل ضخمة جالسة للملك؛ ويذكر المصدر أن أحدها انهار بسبب زلزال قديم. ويذكر المصدر نفسه أن قدس الأقداس يضم آمون-رع ورع-حور-آختي وبتاح ورمسيس الثاني المؤلَّه. أما المعبد الصغير شماله فهو مكرس لحتحور والملكة نفرتاري، ويصف المصدر تماثيل نفرتاري بأنها بمقياس تماثيل الملك، وهو أمر نادر. لكن صفحة المصدر لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها، لذلك لا أجزم بهذه التفاصيل. الفرق المثبت هنا هو في التكريس والتكوين الملكي، أما الدافع التفصيلي وراء اختيار كل عنصر فلا يكفي المصدر وحده لحسمه. نُقل المعبدان سنة 1968 لإنقاذهما من الغمر بعد بناء السد العالي، ضمن حملة دولية قادتها اليونسكو بين 1960 و1980.",
+    sources: [
+      {
+        title: "Abu Simbel",
+        organization: "Egyptian Ministry of Tourism and Antiquities",
+        url: "https://egymonuments.gov.eg/en/archaeological-sites/abu-simbel/",
+      },
+      {
+        title: "Nubian Monuments from Abu Simbel to Philae",
+        organization: "UNESCO World Heritage Centre",
+        url: "https://whc.unesco.org/en/list/88/",
+      },
+    ],
+  },
+  {
     id: "mastaba-to-pyramid-evolution",
     title: "المصاطب وتطور المقابر الملكية إلى الأهرامات",
     keywords: [
@@ -1167,6 +1196,17 @@ function normalize(value: string): string {
 
 const FOLLOW_UP_PATTERN =
   /^(?:(?:طب|طيب|تمام|ماشي|حلو|يعني)\s*)?(?:اعمل ايه|اتصرف ازاي|ازاي ارد|ارد اقول ايه|اكمل ازاي|والحل ايه|ايه الخطوه الجايه|ممكن توضح|اشرح اكتر|كمل|كملي|كمللي)$/u;
+const CONTEXTUAL_REFERENCE_PATTERN =
+  /(?:^|\s)(?:هل\s+ده|ده\s+(?:يثبت|معناه|يعني|يدل|يفسر|سببه)|دي\s+(?:تثبت|معناها|تعني|تدل|تفسر)|المعلومة\s+(?:دي|ده)|الكلام\s+(?:ده|دي)|في\s+(?:المثال|الحالة)\s+(?:ده|دي)|does\s+this\s+(?:mean|prove)|does\s+that\s+(?:mean|prove)|what\s+does\s+that\s+mean)(?=\s|$)/u;
+
+function isContextualFollowUp(latest: string, previous: string): boolean {
+  if (!previous) return false;
+  const normalizedLatest = normalize(latest);
+  return (
+    FOLLOW_UP_PATTERN.test(normalizedLatest) ||
+    CONTEXTUAL_REFERENCE_PATTERN.test(normalizedLatest)
+  );
+}
 
 function getRelevantEntries(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
@@ -1175,8 +1215,9 @@ function getRelevantEntries(
   const userMessages = messages.filter((message) => message.role === "user");
   const latest = userMessages.at(-1)?.content ?? "";
   const previous = userMessages.at(-2)?.content ?? "";
+  const sourceRequest = isSourceRequest(latest);
   const query = normalize(
-    FOLLOW_UP_PATTERN.test(normalize(latest)) || isSourceRequest(latest)
+    isContextualFollowUp(latest, previous) || sourceRequest
       ? `${previous} ${latest}`
       : latest,
   );
@@ -1240,7 +1281,12 @@ export function getRelevantKnowledgeAnswer(
       seen.add(source.url);
       return true;
     });
-  const directEntry = entries.find((entry) => entry.directResponse);
+  const latest = messages.filter((message) => message.role === "user").at(-1)?.content ?? "";
+  const previous = messages.filter((message) => message.role === "user").at(-2)?.content ?? "";
+  const directEntry =
+    isSourceRequest(latest) || !isContextualFollowUp(latest, previous)
+      ? entries.find((entry) => entry.directResponse)
+      : undefined;
 
   return {
     content: entries.map((entry) => entry.content).join("\n\n"),

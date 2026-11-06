@@ -141,6 +141,36 @@ describe("Egypt Smart Guide conversation instructions", () => {
     expect(payload.messages[0]?.content).toContain("RETRIEVED HERITAGE KNOWLEDGE");
   });
 
+  it("retains retrieved site evidence for a contextual follow-up without adding source links", () => {
+    const data = chatInput.parse({
+      language: "ar",
+      messages: [
+        {
+          role: "user",
+          content: "اشرح الفرق بين معبد أبو سمبل الكبير ومعبد نفرتاري الصغير",
+        },
+        {
+          role: "assistant",
+          content: "المعبد الصغير مكرس لحتحور ونفرتاري وتماثيلها بمقياس تماثيل الملك.",
+        },
+        {
+          role: "user",
+          content: "هل ده يثبت إن نفرتاري كان ليها نفس السلطة السياسية لرمسيس؟",
+        },
+      ],
+    });
+    const payload = JSON.parse(createOllamaChatRequest(data).body) as {
+      messages: { role: string; content: string }[];
+    };
+
+    expect(payload.messages[0]?.content).toContain("RETRIEVED HERITAGE KNOWLEDGE");
+    expect(payload.messages[0]?.content).toContain("لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها");
+    expect(payload.messages[0]?.content).toContain(
+      "https://egymonuments.gov.eg/en/archaeological-sites/abu-simbel/",
+    );
+    expect(payload.messages.at(-1)?.content).toContain("نفس السلطة السياسية");
+  });
+
   it("uses the same heritage accuracy rules in the Arabic fallback", () => {
     const data = chatInput.parse({
       language: "ar",

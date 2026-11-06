@@ -97,6 +97,12 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     );
   });
 
+  it("avoids Markdown tables that the chat UI cannot render as tables", () => {
+    expect(buildChatSystemInstruction("ar")).toContain(
+      "Never format an answer as a Markdown table",
+    );
+  });
+
   it("uses user-provided sources directly and cites them beside supported claims", () => {
     const prompt = buildChatSystemInstruction("ar");
     expect(prompt).toContain("When the user supplies sources with a question, inspect and extract");
