@@ -392,9 +392,9 @@ export async function handleChatPost(
           body: JSON.stringify({
             model,
             messages: localPayload.messages,
-            max_completion_tokens: 1800,
+            max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
-            reasoning_effort: "low",
+            reasoning_effort: "medium",
             reasoning_format: "hidden",
           }),
         });
@@ -423,9 +423,9 @@ export async function handleChatPost(
                     body: JSON.stringify({
                       model,
                       messages: createContinuationMessages(localPayload.messages, answer),
-                      max_completion_tokens: 1800,
+                      max_completion_tokens: 4096,
                       ...(heritageQuestion ? { temperature: 0.2 } : {}),
-                      reasoning_effort: "low",
+                      reasoning_effort: "medium",
                       reasoning_format: "hidden",
                     }),
                   },
@@ -540,7 +540,7 @@ export async function handleChatPost(
               systemInstruction: { parts: [{ text: systemText }] },
               contents,
               generationConfig: {
-                maxOutputTokens: 1800,
+                maxOutputTokens: 4096,
                 ...(heritageQuestion ? { temperature: 0.2 } : {}),
               },
             }),
