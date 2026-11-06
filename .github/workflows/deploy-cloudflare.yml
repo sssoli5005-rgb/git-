@@ -17,7 +17,8 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Verify deployment secrets
+      - name: Resolve deployment secrets
+        id: credentials
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -25,21 +26,23 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "CLOUDFLARE_API_TOKEN is missing from GitHub Actions repository secrets."
-            exit 1
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "cloudflare_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cloudflare_ready=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare deployment credentials are not configured."
           fi
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "CLOUDFLARE_ACCOUNT_ID is missing from GitHub Actions repository secrets."
-            exit 1
+          if [ -n "$GEMINI_API_KEY" ]; then
+            echo "gemini_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "gemini_ready=false" >> "$GITHUB_OUTPUT"
+            echo "GEMINI_API_KEY is not configured; Gemini chat will not be updated."
           fi
-          if [ -z "$GEMINI_API_KEY" ]; then
-            echo "GEMINI_API_KEY is missing from GitHub Actions repository secrets."
-            exit 1
-          fi
-          if [ -z "$GROQ_API_KEY" ]; then
-            echo "GROQ_API_KEY is missing from GitHub Actions repository secrets."
-            exit 1
+          if [ -n "$GROQ_API_KEY" ]; then
+            echo "groq_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "groq_ready=false" >> "$GITHUB_OUTPUT"
+            echo "GROQ_API_KEY is not configured; Groq chat will not be updated."
           fi
 
       - name: Set up Bun
@@ -59,12 +62,14 @@ jobs:
           NITRO_PRESET: cloudflare-module
 
       - name: Deploy to Cloudflare
+        if: steps.credentials.outputs.cloudflare_ready == 'true'
         run: bunx wrangler@4.68.0 deploy --config .output/server/wrangler.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Configure Gemini chat secret
+        if: steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.gemini_ready == 'true'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -73,6 +78,7 @@ jobs:
         run: printf '%s' "$GEMINI_API_KEY" | bunx wrangler@4.68.0 secret put GEMINI_API_KEY --config .output/server/wrangler.json
 
       - name: Configure Groq chat secret
+        if: steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.groq_ready == 'true'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -81,6 +87,7 @@ jobs:
         run: printf '%s' "$GROQ_API_KEY" | bunx wrangler@4.68.0 secret put GROQ_API_KEY --config .output/server/wrangler.json
 
       - name: Smoke test deployed application
+        if: steps.credentials.outputs.cloudflare_ready == 'true'
         run: |
           set -euo pipefail
           BASE_URL="https://memansisis-wq-ektaberha500.sssoli5005.workers.dev"
@@ -113,3 +120,9 @@ jobs:
           CHAT_STATUS="$(curl --silent --show-error -o /tmp/athara-chat.json -w "%{http_code}" -X POST "$BASE_URL/api/chat" -H "Content-Type: application/json" --data '{"language":"ar","messages":[{"role":"user","content":"مرحبا"}]}')"
           test "$CHAT_STATUS" = "401"
           echo "Homepage, health, auth, scanner dispatch, and protected chat smoke tests passed."
+
+      - name: Explain skipped deployment
+        if: steps.credentials.outputs.cloudflare_ready != 'true'
+        run: |
+          echo "Build and tests passed, but deployment was skipped."
+          echo "Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to the repository Actions secrets to publish this commit."
