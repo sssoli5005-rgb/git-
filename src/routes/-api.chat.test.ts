@@ -674,8 +674,52 @@ describe("handleChatPost hosted Groq provider", () => {
       role: "assistant",
       content: "رد انتهى قبل ما يكمل",
     });
-    expect(continuationRequest.messages.at(-1)?.content).toContain("Continue your previous answer");
+    expect(continuationRequest.messages.at(-1)?.content).toContain("كمّل إجابتك السابقة");
   });
+
+  it.each([
+    ["ar", "كمّل إجابتك السابقة", "الجزء الأول.", " اكتملت الإجابة."],
+    ["en", "Continue your previous answer", "The first part.", " The answer is complete."],
+    ["fr", "Continue ta réponse précédente", "Première partie.", " La réponse est complète."],
+    ["es", "Continúa tu respuesta anterior", "Primera parte.", " La respuesta está completa."],
+    ["it", "Continua la risposta precedente", "Prima parte.", " La risposta è completa."],
+    ["de", "Setze deine vorherige Antwort", "Der erste Teil.", " Die Antwort ist vollständig."],
+    ["ru", "Продолжи предыдущий ответ", "Первая часть.", " Ответ завершён."],
+    ["ja", "前の回答が途切れたところから", "最初の部分。", " 回答が完了しました。"],
+    ["zh", "从上次回答中断的地方", "第一部分。", " 回答已完成。"],
+  ] as const)(
+    "continues a truncated answer in the selected %s interface language",
+    async (language, instruction, partial, continuation) => {
+      vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+      vi.stubEnv("GEMINI_API_KEY", "");
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          Response.json({
+            choices: [{ finish_reason: "length", message: { content: partial } }],
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            choices: [{ finish_reason: "stop", message: { content: continuation } }],
+          }),
+        );
+
+      const response = await handleChatPost(
+        createChatRequest("Share one short fact.", language),
+        fetcher,
+      );
+      const body = await response.text();
+      const continuationRequest = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as {
+        messages: { role: string; content: string }[];
+      };
+
+      expect(response.status).toBe(200);
+      expect(body).toContain(partial);
+      expect(body).toContain(continuation.trim());
+      expect(continuationRequest.messages.at(-1)?.content).toContain(instruction);
+    },
+  );
 
   it("falls back to Gemini when Groq is temporarily unavailable", async () => {
     vi.stubEnv("GROQ_API_KEY", "test-groq-key");
@@ -820,9 +864,7 @@ describe("handleChatPost hosted Groq provider", () => {
       role: "model",
       parts: [{ text: "رد انتهى قبل ما يكمل" }],
     });
-    expect(continuationRequest.contents.at(-1)?.parts[0]?.text).toContain(
-      "Continue your previous answer",
-    );
+    expect(continuationRequest.contents.at(-1)?.parts[0]?.text).toContain("كمّل إجابتك السابقة");
   });
 
   it("retries with Gemini when Groq mixes English into an Arabic answer", async () => {
@@ -1178,7 +1220,9 @@ describe("handleChatPost Ollama stream handling", () => {
           new ReadableStream<Uint8Array>({
             start(controller) {
               controller.enqueue(
-                new TextEncoder().encode(ollamaChunk("The pyramids are ancient monuments.", true, "stop")),
+                new TextEncoder().encode(
+                  ollamaChunk("The pyramids are ancient monuments.", true, "stop"),
+                ),
               );
             },
             cancel() {

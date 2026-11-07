@@ -7,14 +7,12 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("Use Arabic, the selected interface language, for the entire reply");
     expect(prompt).toContain("takes precedence over the language used in conversation history");
     expect(prompt).toContain("Do not mix languages or give bilingual greetings");
-    expect(prompt).toContain("switch only when the user explicitly asks for another language");
+    expect(prompt).toContain("Switch only when the user explicitly asks for another language");
     expect(prompt).toContain("natural Egyptian colloquial Arabic");
     expect(buildChatSystemInstruction("en")).toContain(
       "Use English, the selected interface language, for the entire reply",
     );
-    expect(buildChatSystemInstruction("de")).toContain(
-      "Translate explanations into German",
-    );
+    expect(buildChatSystemInstruction("de")).toContain("Translate explanations into German");
     expect(buildChatSystemInstruction("fr")).toContain(
       "Use French, the selected interface language, for the entire reply",
     );
@@ -22,17 +20,43 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
 
   it("handles spelling mistakes gently without changing the user's intent", () => {
     const prompt = buildChatSystemInstruction("ar");
-    expect(prompt).toContain("infer the most likely intended wording from context");
+    expect(prompt).toContain("Infer the user's intended meaning despite spelling");
+    expect(prompt).toContain("in any supported language");
+    expect(prompt).toContain(
+      "briefly say what you think the user meant (the equivalent of “Did you mean [corrected term]?” in the selected interface language)",
+    );
+    expect(prompt).toContain("answer that likely question in the same reply");
+    expect(prompt).toContain("do not make the user repeat themselves");
     expect(prompt).toContain("Never shame the user");
     expect(prompt).toContain("ask one short, friendly clarification");
   });
 
+  it.each([
+    ["ar", "Arabic"],
+    ["en", "English"],
+    ["fr", "French"],
+    ["es", "Spanish"],
+    ["it", "Italian"],
+    ["de", "German"],
+    ["ru", "Russian"],
+    ["ja", "Japanese"],
+    ["zh", "Chinese"],
+  ])("applies spelling correction and proofreading rules when %s is selected", (language, name) => {
+    const prompt = buildChatSystemInstruction(language);
+    expect(prompt).toContain(`Use ${name}, the selected interface language, for the entire reply`);
+    expect(prompt).toContain(
+      `Proofread every answer in the selected interface language for spelling, grammar, punctuation`,
+    );
+    expect(prompt).toContain("the equivalent of “Did you mean [corrected term]?”");
+  });
+
   it("corrects mistaken premises and keeps answering instead of refusing or stopping", () => {
     const prompt = buildChatSystemInstruction("ar");
-    expect(prompt).toContain("If a premise is factually wrong, gently correct it and explain the supported account");
-    expect(prompt).toContain("infer the likely intended meaning");
-    expect(prompt).toContain("provide the best supported answer");
-    expect(prompt).toContain("do not stop with a generic refusal");
+    expect(prompt).toContain(
+      "If a premise is factually wrong, gently correct it and explain the supported account",
+    );
+    expect(prompt).toContain("Provide the best supported answer rather than a generic refusal");
+    expect(prompt).toContain("rather than a generic refusal");
   });
 
   it("prioritizes archaeological accuracy and labels uncertainty", () => {
@@ -165,7 +189,9 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     const prompt = buildChatSystemInstruction("ar");
     expect(prompt).toContain("artistic color conventions");
     expect(prompt).toContain("idealized depiction");
-    expect(prompt).toContain("Do not treat a painted Egyptian mask or statue as evidence of a person’s real skin tone");
+    expect(prompt).toContain(
+      "Do not treat a painted Egyptian mask or statue as evidence of a person’s real skin tone",
+    );
     expect(prompt).toContain("Nefertiti");
   });
 

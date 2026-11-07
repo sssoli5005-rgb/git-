@@ -42,14 +42,25 @@ function readProviderEnv(env: ChatProviderEnv | undefined, key: string): string 
 function createContinuationMessages(
   messages: { role: string; content: string }[],
   partialAnswer: string,
+  language: LangCode,
 ): { role: string; content: string }[] {
+  const instructions: Record<LangCode, string> = {
+    ar: "كمّل إجابتك السابقة من حيث توقفت بالضبط. لا تكرر ما كُتب بالفعل. أكمل الفكرة وأنهِ إجابة مكتملة باللغة العربية.",
+    en: "Continue your previous answer from exactly where it stopped. Do not repeat what is already written. Finish the thought and give a complete answer in English.",
+    fr: "Continue ta réponse précédente exactement là où elle s’est arrêtée. Ne répète pas ce qui est déjà écrit. Termine l’idée et donne une réponse complète en français.",
+    es: "Continúa tu respuesta anterior exactamente donde se detuvo. No repitas lo que ya está escrito. Termina la idea y ofrece una respuesta completa en español.",
+    it: "Continua la risposta precedente esattamente da dove si è interrotta. Non ripetere ciò che è già scritto. Completa il pensiero e dai una risposta completa in italiano.",
+    de: "Setze deine vorherige Antwort genau an der Stelle fort, an der sie abgebrochen wurde. Wiederhole nichts bereits Geschriebenes. Beende den Gedanken und gib eine vollständige Antwort auf Deutsch.",
+    ru: "Продолжи предыдущий ответ точно с того места, где он остановился. Не повторяй уже написанное. Заверши мысль и дай полный ответ на русском языке.",
+    ja: "前の回答が途切れたところから正確に続けてください。すでに書かれた内容は繰り返さず、話を完結させ、日本語で回答を仕上げてください。",
+    zh: "从上次回答中断的地方准确继续，不要重复已经写过的内容。完成当前思路，并用中文给出完整回答。",
+  };
   return [
     ...messages,
     { role: "assistant", content: partialAnswer },
     {
       role: "user",
-      content:
-        "Continue your previous answer from exactly where it stopped. Do not repeat what is already written. Finish the current thought and end with a complete answer in the same language.",
+      content: instructions[language],
     },
   ];
 }
@@ -430,7 +441,11 @@ export async function handleChatPost(
                     signal: continuationSignal,
                     body: JSON.stringify({
                       model,
-                      messages: createContinuationMessages(localPayload.messages, answer),
+                      messages: createContinuationMessages(
+                        localPayload.messages,
+                        answer,
+                        parsed.data.language,
+                      ),
                       max_completion_tokens: 4096,
                       ...(heritageQuestion ? { temperature: 0.2 } : {}),
                       reasoning_effort: "medium",
@@ -593,6 +608,7 @@ export async function handleChatPost(
                             content: message.content,
                           })),
                         answer,
+                        parsed.data.language,
                       ).map((message) => ({
                         role: message.role === "assistant" ? "model" : "user",
                         parts: [{ text: message.content }],
