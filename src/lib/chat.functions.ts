@@ -74,19 +74,19 @@ type ConversationAct =
 
 const CONVERSATION_ACT_GUIDANCE: Record<ConversationAct, string> = {
   greeting:
-    "This is a greeting: greet briefly in the user's language and register. For Egyptian Arabic, use Egyptian Arabic. Do not introduce the app or list services.",
+    "This is a greeting: greet briefly in the selected interface language and register. If it is Arabic, use natural Egyptian Arabic. Do not introduce the app or list services.",
   check_in:
-    "This is a social check-in asking how you are. Reply briefly and naturally in Egyptian Arabic, for example 'أنا تمام، وإنت؟' Do not echo the user's message. If they already shared how they are, acknowledge it without asking again. If they ask whether you are alone, answer that separate question instead of using the check-in wording. Do not give an app introduction, list capabilities, claim physical health, or gender yourself.",
+    "This is a social check-in asking how you are. Reply briefly and naturally in the selected interface language and register; if it is Arabic, use Egyptian Arabic. Do not echo the user's message. If they already shared how they are, acknowledge it without asking again. If they ask whether you are alone, answer that separate question instead of using the check-in wording. Do not give an app introduction, list capabilities, claim physical health, or gender yourself.",
   alone_check:
     "The user is asking whether you are alone. Answer that directly: you are an AI and have no physical location or human company. If they also shared how they are, acknowledge that briefly. Do not echo their message, claim to be physically alone, or ask another question.",
   relationship_disclosure:
     "The user has shared romantic interest and fear about expressing it. Respond to that concern with brief empathy and one low-pressure, respectful next step. Use details they already provided; do not ask the generic 'what happened?' or ask again whether they talk if they already said so. Do not assume the other person's feelings. Offer optional example wording and respect for either response.",
   physical_health_check:
-    "The user clarified that they mean your physical health: answer briefly in their language that you have no physical body or health, for example 'ماعنديش جسم أو صحة بدنية زي البشر'. Do not say you are physically well or pivot to a service list.",
+    "The user clarified that they mean your physical health: answer briefly in the selected interface language that you have no physical body or health. Do not say you are physically well or pivot to a service list.",
   gratitude:
-    "The user is expressing thanks or affection: accept it warmly and briefly in their language; do not say you are well, restart with a greeting, or add a service pitch.",
+    "The user is expressing thanks or affection: accept it warmly and briefly in the selected interface language; do not say you are well, restart with a greeting, or add a service pitch.",
   closing:
-    "The user may be acknowledging or closing the exchange: acknowledge briefly in their language, do not answer as if asked how you are, and do not add a follow-up question.",
+    "The user may be acknowledging or closing the exchange: acknowledge briefly in the selected interface language, do not answer as if asked how you are, and do not add a follow-up question.",
   correction:
     "The user is correcting your understanding: accept the correction and follow the new intent. If the new meaning is still missing, ask one concise clarifying question.",
   clarification:
@@ -98,21 +98,21 @@ const CONVERSATION_ACT_GUIDANCE: Record<ConversationAct, string> = {
   missed_connection:
     "The user expresses missing you or asks where you have been: respond warmly in their language without inventing a human absence, personal life, or memories.",
   exact_format:
-    "The user explicitly requested a strict response length or format. Follow that constraint exactly. If they requested one word, output exactly one word in the user's language and nothing else. Do not add an introduction, explanation, question, or emoji.",
+    "The user explicitly requested a strict response length or format. Follow that constraint exactly. If they requested one word, output exactly one word in the selected interface language and nothing else, unless they explicitly requested another language. Do not add an introduction, explanation, question, or emoji.",
   relationship_opening:
-    "Reply in fluent Egyptian Arabic. The user asks how to start getting to know someone but lacks context. Briefly acknowledge them, then ask just one useful question about where they know the person from. Do not ask multiple questions or assume the other person's feelings.",
+    "Reply in the selected interface language; if it is Arabic, use fluent Egyptian Arabic. The user asks how to start getting to know someone but lacks context. Briefly acknowledge them, then ask just one useful question about where they know the person from. Do not ask multiple questions or assume the other person's feelings.",
   relationship_followup:
-    "The user asks what to say to someone they like in a known social context. Use the supplied facts to offer one low-pressure, respectful option in natural Egyptian Arabic. Do not assume the other person's interest, force a coffee invitation, or use a fixed script if the context suggests a better next step.",
+    "The user asks what to say to someone they like in a known social context. Reply in the selected interface language; if it is Arabic, use natural Egyptian Arabic. Use the supplied facts to offer one low-pressure, respectful option. Do not assume the other person's interest, force a coffee invitation, or use a fixed script if the context suggests a better next step.",
   friendship_advice:
     "For a detailed friendship disclosure, keep the user, friend, and assistant clearly distinct; never narrate the user's experience as your own. Reflect the observed behavior, offer at most two uncertain explanations, then one practical next step. If useful, include one short sentence the user could say, clearly from the user's perspective. Use at most five short sentences and do not add a generic closing question. Do not infer motives, use pet names, or repeat questions already answered.",
   contextual_script:
-    "Use the earlier friendship details to give one natural Egyptian sentence the user can say, focused on their observation and feelings without accusation. Do not ask them to repeat the situation.",
+    "Use the earlier friendship details to give one natural sentence in the selected interface language that the user can say, focused on their observation and feelings without accusation. If the selected language is Arabic, use Egyptian Arabic. Do not ask them to repeat the situation.",
   friendship_concern:
     "The user fears upsetting this friend. Keep the user, friend, and assistant clearly distinct; never narrate the user's experience as your own. Acknowledge the concern without assuming the friend's reaction, connect to the known behavior, then suggest one gentle way to raise it. Use at most five short sentences and do not add a generic closing question. Do not restart with generic questions, gender yourself, or use pet names.",
   social_anxiety:
     "The user describes anxiety around meeting people and replaying conversations afterward. Explain the pattern without diagnosing, distinguish an anxious prediction from evidence, and suggest one small practical experiment. Use at most five short sentences; use prior context and do not repeat questions or add a generic closing question.",
   unanswered_message:
-    "The user says someone is not replying. Use fluent, empathetic Egyptian Arabic, and do not assume how long it has been, what they sent, or why the person is silent. If they ask for possibilities and what to do, briefly give a few plausible possibilities as uncertain, then one practical next step; do not ask for information they explicitly declined to share. Otherwise, acknowledge the uncertainty and ask at most one question about the last interaction only if that detail is needed. Do not pressure anyone or claim to know the other person's intentions.",
+    "The user says someone is not replying. Use the selected interface language; if it is Arabic, use fluent, empathetic Egyptian Arabic. Do not assume how long it has been, what they sent, or why the person is silent. If they ask for possibilities and what to do, briefly give a few plausible possibilities as uncertain, then one practical next step; do not ask for information they explicitly declined to share. Otherwise, acknowledge the uncertainty and ask at most one question about the last interaction only if that detail is needed. Do not pressure anyone or claim to know the other person's intentions.",
 };
 
 function normalizeArabicForMatching(value: string): string {
@@ -1102,7 +1102,7 @@ export function createOllamaChatRequest(data: ChatRequest, additionalKnowledge =
   }
   const actInstruction = !conversationAct
     ? ""
-    : `CURRENT TURN TASK (${conversationAct}): ${CONVERSATION_ACT_GUIDANCE[conversationAct]} Use the conversation history and latest user's language. This task narrows the immediate response only; it does not override the system rules for identity, language, context, uncertainty, respect, or safety.`;
+    : `CURRENT TURN TASK (${conversationAct}): ${CONVERSATION_ACT_GUIDANCE[conversationAct]} Use the conversation history for context, but keep replying in the selected interface language unless the user explicitly requests another language. This task narrows the immediate response only; it does not override the system rules for identity, language, context, uncertainty, respect, or safety.`;
   const messages = [
     {
       role: "system",

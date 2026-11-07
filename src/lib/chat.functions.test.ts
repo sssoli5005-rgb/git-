@@ -52,6 +52,28 @@ describe("Egypt Smart Guide conversation instructions", () => {
     },
   );
 
+  it("keeps the selected interface language when the conversation history uses another language", () => {
+    const data = chatInput.parse({
+      language: "en",
+      messages: [
+        { role: "assistant", content: "أهلًا وسهلًا!" },
+        { role: "user", content: "I would like to know about the pyramids." },
+      ],
+    });
+    const request = createOllamaChatRequest(data);
+    const payload = JSON.parse(request.body) as {
+      messages: { role: string; content: string }[];
+    };
+    const systemMessage = payload.messages[0]?.content ?? "";
+
+    expect(systemMessage).toContain(
+      "Use English, the selected interface language, for the entire reply",
+    );
+    expect(payload.messages.at(-1)?.content).toBe(
+      "I would like to know about the pyramids.",
+    );
+  });
+
   it("keeps the distinction between verified facts, hypotheses and legends", () => {
     const prompt = buildChatSystemInstruction("ar");
     expect(prompt).toContain("Verified historical or archaeological information");

@@ -2,11 +2,22 @@ import { describe, expect, it } from "vitest";
 import { buildChatSystemInstruction } from "./chat-instructions";
 
 describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
-  it("uses the selected language as a fallback and keeps Egyptian Arabic natural", () => {
+  it("uses the selected interface language consistently and keeps Egyptian Arabic natural", () => {
     const prompt = buildChatSystemInstruction("ar");
-    expect(prompt).toContain("use Arabic only when unclear");
+    expect(prompt).toContain("Use Arabic, the selected interface language, for the entire reply");
+    expect(prompt).toContain("takes precedence over the language used in conversation history");
+    expect(prompt).toContain("Do not mix languages or give bilingual greetings");
+    expect(prompt).toContain("switch only when the user explicitly asks for another language");
     expect(prompt).toContain("natural Egyptian colloquial Arabic");
-    expect(buildChatSystemInstruction("fr")).toContain("use French only when unclear");
+    expect(buildChatSystemInstruction("en")).toContain(
+      "Use English, the selected interface language, for the entire reply",
+    );
+    expect(buildChatSystemInstruction("de")).toContain(
+      "Translate explanations into German",
+    );
+    expect(buildChatSystemInstruction("fr")).toContain(
+      "Use French, the selected interface language, for the entire reply",
+    );
   });
 
   it("handles spelling mistakes gently without changing the user's intent", () => {
