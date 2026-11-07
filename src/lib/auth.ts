@@ -59,15 +59,20 @@ export function hasAuthConfiguration(): boolean {
   );
 }
 
-export function verifyUsername(username: string): boolean {
-  const normalize = (value: string) =>
-    value.normalize("NFKC")
-      .replace(/[إأآا]/gu, "ا")
-      .replace(/[\s\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "")
-      .trim();
+function normalizeUsername(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "")
+    .replace(/[\s\t\r\n]/gu, "")
+    .replace(/[إأآٱ]/gu, "ا")
+    .replace(/[ى]/gu, "ي")
+    .replace(/([ا])\1+/gu, "$1")
+    .trim();
+}
 
-  const configured = normalize(process.env.APP_USERNAME ?? "");
-  const candidate = normalize(username);
+export function verifyUsername(username: string): boolean {
+  const configured = normalizeUsername(process.env.APP_USERNAME ?? "");
+  const candidate = normalizeUsername(username);
 
   const a = createHash("sha256").update(configured).digest();
   const b = createHash("sha256").update(candidate).digest();

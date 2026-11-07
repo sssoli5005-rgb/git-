@@ -91,7 +91,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
     }
   });
 
-  it("does not return an AI artifact guess without reverse-image search", async () => {
+  it("returns a visual description without claiming an artifact identity without reverse-image search", async () => {
     vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OLLAMA_BASE_URL", "");
     const run = vi.fn().mockResolvedValue({
@@ -113,11 +113,12 @@ describe("ATHARA API dispatch in the production server entry", () => {
     expect(response?.status).toBe(200);
     await expect(response?.json()).resolves.toMatchObject({
       ok: true,
-      analysis: "",
+      analysis: expect.stringContaining("شكل حجري صغير"),
       resultType: "unverified",
       reverseImageSearchStatus: "unavailable",
+      confidenceByField: expect.objectContaining({ identity: "low" }),
     });
-    expect(run).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledOnce();
   });
 
   it("leaves unrelated routes to TanStack Start", () => {

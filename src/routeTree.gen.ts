@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAuthRouteImport } from './routes/api.auth'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
+import { Route as ApiVisionConsentRouteImport } from './routes/api.vision-consent'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVisionConsentRoute = ApiVisionConsentRouteImport.update({
+  id: '/api/vision-consent',
+  path: '/api/vision-consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/auth': typeof ApiAuthRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/vision-consent': typeof ApiVisionConsentRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/auth': typeof ApiAuthRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/vision-consent': typeof ApiVisionConsentRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/auth': typeof ApiAuthRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/vision-consent': typeof ApiVisionConsentRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/auth' | '/api/chat'
+  fullPaths: '/' | '/api/auth' | '/api/chat' | '/api/vision-consent'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/auth' | '/api/chat'
-  id: '__root__' | '/' | '/api/auth' | '/api/chat'
+  to: '/' | '/api/auth' | '/api/chat' | '/api/vision-consent'
+  id: '__root__' | '/' | '/api/auth' | '/api/chat' | '/api/vision-consent'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAuthRoute: typeof ApiAuthRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiVisionConsentRoute: typeof ApiVisionConsentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vision-consent': {
+      id: '/api/vision-consent'
+      path: '/api/vision-consent'
+      fullPath: '/api/vision-consent'
+      preLoaderRoute: typeof ApiVisionConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAuthRoute: ApiAuthRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiVisionConsentRoute: ApiVisionConsentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

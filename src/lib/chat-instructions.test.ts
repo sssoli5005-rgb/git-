@@ -72,6 +72,9 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain(
       "Never describe Egyptian art as a simple evolution from symbolic to realistic",
     );
+    expect(prompt).toContain("STATUE SCALE AND POLITICAL STATUS — CRITICAL");
+    expect(prompt).toContain("a visual fact, not proof of equal political authority");
+    expect(prompt).toContain("does not establish why this scale was chosen");
   });
 
   it("guards against the specific unsupported Amun claims from the failed chat answer", () => {

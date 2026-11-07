@@ -37,5 +37,6 @@ dist-ssr
 
 # Local Python environments and generated data
 venv/
+.venv/
 __pycache__/
 cache/

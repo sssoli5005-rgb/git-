@@ -1,6 +1,9 @@
-name = "memansisis-wq-ektaberha500"
+name = "ektaberha500-current"
 main = "src/athara-worker.js"
 compatibility_date = "2026-11-01"
+
+[vars]
+SCANNER_MATCH_THRESHOLD = "0.80"
 
 [ai]
 binding = "AI"

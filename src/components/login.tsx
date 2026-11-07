@@ -14,12 +14,21 @@ export function Login({ onAuthenticated }: { onAuthenticated: () => void }) {
     setSubmitting(true);
     setError("");
     try {
+      const normalizedUsername = username
+        .normalize("NFKC")
+        .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "")
+        .replace(/^[\s\t\r\n]+|[\s\t\r\n]+$/gu, "")
+        .replace(/[إأآٱ]/gu, "ا")
+        .replace(/[ى]/gu, "ي")
+        .replace(/([ا])\1+/gu, "$1")
+        .trim();
+
       const response = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({
-          username: username.normalize("NFKC").replace(/[\s\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim(),
+          username: normalizedUsername,
           password: password.normalize("NFKC").replace(/^[\s\u200e\u200f\u202a-\u202e\u2066-\u2069]+|[\s\u200e\u200f\u202a-\u202e\u2066-\u2069]+$/gu, ""),
         }),
       });

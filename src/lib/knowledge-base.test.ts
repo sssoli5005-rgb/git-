@@ -95,6 +95,7 @@ describe("retrieveRelevantKnowledge", () => {
     expect(answer.directAnswer).toContain("أربعة تماثيل ضخمة جالسة");
     expect(answer.directAnswer).toContain("مكرس لحتحور والملكة نفرتاري");
     expect(answer.directAnswer).toContain("لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها");
+    expect(answer.directAnswer).toContain("لا يثبت مساواة في السلطة السياسية أو استقلال الحكم");
     expect(answer.directAnswer).not.toContain("ثلاثة لرمسيس وثلاثة لنفرتاري");
     expect(answer.sources).toEqual(
       expect.arrayContaining([

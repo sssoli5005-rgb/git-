@@ -25,4 +25,13 @@ describe("local administrator authentication", () => {
 
     expect(verifyCredentials("\u202e إنصاف50012 \u202c", "\u200f01101493372\u200e")).toBe(true);
   });
+
+  it("accepts the user’s exact username spelling and repeated Arabic alef variants", () => {
+    process.env.APP_USERNAME = "إنصاف 50012";
+    process.env.ADMIN_PASSWORD = "01101493372";
+    process.env.APP_SESSION_SECRET = "test-session-secret";
+
+    expect(verifyCredentials("انصاف 50012", "01101493372")).toBe(true);
+    expect(verifyCredentials("إإإنصاف50012", "01101493372")).toBe(true);
+  });
 });

@@ -44,7 +44,6 @@ jobs:
             echo "groq_ready=false" >> "$GITHUB_OUTPUT"
             echo "GROQ_API_KEY is not configured; Groq chat will not be updated."
           fi
-
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -63,7 +62,7 @@ jobs:
 
       - name: Deploy to Cloudflare
         if: steps.credentials.outputs.cloudflare_ready == 'true'
-        run: bunx wrangler@4.68.0 deploy --config .output/server/wrangler.json
+        run: bunx wrangler@4.68.0 deploy --config .output/server/wrangler.json --name ektaberha500-current
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -75,7 +74,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: printf '%s' "$GEMINI_API_KEY" | bunx wrangler@4.68.0 secret put GEMINI_API_KEY --config .output/server/wrangler.json
+        run: printf '%s' "$GEMINI_API_KEY" | bunx wrangler@4.68.0 secret put GEMINI_API_KEY --config .output/server/wrangler.json --name ektaberha500-current
 
       - name: Configure Groq chat secret
         if: steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.groq_ready == 'true'
@@ -84,13 +83,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: printf '%s' "$GROQ_API_KEY" | bunx wrangler@4.68.0 secret put GROQ_API_KEY --config .output/server/wrangler.json
+        run: printf '%s' "$GROQ_API_KEY" | bunx wrangler@4.68.0 secret put GROQ_API_KEY --config .output/server/wrangler.json --name ektaberha500-current
 
       - name: Smoke test deployed application
         if: steps.credentials.outputs.cloudflare_ready == 'true'
         run: |
           set -euo pipefail
-          BASE_URL="https://memansisis-wq-ektaberha500.sssoli5005.workers.dev"
+          BASE_URL="https://ektaberha500-current.sssoli5005.workers.dev"
           curl --fail --silent --show-error "$BASE_URL/" -o /tmp/athara-home.html
           grep -Eiq "أثَرة|ATHARA" /tmp/athara-home.html
           curl --fail --silent --show-error "$BASE_URL/api/health" | node -e '
@@ -116,7 +115,7 @@ jobs:
             echo "Live vision scan returned HTTP $VISION_STATUS"
             exit 1
           fi
-          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/athara-vision.json","utf8")); if(!x.ok || !x.analysis || x.resultType!=="ai_guess" || !x.model?.startsWith("Cloudflare Workers AI")) { console.error("Cloudflare vision scan failed:", {model:x.model, diagnostics:x.visionDiagnostics, error:x.error}); process.exit(1); } console.log("Live Cloudflare vision inference passed.");'
+          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/athara-vision.json","utf8")); if(!x.ok || !x.analysis || x.resultType!=="unverified" || x.confidenceByField?.identity!=="low" || !(x.visionDiagnostics?.enginesCompleted > 0)) { console.error("Cloudflare vision scan failed:", {model:x.model, diagnostics:x.visionDiagnostics, error:x.error}); process.exit(1); } console.log("Live Cloudflare vision inference returned a cautious description.");'
           CHAT_STATUS="$(curl --silent --show-error -o /tmp/athara-chat.json -w "%{http_code}" -X POST "$BASE_URL/api/chat" -H "Content-Type: application/json" --data '{"language":"ar","messages":[{"role":"user","content":"مرحبا"}]}')"
           test "$CHAT_STATUS" = "401"
           echo "Homepage, health, auth, scanner dispatch, and protected chat smoke tests passed."

@@ -36,6 +36,20 @@ type ScanDiagnostics = {
   usedFallback?: boolean;
   attempts?: ScanProviderAttempt[];
 };
+type ScanVisualDescription = {
+  object_type?: string;
+  material?: string;
+  symbols?: string[];
+  style?: string;
+  possible_location?: string;
+};
+type ScanArtifactCandidate = {
+  name?: string;
+  museum?: string;
+  objectNumber?: string;
+  url?: string;
+  similarity?: number;
+};
 
 export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
   const { lang } = useLanguage();
@@ -70,6 +84,10 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
   >([]);
   const [scanWikipediaAvailable, setScanWikipediaAvailable] = useState<boolean | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [visionConsentRequired, setVisionConsentRequired] = useState(false);
+  const [visionConsentChecked, setVisionConsentChecked] = useState(false);
+  const [visionConsentSubmitting, setVisionConsentSubmitting] = useState(false);
+  const [visionConsentError, setVisionConsentError] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scanAttempt, setScanAttempt] = useState(0);
   const [openInfo, setOpenInfo] = useState<"about" | "how" | null>(null);
@@ -154,7 +172,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
     const requestTimeout = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, 60000);
+    }, 300000);
     setScanResult(null);
     setScanConfidence(null);
     setScanSources([]);
@@ -291,9 +309,54 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             }>;
             confidenceByField?: ScanConfidence;
             wikipediaAvailable?: boolean;
+            licenseAgreementRequired?: boolean;
             visionDiagnostics?: ScanDiagnostics;
-            reverseImageSearchStatus?: "unavailable" | "no_match" | "failed";
+            reverseImageSearchStatus?: "unavailable" | "no_match" | "failed" | "match";
+            visualDescription?: ScanVisualDescription;
+            matchedArtifact?: ScanArtifactCandidate | null;
+            candidates?: ScanArtifactCandidate[];
           };
+          let analysis = data.analysis || "";
+          if (data.visualDescription) {
+            const visual = data.visualDescription;
+            const details = [
+              `${scanCopy.visualObjectType}: ${visual.object_type || scanCopy.visualUnknown}`,
+              `${scanCopy.visualMaterial}: ${visual.material || scanCopy.visualUnknown}`,
+              `${scanCopy.visualSymbols}: ${visual.symbols?.join(", ") || scanCopy.visualUnknown}`,
+              `${scanCopy.visualStyle}: ${visual.style || scanCopy.visualUnknown}`,
+              `${scanCopy.visualPossibleLocation}: ${visual.possible_location || scanCopy.visualUnknown}`,
+            ];
+            if (data.matchedArtifact) {
+              const match = data.matchedArtifact;
+              details.push(
+                `${scanCopy.visualMatch}: ${match.name || scanCopy.visualUnknown}`,
+                `${scanCopy.visualMuseum}: ${match.museum || scanCopy.visualUnknown}`,
+                `${scanCopy.visualObjectNumber}: ${match.objectNumber || scanCopy.visualUnknown}`,
+              );
+              if (typeof match.similarity === "number") {
+                details.push(`${scanCopy.visualSimilarity}: ${match.similarity.toFixed(3)}`);
+              }
+              const sourceText = data.sources?.[0]?.snippet?.trim();
+              if (sourceText) details.push(sourceText);
+            } else {
+              details.push(scanCopy.visualUnconfirmed);
+              const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+              if (candidates.length > 0) {
+                details.push(
+                  scanCopy.visualCandidates,
+                  ...candidates.map(
+                    (candidate, index) =>
+                      `${index + 1}. ${candidate.name || scanCopy.visualUnknown} — ${
+                        typeof candidate.similarity === "number"
+                          ? candidate.similarity.toFixed(3)
+                          : scanCopy.visualUnknown
+                      }`,
+                  ),
+                );
+              }
+            }
+            analysis = details.join("\n");
+          }
           const reverseSearchNotice = scanMode !== "objects"
             ? ""
             : data.reverseImageSearchStatus === "unavailable"
@@ -303,7 +366,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 : data.reverseImageSearchStatus === "failed"
                   ? scanCopy.reverseImageSearchFailed
                   : "";
-          if (!response.ok || !data.ok || (!data.analysis && !reverseSearchNotice)) {
+          if (!response.ok || !data.ok || (!analysis && !reverseSearchNotice)) {
             const providerFailures = (data.visionDiagnostics?.attempts || []).map(
               ({ model, reason }) => `${model}: ${reason}`,
             );
@@ -312,17 +375,18 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             );
           }
           if (!cancelled) {
-            setScanResult([reverseSearchNotice, data.analysis].filter(Boolean).join("\n\n"));
+            setScanResult([reverseSearchNotice, analysis].filter(Boolean).join("\n\n"));
             setScanSources(Array.isArray(data.sources) ? data.sources : []);
             setScanConfidence(data.confidenceByField ?? null);
             setScanWikipediaAvailable(data.wikipediaAvailable ?? null);
+            setVisionConsentRequired(data.licenseAgreementRequired === true);
+            setVisionConsentChecked(false);
+            setVisionConsentError("");
           }
         } catch (error) {
           if (!cancelled) {
             if (timedOut) {
-              setScanError(
-                "التحليل أخد وقت أطول من دقيقة. جرّب صورة أصغر أو أوضح، وبعدها اضغط حاول تاني.",
-              );
+              setScanError(scanCopy.analysisTimeout);
             } else if (!(error instanceof DOMException && error.name === "AbortError")) {
               setScanError(
                 error instanceof Error ? error.message : "حصلت مشكلة أثناء تحليل الصورة.",
@@ -343,6 +407,38 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
       controller.abort();
     };
   }, [scannerOpen, captured, cameraError, scanMode, lang, scanAttempt]);
+
+  const acceptVisionLicense = async () => {
+    if (!visionConsentChecked || visionConsentSubmitting) {
+      setVisionConsentError(scanCopy.licenseConfirmationRequired);
+      return;
+    }
+
+    setVisionConsentSubmitting(true);
+    setVisionConsentError("");
+    try {
+      const response = await fetch("/api/vision-consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ confirmed: true }),
+      });
+      const result = await response.json().catch(() => null) as { accepted?: boolean } | null;
+      if (!response.ok || result?.accepted !== true) {
+        throw new Error("Vision model consent request failed.");
+      }
+
+      setVisionConsentRequired(false);
+      setScanResult(null);
+      setScanSources([]);
+      setScanError(null);
+      setScanAttempt((current) => current + 1);
+    } catch {
+      setVisionConsentError(scanCopy.licenseAcceptError);
+    } finally {
+      setVisionConsentSubmitting(false);
+    }
+  };
 
   const categories = [
     { id: "artifacts", icon: Landmark, title: c.artifacts, desc: c.artifactsDesc, symbol: "𓂀" },
@@ -465,7 +561,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
 
         <section id="discover" className="egypt-section">
           <div className="egypt-section-heading">
-            <span>{c.discoverLabel}</span>
+            <span className="egypt-discover-label">{c.discoverLabel}</span>
             <h2>{c.discoverTitle}</h2>
             <p>{c.discoverText}</p>
           </div>
@@ -692,6 +788,57 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 <div>
                   <strong>{resultCopy.title}</strong>
                   <p>{scanResult}</p>
+                  {visionConsentRequired && (
+                    <div className="mt-4 space-y-3 border-t border-current/20 pt-4">
+                      <h3 className="font-bold">{scanCopy.licenseTitle}</h3>
+                      <p className="text-sm">{scanCopy.licenseDescription}</p>
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <a
+                          href="https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/LICENSE"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline font-medium"
+                        >
+                          {scanCopy.licenseLink}
+                        </a>
+                        <a
+                          href="https://www.llama.com/llama3_2/use-policy/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline font-medium"
+                        >
+                          {scanCopy.acceptableUseLink}
+                        </a>
+                      </div>
+                      <label className="flex items-start gap-3 text-sm leading-6">
+                        <input
+                          type="checkbox"
+                          checked={visionConsentChecked}
+                          onChange={(event) => {
+                            setVisionConsentChecked(event.target.checked);
+                            setVisionConsentError("");
+                          }}
+                          className="mt-1 h-5 w-5 shrink-0 accent-primary"
+                        />
+                        <span>{scanCopy.licenseConfirmation}</span>
+                      </label>
+                      {visionConsentError && (
+                        <p role="alert" className="text-sm text-destructive">
+                          {visionConsentError}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="egypt-gold-button"
+                        disabled={!visionConsentChecked || visionConsentSubmitting}
+                        onClick={() => void acceptVisionLicense()}
+                      >
+                        {visionConsentSubmitting
+                          ? scanCopy.licenseAccepting
+                          : scanCopy.licenseAcceptButton}
+                      </button>
+                    </div>
+                  )}
                   <details className="mt-4 border-t border-current/15 pt-3">
                     <summary className="cursor-pointer font-semibold">
                       {resultCopy.showReferences}

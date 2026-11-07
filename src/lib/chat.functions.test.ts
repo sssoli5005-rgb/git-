@@ -165,6 +165,7 @@ describe("Egypt Smart Guide conversation instructions", () => {
 
     expect(payload.messages[0]?.content).toContain("RETRIEVED HERITAGE KNOWLEDGE");
     expect(payload.messages[0]?.content).toContain("لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها");
+    expect(payload.messages[0]?.content).toContain("لا يثبت مساواة في السلطة السياسية أو استقلال الحكم");
     expect(payload.messages[0]?.content).toContain(
       "https://egymonuments.gov.eg/en/archaeological-sites/abu-simbel/",
     );
