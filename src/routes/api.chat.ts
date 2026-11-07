@@ -194,7 +194,15 @@ async function consumeOllamaStream(
       buffered += decoder.decode(value, { stream: true });
       const lines = buffered.split("\n");
       buffered = lines.pop() ?? "";
-      lines.forEach(processLine);
+      for (const line of lines) {
+        processLine(line);
+        if (done) break;
+      }
+      if (done) {
+        buffered = "";
+        await reader.cancel();
+        break;
+      }
     }
     buffered += decoder.decode();
     processLine(buffered);
@@ -969,12 +977,30 @@ export async function handleChatPost(
     });
   }
 
-  return new Response(response.body, {
-    headers: {
-      "Cache-Control": "no-cache, no-transform",
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "X-Accel-Buffering": "no",
-    },
+  return asProgressiveChatStream(async (emit) => {
+    let reply: string;
+    let doneReason: string | undefined;
+    try {
+      ({ content: reply, doneReason } = await consumeOllamaStream(response, (content) => {
+        emit({ message: { content } });
+      }));
+    } catch (error) {
+      console.error("[Ollama] Response stream could not be completed", {
+        model: requestPayload.model,
+        reason: error instanceof Error ? error.message : "unknown",
+      });
+      emit({ error: providerTimeout.aborted ? "timeout" : "provider_error" });
+      return;
+    }
+
+    if (doneReason === "length") {
+      emit({ error: "incomplete_response" });
+      return;
+    }
+
+    const sourceSection = formatSourceSection(responseSources, parsed.data.language);
+    if (sourceSection) emit({ message: { content: sourceSection } });
+    emit({ done: true, done_reason: "stop" });
   });
 }
 

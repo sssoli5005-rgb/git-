@@ -1168,6 +1168,38 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(events.at(-1)).toMatchObject({ done: true, done_reason: "stop" });
   });
 
+  it("finishes a non-Arabic reply when Ollama sends its completion marker but keeps the stream open", async () => {
+    vi.stubEnv("GROQ_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    let streamCancelled = false;
+    const fetcher = vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(ollamaChunk("The pyramids are ancient monuments.", true, "stop")),
+              );
+            },
+            cancel() {
+              streamCancelled = true;
+            },
+          }),
+        ),
+    );
+
+    const response = await handleChatPost(
+      createChatRequest("Please explain what a greeting is.", "en"),
+      fetcher,
+    );
+    const events = await readChatEvents(response);
+
+    expect(response.status).toBe(200);
+    expect(finalChatContent(events)).toBe("The pyramids are ancient monuments.");
+    expect(events.at(-1)).toMatchObject({ done: true, done_reason: "stop" });
+    expect(streamCancelled).toBe(true);
+  });
+
   it("continues with a conversational model when live search cannot verify a Saqqara answer", async () => {
     vi.stubEnv("GROQ_API_KEY", "");
     vi.stubEnv("GEMINI_API_KEY", "");
