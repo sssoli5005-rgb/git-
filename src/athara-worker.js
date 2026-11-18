@@ -2424,7 +2424,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             const cloudflareVision = await env.AI.run(VISION_MODEL, {
               task: "query",
               image: imageDataUrl,
-              question: `${visionPrompt}\n\nحلّل الصورة نفسها، واقترح أقرب هوية أثرية كاحتمال مع قرائن مرئية. أخرج JSON فقط بالمفاتيح المطلوبة في التعليمات. لا تدّعِ تطابقًا بصريًا أو مكانًا مؤكدًا بلا صورة مرجعية ومصدر مطابق.\nلغة الإجابة: ${LANGUAGES[language]}.`,
+              question: `${prompt}\n\nحلّل الصورة نفسها، واقترح أقرب هوية أثرية كاحتمال مع قرائن مرئية. أخرج JSON فقط بالمفاتيح المطلوبة في التعليمات. لا تدّعِ تطابقًا بصريًا أو مكانًا مؤكدًا بلا صورة مرجعية ومصدر مطابق.\nلغة الإجابة: ${LANGUAGES[language]}.`,
               reasoning: false,
               temperature: 0.1,
               max_tokens: 950,
