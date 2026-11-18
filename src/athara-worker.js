@@ -1776,7 +1776,7 @@ function formatScannerResult(observation, sources, mode, language, confidenceByF
   }
   const highlightsText = [observation.significance, observation.keyFeatures, observation.visualHighlights]
     .filter((part) => typeof part === "string" && part.trim()).join("\n");
-  if (mode === "objects" && observation.visualCandidateIdentity && observation.historicalEvidenceConfirmed === true) {
+  if (mode === "objects" && observation.visualCandidateIdentity) {
     const relatedSources = sources.filter((source) => scannerSourceSupportsCandidate(source, observation));
     const groundedSource = relatedSources[0];
     if (groundedSource) {
@@ -2055,16 +2055,19 @@ function normalizeSearchTerms(value) {
 }
 
 function scannerCandidateTerms(observation) {
-  const identity = String(observation.visualCandidateIdentity || "").trim();
-  const terms = normalizeSearchTerms(identity);
+  const terms = normalizeSearchTerms([
+    observation.visualCandidateIdentity,
+    ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation.keywords) ? observation.keywords : []),
+  ].filter(Boolean).join(" "));
   const genericTerms = new Set([
     "statue", "artifact", "egyptian", "ancient", "temple", "wooden",
-    "bust", "plaster", "stone", "painted", "royal",
+    "bust", "plaster", "stone", "painted", "royal", "figurine",
     "تمثال", "أثري", "أثر", "مصرية", "مصري", "القديمة", "قديم",
-    "ملون", "حجر", "جص", "ملكي", "نصفي",
+    "ملون", "حجر", "جص", "ملكي", "نصفي", "خشبي",
   ]);
-  const distinctive = terms.filter((term) => !genericTerms.has(term));
-  return distinctive.length >= 2 ? distinctive : [];
+  const distinctive = [...new Set(terms.filter((term) => !genericTerms.has(term)))];
+  return distinctive;
 }
 
 function scannerSourceSupportsCandidate(source, observation) {
@@ -2073,7 +2076,7 @@ function scannerSourceSupportsCandidate(source, observation) {
   if (identityTerms.length < 2) return false;
   const sourceTerms = new Set(normalizeSearchTerms(`${source.title || ""} ${source.snippet || ""}`));
   const matchedTerms = identityTerms.filter((term) => sourceTerms.has(term));
-  return matchedTerms.length >= Math.max(2, Math.ceil(identityTerms.length * 0.6));
+  return matchedTerms.length >= Math.max(1, Math.ceil(identityTerms.length * 0.6));
 }
 
 async function searchOfficialMonumentsArchive(query) {
