@@ -1134,7 +1134,7 @@ async function summarizeTrustedSourceText(env, sourceText, language) {
         max_tokens: 300,
         messages: [{ role: "user", content: `لخّص النص المرجعي التالي بلغة ${LANGUAGES[language]} فقط. لا تضف أي معلومة من معرفتك، ولا تخترع مكانًا أو تاريخًا أو قصة. أعد الملخص فقط.\n\n${text}` }],
       }),
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(4_000),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(payload?.error?.message || `Groq returned HTTP ${response.status}`);
@@ -2532,7 +2532,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               temperature: 0.1,
               max_tokens: 950,
               stream: false,
-            }, { rejectIfBusy: true }), 12_000, "Cloudflare Moondream");
+            }, { rejectIfBusy: true }), 8_000, "Cloudflare Moondream");
             rawVisual = extractText(cloudflareVision).trim();
             if (!rawVisual) throw new Error("Cloudflare Moondream returned an empty response.");
             const observation = parseVisionObservation(rawVisual);
@@ -2567,7 +2567,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ] }],
                   generationConfig: { temperature: 0.1, maxOutputTokens: 1100 },
                 }),
-                signal: AbortSignal.timeout(10_000),
+                signal: AbortSignal.timeout(8_000),
               },
             );
             const geminiPayload = await geminiResponse.json().catch(() => null);
@@ -2617,7 +2617,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ],
                 }],
               }),
-              signal: AbortSignal.timeout(10_000),
+              signal: AbortSignal.timeout(8_000),
             });
             const groqPayload = await groqResponse.json().catch(() => null);
             if (!groqResponse.ok) throw new Error(groqPayload?.error?.message || `Groq Vision returned HTTP ${groqResponse.status}`);
@@ -3103,7 +3103,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : true;
 
         let freeFallbackCandidate = null;
-        if (identificationStatus === "unverified" && freeFallbackEnabled) {
+        if (identificationStatus === "unverified" && freeFallbackEnabled && openScannerDiscoveredCandidates.length === 0) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback?.sources?.length) {
             // Keep free catalog hits as explicit research leads, never as confirmed visual matches.
