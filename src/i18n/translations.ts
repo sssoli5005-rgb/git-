@@ -794,7 +794,7 @@ export const scannerResultCopy = {
   ar: {
     title: "نتيجة تحليل الصورة",
     references: "نتائج البحث والمراجع",
-    showReferences: "عرض المصادر عند الحاجة",
+    showReferences: "المصادر",
     confirmedStatus: "مؤكد بمطابقة بصرية ومصدر موثوق",
     probableStatus: "مرجّح، ويحتاج تأكيدًا إضافيًا",
     unverifiedStatus: "لم يتم تأكيد هوية القطعة",
@@ -807,7 +807,7 @@ export const scannerResultCopy = {
   en: {
     title: "Image analysis result",
     references: "Search results and references",
-    showReferences: "Show sources if needed",
+    showReferences: "Sources",
     confirmedStatus: "Confirmed by visual match and a trusted source",
     probableStatus: "Probable; further confirmation is needed",
     unverifiedStatus: "Unverified",
