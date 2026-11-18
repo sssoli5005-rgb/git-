@@ -10,12 +10,13 @@ const SCANNER_IMAGE_HOSTS = new Set([
   "openaccess-cdn.clevelandart.org",
   "upload.wikimedia.org",
   "commons.wikimedia.org",
+  "www.artic.edu",
 ]);
 const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
   "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
   "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org",
-  "si.edu", "europeana.eu",
+  "si.edu", "europeana.eu", "artic.edu",
 ];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
@@ -35,6 +36,7 @@ const TRUSTED_SOURCE_DOMAINS = [
   "isac.uchicago.edu",
   "oi.uchicago.edu",
   "thebanmappingproject.com",
+  "artic.edu",
 ];
 const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
@@ -1217,7 +1219,13 @@ function makeScannerCandidate(candidate) {
     url: pageUrl.href,
     imageUrl: imageUrl.href,
     source: String(candidate.source || "").trim().slice(0, 100),
-    sourceText: String(candidate.sourceText || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200),
+    currentLocation: String(candidate.currentLocation || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240),
+    findSpot: String(candidate.findSpot || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240),
+    period: String(candidate.period || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240),
+    material: String(candidate.material || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240),
+    provenance: String(candidate.provenance || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200),
+    didYouKnow: String(candidate.didYouKnow || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1200),
+    sourceText: String(candidate.sourceText || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 6000),
   };
 }
 
@@ -1286,6 +1294,97 @@ async function searchClevelandScannerCandidates(query) {
     sourceText: [item.description, item.tombstone, item.culture?.join(" "), item.creation_date]
       .filter(Boolean).join(" "),
   })).filter(Boolean);
+}
+
+async function searchClevelandByImage(imageBytes) {
+  try {
+    const mimeType = detectImageMimeType(imageBytes);
+    const extension = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+    const form = new FormData();
+    form.set("file", new Blob([new Uint8Array(imageBytes)], { type: mimeType }), `athara-upload.${extension}`);
+    const response = await fetch("https://openaccess-api.clevelandart.org/api/artworks", {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) throw new Error(`Cleveland image similarity returned HTTP ${response.status}`);
+    const payload = await response.json();
+    const candidates = (Array.isArray(payload?.data) ? payload.data : [])
+      .map((item) => makeScannerCandidate({
+        name: item.title,
+        museum: "Cleveland Museum of Art",
+        objectNumber: item.accession_number,
+        url: item.url,
+        imageUrl: item.images?.web?.url || item.images?.print?.url,
+        source: "Cleveland Museum of Art — image similarity",
+        currentLocation: item.current_location,
+        findSpot: item.find_spot,
+        period: item.creation_date || item.culture,
+        material: item.technique || item.support_materials,
+        provenance: item.provenance,
+        didYouKnow: item.did_you_know || item.artlens_description,
+        sourceText: [
+          item.description,
+          item.tombstone,
+          item.did_you_know,
+          item.artlens_description,
+          item.early_education_description,
+          item.creation_date,
+          item.culture,
+          item.technique,
+          item.support_materials,
+          item.provenance,
+          item.exhibitions,
+          item.citations,
+        ].filter(Boolean).join(" "),
+      }))
+      .filter(Boolean)
+      .slice(0, 12);
+    console.info("[Image scanner] Cleveland image-similarity retrieval:", {
+      returned: candidates.length,
+      hasCatalogRecords: candidates.length > 0,
+    });
+    return { candidates, available: true };
+  } catch (error) {
+    console.error(`[Image scanner] Cleveland image-similarity retrieval failed: ${String(error?.message || error).slice(0, 180)}`);
+    return { candidates: [], available: false };
+  }
+}
+
+async function searchArtInstituteScannerCandidates(query) {
+  const url = new URL("https://api.artic.edu/api/v1/artworks/search");
+  url.search = new URLSearchParams({
+    q: query,
+    limit: "5",
+    "query[term][is_public_domain]": "true",
+    fields: "id,title,artist_title,date_display,medium_display,place_of_origin,description,image_id,is_public_domain,main_reference_number",
+  }).toString();
+  const data = await scannerJson(url, "Art Institute of Chicago collection search");
+  return (Array.isArray(data?.data) ? data.data : [])
+    .filter((item) => {
+      if (!item?.image_id || item?.is_public_domain !== true) return false;
+      const recordText = [item.title, item.artist_title, item.place_of_origin, item.description].filter(Boolean).join(" ");
+      return /egypt|egyptian|pharaoh|nubia|thebes|ancient near east|مصر|مصري|فرعوني|طيبة|النوبة/i.test(recordText);
+    })
+    .map((item) => makeScannerCandidate({
+      name: item.title,
+      museum: "Art Institute of Chicago",
+      objectNumber: item.main_reference_number || String(item.id || ""),
+      url: `https://www.artic.edu/artworks/${item.id}`,
+      imageUrl: `https://www.artic.edu/iiif/2/${encodeURIComponent(item.image_id)}/full/400,/0/default.jpg`,
+      source: "Art Institute of Chicago",
+      period: item.date_display,
+      material: item.medium_display,
+      sourceText: [
+        item.description,
+        item.artist_title,
+        item.date_display,
+        item.medium_display,
+        item.place_of_origin,
+        item.main_reference_number,
+      ].filter(Boolean).join(" "),
+    }))
+    .filter(Boolean);
 }
 
 async function searchWikipediaScannerCandidates(query, language) {
@@ -1408,11 +1507,12 @@ async function searchWikidataScannerCandidates(query) {
 }
 
 async function searchOpenScannerCandidates(observation, language = "en") {
-  const queries = scannerSearchQueries(observation).slice(0, 1);
+  const queries = scannerSearchQueries(observation).slice(0, 2);
   if (!queries.length) return { candidates: [], availableSources: 0, failedSources: 0 };
   const providers = queries.flatMap((query) => [
     [`Met (${query})`, () => searchMetScannerCandidates(query)],
     [`Cleveland (${query})`, () => searchClevelandScannerCandidates(query)],
+    [`Art Institute of Chicago (${query})`, () => searchArtInstituteScannerCandidates(query)],
     [`Wikimedia Commons (${query})`, () => searchCommonsScannerCandidates(query)],
     [`Wikidata (${query})`, () => searchWikidataScannerCandidates(query)],
     [`Wikipedia en (${query})`, () => searchWikipediaScannerCandidates(query, "en")],
@@ -1478,6 +1578,77 @@ async function downloadScannerCandidateImages(candidates) {
   return downloads
     .filter((candidate) => candidate !== null)
     .map((candidate, index) => ({ id: `C${index + 1}`, ...candidate }));
+}
+
+function cosineSimilarity(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length || !left.length) return -1;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = Number(left[index]);
+    const b = Number(right[index]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return -1;
+    dot += a * b;
+    leftNorm += a * a;
+    rightNorm += b * b;
+  }
+  return leftNorm > 0 && rightNorm > 0 ? dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm)) : -1;
+}
+
+async function rankScannerCandidateImagesWithEmbeddings(ai, imageBytes, candidates) {
+  const selected = candidates.filter((candidate) => candidate?.imageBytes?.length).slice(0, 5);
+  if (!ai || typeof ai.run !== "function" || !selected.length) {
+    return { ranked: [], model: "", available: false };
+  }
+  const toImageUri = (bytes) => `data:${detectImageMimeType(bytes)};base64,${bytesToBase64(bytes)}`;
+  const imageMessages = [
+    imageBytes,
+    ...selected.map((candidate) => candidate.imageBytes),
+  ].map((bytes) => [{
+    role: "user",
+    content: [{
+      type: "image_url",
+      image_url: { url: toImageUri(bytes) },
+    }],
+  }]);
+  const response = await withScannerTimeout(
+    ai.run("@cf/google/embeddinggemma-2", {
+      messages: imageMessages,
+      dimensions: 512,
+    }),
+    7_000,
+    "Cloudflare EmbeddingGemma 2",
+  );
+  const vectors = Array.isArray(response?.data)
+    ? response.data.map((entry) => entry?.embedding)
+    : [];
+  if (vectors.length !== selected.length + 1 || !Array.isArray(vectors[0])) {
+    throw new Error("EmbeddingGemma returned an incomplete image-vector batch.");
+  }
+  const ranked = selected.map((candidate, index) => ({
+    ...candidate,
+    similarity: cosineSimilarity(vectors[0], vectors[index + 1]),
+  }))
+    .filter((candidate) => Number.isFinite(candidate.similarity) && candidate.similarity >= -1)
+    .sort((left, right) => right.similarity - left.similarity);
+  return { ranked, model: "@cf/google/embeddinggemma-2", available: true };
+}
+
+function formatArtifactCatalogStory(candidate, language = "ar") {
+  const isArabic = language === "ar";
+  const lines = [
+    candidate.name ? (isArabic ? `اسم القطعة: ${candidate.name}` : `Object: ${candidate.name}`) : "",
+    candidate.museum ? (isArabic ? `المتحف/المجموعة: ${candidate.museum}` : `Museum/collection: ${candidate.museum}`) : "",
+    candidate.currentLocation ? (isArabic ? `مكان العرض حسب سجل المتحف: ${candidate.currentLocation}` : `Recorded display location: ${candidate.currentLocation}`) : "",
+    candidate.findSpot ? (isArabic ? `مكان العثور أو الاكتشاف: ${candidate.findSpot}` : `Findspot: ${candidate.findSpot}`) : "",
+    candidate.period ? (isArabic ? `التاريخ أو الفترة المسجلة: ${candidate.period}` : `Recorded date/period: ${candidate.period}`) : "",
+    candidate.material ? (isArabic ? `الخامة/التقنية: ${candidate.material}` : `Material/technique: ${candidate.material}`) : "",
+    candidate.didYouKnow ? (isArabic ? `عن القطعة: ${candidate.didYouKnow}` : `About the object: ${candidate.didYouKnow}`) : "",
+    candidate.provenance ? (isArabic ? `سجل الملكية: ${candidate.provenance}` : `Provenance: ${candidate.provenance}`) : "",
+    candidate.sourceText ? (isArabic ? `تفاصيل بطاقة المتحف: ${candidate.sourceText}` : `Museum catalogue record: ${candidate.sourceText}`) : "",
+  ].filter(Boolean);
+  return lines.join("\n\n");
 }
 
 async function compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
@@ -2830,10 +3001,44 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ])].slice(0, 8),
                 }
               : observation;
-            const search = await searchOpenScannerCandidates(searchObservation, language);
+            const [imageSearch, textSearch] = await Promise.all([
+              searchClevelandByImage(comparisonImageBytes || imageBytes),
+              searchOpenScannerCandidates(searchObservation, language),
+            ]);
+            const mergedCandidates = [
+              ...imageSearch.candidates,
+              ...textSearch.candidates,
+            ];
+            const uniqueCandidates = [...new Map(mergedCandidates.map((candidate) => [candidate.url, candidate])).values()];
+            const search = {
+              candidates: uniqueCandidates.slice(0, 12),
+              availableSources: textSearch.availableSources + (imageSearch.available ? 1 : 0),
+              failedSources: textSearch.failedSources + (imageSearch.available ? 0 : 1),
+            };
             openScannerDiscoveredCandidates = search.candidates;
             openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
-            const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 5));
+            const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 8));
+            let embeddingRankedCandidates = [];
+            if (candidateImages.length && typeof env.AI?.run === "function") {
+              try {
+                const embeddingResult = await rankScannerCandidateImagesWithEmbeddings(
+                  env.AI,
+                  comparisonImageBytes || imageBytes,
+                  candidateImages,
+                );
+                embeddingRankedCandidates = embeddingResult.ranked;
+                const embeddingOrder = new Map(embeddingRankedCandidates.map((candidate, index) => [candidate.url, index]));
+                candidateImages.sort((left, right) =>
+                  (embeddingOrder.get(left.url) ?? 999) - (embeddingOrder.get(right.url) ?? 999),
+                );
+                console.info("[Image scanner] Multimodal image embeddings ranked museum candidates:", {
+                  model: embeddingResult.model,
+                  count: embeddingRankedCandidates.length,
+                });
+              } catch (error) {
+                console.warn("[Image scanner] Multimodal embedding ranking unavailable:", String(error?.message || error).slice(0, 180));
+              }
+            }
             if (!search.candidates.length) {
               openScannerSearchStatus = search.availableSources === 0
                 ? "failed"
@@ -2906,10 +3111,17 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
 
               if (comparison?.match) {
                 const candidate = comparison.match.candidate;
+                const catalogueStory = formatArtifactCatalogStory(candidate, language);
                 const sourceStory = await summarizeTrustedSourceText(env, candidate.sourceText || "", language);
+                const artifactStory = sourceStory || catalogueStory || candidate.sourceText;
                 const matchedArtifact = {
                   name: candidate.name,
                   museum: candidate.museum,
+                  currentLocation: candidate.currentLocation || "",
+                  findSpot: candidate.findSpot || "",
+                  period: candidate.period || "",
+                  material: candidate.material || "",
+                  provenance: candidate.provenance || "",
                   objectNumber: candidate.objectNumber,
                   url: candidate.url,
                   similarity: Math.round(comparison.match.similarity * 1000) / 1000,
@@ -2923,8 +3135,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 };
                 return json({
                   ok: true,
-                  analysis: sourceStory || candidate.sourceText,
-                  sourceStory,
+                  analysis: artifactStory,
+                  sourceStory: artifactStory,
                   sources: [source],
                   trustedSourcesAvailable: true,
                   wikipediaAvailable: null,
@@ -2934,15 +3146,15 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   confidence: "medium",
                   confidenceByField: {
                     identity: "medium",
-                    place: "low",
-                    period: "low",
+                    place: candidate.currentLocation || candidate.museum ? "medium" : "low",
+                    period: candidate.period ? "medium" : "low",
                   },
                   visualDescription: scannerVisualDescription(observation),
                   matchedArtifact,
                   candidates: [],
                   visualMatchMethod: groqCatalogComparisonSucceeded
-                    ? "Groq Qwen Vision multimodal comparison"
-                    : "Gemini multimodal comparison",
+                    ? "Cleveland visual retrieval + Cloudflare multimodal embeddings + Groq Qwen Vision reference-image verification"
+                    : "Cleveland visual retrieval + Cloudflare multimodal embeddings + Gemini reference-image verification",
                 });
               }
             }
@@ -3069,6 +3281,17 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           observation.verifiedLocation !== true
         ) {
           sources = sources.filter((source) => source?.trusted === true);
+        }
+        // Do not attach generic keyword-search articles to an unidentified object.
+        // Keep catalogue leads only when an actual catalogue record was retrieved.
+        if (
+          mode === "objects" &&
+          !openScannerDiscoveredCandidates.length &&
+          !scannerIndexCandidates(scannerIndexResult).some(
+            (candidate) => candidate.similarity >= scannerProbableThreshold(env),
+          )
+        ) {
+          sources = [];
         }
         const wikipediaAvailable = searchResults.some(
           (result) => result.wikipediaAvailable === true,

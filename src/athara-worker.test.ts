@@ -1213,6 +1213,119 @@ describe("ATHARA Cloudflare Worker", () => {
       }
     });
 
+    it("uses Cleveland image similarity and Cloudflare multimodal embeddings before returning a museum identity and story", async () => {
+      let geminiCall = 0;
+      const aiRun = vi.fn(async (model: string) => {
+        if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+          throw new Error("Moondream busy in test");
+        }
+        if (model === "@cf/google/embeddinggemma-2") {
+          return {
+            data: [
+              { embedding: Array(512).fill(0.25) },
+              { embedding: Array(512).fill(0.25) },
+            ],
+          };
+        }
+        throw new Error(`Unexpected Workers AI model: ${model}`);
+      });
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl = String(input instanceof Request ? input.url : input);
+        if (requestUrl.includes("generativelanguage.googleapis.com")) {
+          geminiCall += 1;
+          if (geminiCall === 1) {
+            return Response.json({
+              candidates: [{ content: { parts: [{ text: JSON.stringify({
+                visualDescription: "Ancient Egyptian seated royal statue",
+                identity: "Seated royal statue",
+                objectType: "Statue",
+                searchTerms: ["Egyptian seated royal statue"],
+                keywords: ["seated royal statue"],
+              }) }] } }],
+            });
+          }
+          return Response.json({
+            candidates: [{ content: { parts: [{ text: JSON.stringify({
+              rankedMatches: [{
+                candidateId: "C1",
+                similarity: 0.93,
+                visualEvidence: ["same distinctive crown outline", "same facial and shoulder silhouette"],
+              }],
+            }) }] } }],
+          });
+        }
+        if (requestUrl.includes("openaccess-api.clevelandart.org/api/artworks") && init?.method === "POST") {
+          expect(init.body).toBeInstanceOf(FormData);
+          return Response.json({ data: [{
+            title: "Royal Figure from Ancient Egypt",
+            accession_number: "1925.100",
+            url: "https://www.clevelandart.org/art/1925.100",
+            images: { web: { url: "https://openaccess-cdn.clevelandart.org/1925.100/1925.100_web.jpg" } },
+            current_location: "Gallery 210",
+            find_spot: "Thebes, Egypt",
+            creation_date: "New Kingdom, 18th Dynasty",
+            technique: "Painted limestone",
+            did_you_know: "The figure was part of a temple setting.",
+            description: "A royal figure from ancient Egypt, catalogued by the Cleveland Museum of Art.",
+            provenance: "Acquired by the museum in 1925.",
+          }] });
+        }
+        if (requestUrl.includes("openaccess-cdn.clevelandart.org")) {
+          return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
+            status: 200,
+            headers: { "content-type": "image/jpeg" },
+          });
+        }
+        if (requestUrl.includes("collectionapi.metmuseum.org") ||
+            requestUrl.includes("openaccess-api.clevelandart.org") ||
+            requestUrl.includes("api.artic.edu") ||
+            requestUrl.includes("commons.wikimedia.org") ||
+            requestUrl.includes("wikidata.org") ||
+            requestUrl.includes("wikipedia.org")) {
+          return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+        }
+        return Response.json({});
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        const response = await worker.fetch(
+          post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+          {
+            AI: { run: aiRun },
+            GEMINI_API_KEY: "gemini-test-key",
+            SCANNER_MATCH_THRESHOLD: "0.80",
+            ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+          },
+        );
+        const body = await response.json();
+        expect(response.status).toBe(200);
+        expect(body).toMatchObject({
+          ok: true,
+          resultType: "reference_match",
+          reverseImageSearchStatus: "match",
+          matchedArtifact: {
+            name: "Royal Figure from Ancient Egypt",
+            museum: "Cleveland Museum of Art",
+            objectNumber: "1925.100",
+            currentLocation: "Gallery 210",
+            findSpot: "Thebes, Egypt",
+            period: "New Kingdom, 18th Dynasty",
+          },
+          confidenceByField: { identity: "medium", place: "medium", period: "medium" },
+        });
+        expect(body.analysis).toContain("اسم القطعة: Royal Figure from Ancient Egypt");
+        expect(body.analysis).toContain("مكان العرض حسب سجل المتحف: Gallery 210");
+        expect(body.analysis).toContain("سجل الملكية: Acquired by the museum in 1925.");
+        expect(aiRun).toHaveBeenCalledWith("@cf/google/embeddinggemma-2", expect.objectContaining({
+          messages: expect.any(Array),
+          dimensions: 512,
+        }));
+        expect(geminiCall).toBe(2);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it("keeps below-threshold visual scores unconfirmed and returns the nearest candidates", async () => {
       let geminiCall = 0;
       vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
