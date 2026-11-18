@@ -291,7 +291,7 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
-  it("shows a trusted Commons candidate for review but keeps identity unverified when image comparison fails", async () => {
+  it("uses Groq multimodal comparison when Gemini image matching is unavailable", async () => {
     const candidateUrl = "https://commons.wikimedia.org/wiki/File:Abu_Simbel_temple.jpg";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestUrl = String(input instanceof Request ? input.url : input);
@@ -312,6 +312,21 @@ describe("ATHARA Cloudflare Worker", () => {
           status: 503,
           headers: { "content-type": "application/json" },
         });
+      }
+      if (requestUrl === "https://api.groq.com/openai/v1/chat/completions") {
+        const requestBody = JSON.parse(String(init?.body));
+        const content = requestBody.messages?.[0]?.content || [];
+        if (Array.isArray(content) && content.some((part) => part.type === "image_url")) {
+          expect(content.filter((part) => part.type === "image_url")).toHaveLength(2);
+          return Response.json({ choices: [{ message: { content: JSON.stringify({
+            rankedMatches: [{
+              candidateId: "C1",
+              similarity: 0.93,
+              visualEvidence: ["four seated colossal statues", "rock-cut temple facade"],
+            }],
+          }) } }] });
+        }
+        return Response.json({ choices: [{ message: { content: "A rock-cut temple facade at Abu Simbel." } }] });
       }
       if (requestUrl.startsWith("https://upload.wikimedia.org/")) {
         return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
@@ -341,21 +356,21 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-key", ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
+        { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key", GROQ_MODEL: "qwen/qwen3.8-27b", ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
       );
       const body = await response.json();
 
-      expect(body.identificationStatus).toBe("unverified");
-      expect(body.resultType).toBe("unverified");
-      expect(body.matchedArtifact).toBeUndefined();
-      expect(body.candidates).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: "Abu Simbel temple" }),
-      ]));
-      expect(body.sources).toContainEqual(expect.objectContaining({
-        url: "https://commons.wikimedia.org/wiki/File%3AAbu_Simbel_temple.jpg",
-        trusted: true,
+      expect(body.identificationStatus).toBe("confirmed");
+      expect(body.resultType).toBe("reference_match");
+      expect(body.matchedArtifact).toEqual(expect.objectContaining({
+        name: "Abu Simbel temple",
+        similarity: 0.93,
       }));
-      expect(body.reverseImageSearchStatus).toBe("failed");
+      expect(body.visualMatchMethod).toContain("Groq Qwen Vision");
+      expect(body.reverseImageSearchStatus).toBe("match");
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input) === "https://api.groq.com/openai/v1/chat/completions",
+      )).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
