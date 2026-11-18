@@ -124,6 +124,70 @@ jobs:
           test "$CHAT_STATUS" = "401"
           echo "Homepage, health, auth, scanner dispatch, and protected chat smoke tests passed."
 
+      - name: Live artifact recognition test (official Nephthys image)
+        if: github.event_name == 'push' && steps.credentials.outputs.cloudflare_ready == 'true'
+        env:
+          ATHARA_BASE_URL: https://ektaberha500-current.sssoli5005.workers.dev
+        run: |
+          node --input-type=module <<'NODE'
+          const pageUrl = "https://egymonuments.gov.eg/ar/collections/statue-of-nephthys-6";
+          const imageUrl = "https://egymonuments.gov.eg/media/4666/dsc_0802.jpg?anchor=center&height=423&mode=crop&rnd=132581519580000000&width=645";
+          const imageResponse = await fetch(imageUrl, {
+            headers: { "user-agent": "ATHARA-Live-Recognition-Test/1.0" },
+            signal: AbortSignal.timeout(20000),
+          });
+          if (!imageResponse.ok) throw new Error("Official Ministry reference image returned HTTP " + imageResponse.status);
+          const imageType = (imageResponse.headers.get("content-type") || "").split(";")[0];
+          if (!imageType.startsWith("image/")) throw new Error("Ministry reference URL did not return an image: " + imageType);
+          const imageBytes = Buffer.from(await imageResponse.arrayBuffer());
+          if (!imageBytes.length || imageBytes.length > 8_000_000) throw new Error("Reference image size is invalid: " + imageBytes.length);
+          console.log("Using the official Ministry image:", imageType, imageBytes.length + " bytes");
+          const scanResponse = await fetch(new URL("/api/scan", process.env.ATHARA_BASE_URL), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              image: "data:" + imageType + ";base64," + imageBytes.toString("base64"),
+              language: "ar",
+              mode: "objects",
+            }),
+            signal: AbortSignal.timeout(120000),
+          });
+          const result = await scanResponse.json().catch(() => null);
+          if (!scanResponse.ok || !result?.ok) {
+            console.error("Live artifact scan request failed:", scanResponse.status, result);
+            process.exit(1);
+          }
+          const officialSource = (result.sources || []).some((source) =>
+            typeof source.url === "string" && source.url.includes("/ar/collections/statue-of-nephthys-6")
+          );
+          const identityText = [
+            result.analysis,
+            result.matchedArtifact?.name,
+            ...(result.candidates || []).map((candidate) => candidate.name),
+            ...(result.sources || []).map((source) => source.title),
+          ].filter(Boolean).join(" ");
+          const nephthysNamed = /نفتيس|nephthys|nebthet/i.test(identityText);
+          const visuallyMatched =
+            result.identificationStatus === "probable" &&
+            result.reverseImageSearchStatus === "match";
+          console.log(JSON.stringify({
+            identificationStatus: result.identificationStatus,
+            reverseImageSearchStatus: result.reverseImageSearchStatus,
+            confidenceByField: result.confidenceByField,
+            matchedArtifact: result.matchedArtifact || null,
+            sources: result.sources,
+            nephthysNamed,
+            officialMinistryCatalogueSource: officialSource,
+            visuallyMatched,
+            analysis: result.analysis,
+          }, null, 2));
+          if (!nephthysNamed || !officialSource || !visuallyMatched) {
+            console.error("LIVE ARTIFACT RECOGNITION FAILED: the same Ministry catalogue image must return the Nephthys identity, its official record, and a visual match.");
+            process.exit(1);
+          }
+          console.log("LIVE ARTIFACT RECOGNITION PASSED: Nephthys is visually matched to the official Ministry catalogue record.");
+          NODE
+
       - name: Explain skipped deployment
         if: github.event_name == 'push' && steps.credentials.outputs.cloudflare_ready != 'true'
         run: |
