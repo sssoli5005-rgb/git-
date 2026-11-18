@@ -1361,7 +1361,11 @@ async function searchArtInstituteScannerCandidates(query) {
   }).toString();
   const data = await scannerJson(url, "Art Institute of Chicago collection search");
   return (Array.isArray(data?.data) ? data.data : [])
-    .filter((item) => item?.image_id && item?.is_public_domain === true)
+    .filter((item) => {
+      if (!item?.image_id || item?.is_public_domain !== true) return false;
+      const recordText = [item.title, item.artist_title, item.place_of_origin, item.description].filter(Boolean).join(" ");
+      return /egypt|egyptian|pharaoh|nubia|thebes|ancient near east|مصر|مصري|فرعوني|طيبة|النوبة/i.test(recordText);
+    })
     .map((item) => makeScannerCandidate({
       name: item.title,
       museum: "Art Institute of Chicago",
@@ -3149,7 +3153,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   matchedArtifact,
                   candidates: [],
                   visualMatchMethod: groqCatalogComparisonSucceeded
-                    ? "Cleveland visual retrieval + Cloudflare multimodal embeddings + Groq reference-image verification"
+                    ? "Cleveland visual retrieval + Cloudflare multimodal embeddings + Groq Qwen Vision reference-image verification"
                     : "Cleveland visual retrieval + Cloudflare multimodal embeddings + Gemini reference-image verification",
                 });
               }
