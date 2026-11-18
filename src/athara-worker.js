@@ -2332,7 +2332,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = mode === "objects" || geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL);
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL);
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
@@ -2711,7 +2711,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         let geminiCatalogComparisonFailed = false;
         let openScannerComparisonSucceeded = false;
         let groqCatalogComparisonSucceeded = false;
-        let openScannerSearchStatus = "no_match";
+        let openScannerSearchStatus = reverseImageSearchConfigured ? "no_match" : "unavailable";
         let openScannerRankedCandidates = [];
         let openScannerSourceCandidates = [];
         let openScannerDiscoveredCandidates = [];
@@ -2804,7 +2804,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           });
         }
 
-        if (mode === "objects" && !officialVisualMatch) {
+        if (mode === "objects" && !officialVisualMatch && reverseImageSearchConfigured) {
           try {
             const probableThreshold = scannerProbableThreshold(env);
             const indexNames = scannerIndexCandidates(scannerIndexResult)
@@ -3186,7 +3186,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ...(mode === "objects"
             ? {
                 visualDescription: scannerVisualDescription(observation),
-                candidates: [
+                candidates: [...new Map([
                   ...openScannerRankedCandidates,
                   ...openScannerSourceCandidates,
                   ...openScannerDiscoveredCandidates.map((candidate) => ({
@@ -3200,7 +3200,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   })),
                   ...indexCandidates,
                   ...(freeFallbackCandidate ? [freeFallbackCandidate] : []),
-                ].slice(0, 5),
+                ].map((candidate) => [candidate.url || candidate.name, candidate])).values()].slice(0, 5),
                 ...(identificationStatus === "probable" && probableArtifact
                   ? { matchedArtifact: probableArtifact }
                   : {}),
