@@ -113,7 +113,10 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(run).toHaveBeenCalledTimes(1);
       expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
       expect(fetchMock.mock.calls.some(([input]) =>
-        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
+        String(input instanceof Request ? input.url : input).includes("/v1beta/interactions"),
+      )).toBe(true);
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).includes(":generateContent"),
       )).toBe(false);
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("api.groq.com"),
@@ -1245,7 +1248,7 @@ describe("ATHARA Cloudflare Worker", () => {
             snippet: "A small bronze figurine in a seated pose. Late Period",
           }],
         });
-        expect(geminiCall).toBe(2);
+        expect(geminiCall).toBe(4);
         expect(fetchMock.mock.calls.some(([input]) => String(input).includes("serpapi.com"))).toBe(false);
       } finally {
         vi.unstubAllGlobals();
