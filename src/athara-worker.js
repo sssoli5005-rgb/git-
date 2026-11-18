@@ -1816,34 +1816,34 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
     searchWithGroqBrowser(query, groqKey, env.GROQ_WEB_SEARCH_MODEL || "openai/gpt-oss-20b") });
   if (typeof env.AI?.websearch === "function") providers.push({ name: "Cloudflare Web Search", run: () =>
     searchWithCloudflareWebSearch(env, query) });
+  // Independent search engines run concurrently. A quota error or timeout in one
+  // engine must not delay or cancel results returned by the others.
+  const results = await Promise.allSettled(providers.map((provider) => provider.run()));
   let failedSources = 0;
-  const collected = [];
-  const providerNames = [];
-  for (const provider of providers) {
-    try {
-      const result = await provider.run();
-      const entries = (result.entries || [])
-        .filter((entry) => scannerSourceUrlAllowed(entry.url))
-        .slice(0, 10);
-      const pages = await Promise.allSettled(entries.map((entry) => readGroundedScannerSource(entry, observation)));
-      const accepted = pages
-        .filter((page) => page.status === "fulfilled" && page.value)
-        .map((page) => page.value);
-      for (const page of accepted) {
-        collected.push({
-          ...page,
-          source: { ...page.source, searchProvider: provider.name },
-        });
-      }
-      if (accepted.length) providerNames.push(provider.name);
-      // Continue to the next independent provider even after finding pages:
-      // the first result may be a context page with no reference image.
-    } catch (error) {
+  const pageTasks = [];
+  for (const [index, result] of results.entries()) {
+    const provider = providers[index];
+    if (result.status === "rejected") {
       failedSources++;
-      console.warn("[Image scanner] Search provider failed; falling back:", provider.name,
-        String(error?.message || error).slice(0, 160));
+      console.warn("[Image scanner] Search provider failed; other engines continue:", provider.name,
+        String(result.reason?.message || result.reason).slice(0, 160));
+      continue;
+    }
+    const entries = (result.value.entries || [])
+      .filter((entry) => scannerSourceUrlAllowed(entry.url))
+      .slice(0, 10);
+    for (const entry of entries) {
+      pageTasks.push(readGroundedScannerSource(entry, observation).then((page) => {
+        if (!page) return null;
+        return { ...page, source: { ...page.source, searchProvider: provider.name } };
+      }).catch((error) => {
+        console.warn("[Image scanner] Catalogue page read failed:", provider.name,
+          String(error?.message || error).slice(0, 120));
+        return null;
+      }));
     }
   }
+  const collected = (await Promise.all(pageTasks)).filter(Boolean);
   const unique = [...new Map(collected.map((entry) => [entry.source.url, entry])).values()];
   unique.sort((left, right) => {
     const leftPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(left.source.url).hostname.endsWith(domain));
@@ -1856,9 +1856,9 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
   return {
     sources,
     candidates: candidates.slice(0, 12),
-    availableSources: providerNames.length,
+    availableSources: new Set(sources.map((source) => source.searchProvider)).size,
     failedSources,
-    provider: providerNames.join(", "),
+    provider: [...new Set(sources.map((source) => source.searchProvider))].join(", "),
   };
 }
 
