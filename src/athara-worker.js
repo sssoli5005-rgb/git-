@@ -2733,6 +2733,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           : `حلل الصورة باعتبارها أثرًا مصريًا قديمًا أو صورة له من كتاب أو شاشة. ابدأ بأقرب اسم معروف يمكن أن يفسر السمات المميزة، لا بمجرد وصف عام؛ اذكره كاحتمال إذا لم توجد علامة فريدة، واتركه فارغًا فقط إذا تعذر اقتراح احتمال مفيد. حدّد نوع الأثر وخامته والرموز أو النقوش والحقبة والموقع المحتمل، واذكر القرينة التي جعلتك تقترح الاسم. افصل التعليقات المطبوعة عن الأثر نفسه. لا تخترع اسمًا أو قصة أو تاريخًا أو مكانًا. يمكن اقتراح اسم ومكان محتملين بصريًا للبحث، لكن لا تصفهما بالمؤكدين إلا بعد دعم صفحة متحف/آثار موثوقة أو مطابقة صورة مرجعية. عند توفر مصدر موثوق في السياق، لخّص منه قصة الأثر ومكان عرضه، ولا تنسب للمصدر معلومات لا يقولها. اترك حقائق القصة والمكان فارغة إذا لم يوجد سند. أخرج JSON فقط بالشكل: {"identity":"أقرب اسم محتمل، أو فارغ إذا تعذر","identityEvidence":"السمات الفارقة التي تدعم الاحتمال أو سبب تعذر التحديد","visualDescription":"وصف مختصر للسمات المرئية","objectType":"نوع الأثر","material":"الخامة المحتملة أو غير متأكد","symbols":["رموز أو نقوش ظاهرة"],"style":"الأسلوب أو غير متأكد","possibleLocation":"المتحف أو الموقع المحتمل أو غير متأكد","country":"الدولة المحتملة أو غير متأكد","city":"المدينة المحتملة أو غير متأكد","place":"المتحف أو الموقع المحتمل أو غير متأكد","period":"العصر المحتمل أو غير متأكد","contextualStory":"القصة/الوظيفة المحتملة فقط إن كنت تعرفها، وإلا فارغ","significance":"الأهمية المحتملة أو فارغ","keyFeatures":"تفاصيل فارقة تساعد في التحقق","searchTerms":["اسم أو كلمات بحث قصيرة بالعربية والإنجليزية"],"keywords":["كلمات دقيقة للبحث"],"possibilities":["حتى 3 أسماء محتملة مع قرينة قصيرة لكل منها"],"confidence":"high أو medium أو low","confidenceByField":{"identity":"high أو medium أو low","place":"high أو medium أو low","period":"high أو medium أو low"}}. لا تدّع أن الاحتمال حقيقة، ولا تدّع إجراء بحث لم يُجرَ.`;
       const visualOnlyPrompt = visionPrompt;
       const visionAttempts = [];
+      const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
+      const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
       try {
         let rawVisual = "";
         let visionUsed = "";
@@ -2749,7 +2751,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const ollamaModel =
           typeof env.OLLAMA_VISION_MODEL === "string" ? env.OLLAMA_VISION_MODEL : "gemma3:4b";
         const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL];
-        const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
         const geminiVisionModels = [configuredGeminiVisionModel(env)];
         const independentObservations = [];
         let visionProviderUsed = "";
@@ -2820,7 +2821,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
         const groqVisionModel =
           typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
             ? env.GROQ_VISION_MODEL.trim()
