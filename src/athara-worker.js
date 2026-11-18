@@ -6,6 +6,11 @@ const FALLBACK_VISION_MODELS = [
 const FALLBACK_VISION_MODEL = FALLBACK_VISION_MODELS[0];
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
+const OPENROUTER_VISION_MODELS = [
+  "nvidia/nemotron-3.5-super-vl:free",
+  "google/gemma-4-31b-it:free",
+  "openrouter/free",
+];
 const MAX_IMAGE_CHARS = 8_500_000;
 const MAX_COMPARISON_IMAGE_BYTES = 500_000;
 const DEFAULT_SCANNER_MATCH_THRESHOLD = 0.8;
@@ -277,8 +282,12 @@ function cleanVisionObservation(value) {
   ]));
 }
 
-function resolveVisionProviderOrder(_env) {
-  return [...DEFAULT_VISION_PROVIDER_ORDER];
+function resolveVisionProviderOrder(env) {
+  const order = [...DEFAULT_VISION_PROVIDER_ORDER];
+  if (typeof env?.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim()) {
+    order.push("OpenRouter");
+  }
+  return order;
 }
 
 function stripHtml(html) {
@@ -488,7 +497,42 @@ function combineVisionObservations(observations) {
       : levels.includes("medium") ? "medium"
         : levels.includes("low") ? "low" : "unavailable";
   }
+  combined.candidateIdentities = [...new Set(observations
+    .map((observation) => meaningfulVisionText(observation.identity || observation.visualCandidateIdentity))
+    .filter(Boolean))].slice(0, 4);
+  combined.identityConflict = combined.candidateIdentities.length > 1 &&
+    !hasVisionIdentityAgreement(combined.candidateIdentities);
+  if (combined.identityConflict) {
+    combined.identity = "";
+    combined.visualCandidateIdentity = combined.candidateIdentities[0];
+    combined.possibilities = combined.candidateIdentities.slice(0, 3);
+  }
   return combined;
+}
+
+function hasVisionIdentityAgreement(identities) {
+  const termSets = identities.map((identity) =>
+    new Set(scannerCandidateTerms({ identity }).filter((term) => term.length > 2)),
+  );
+  for (let left = 0; left < termSets.length; left += 1) {
+    for (let right = left + 1; right < termSets.length; right += 1) {
+      let shared = 0;
+      for (const term of termSets[left]) if (termSets[right].has(term)) shared += 1;
+      const denominator = Math.max(1, Math.min(termSets[left].size, termSets[right].size));
+      if (shared >= 1 && shared / denominator >= 0.25) return true;
+    }
+  }
+  return false;
+}
+
+function needsAdditionalArtifactVision(observations, mode) {
+  if (!observations.length) return true;
+  if (mode !== "objects") return false;
+  const identities = observations
+    .map((observation) => meaningfulVisionText(observation.identity || observation.visualCandidateIdentity))
+    .filter(Boolean);
+  if (identities.length < 2) return true;
+  return !hasVisionIdentityAgreement(identities);
 }
 
 function readExifGps(bytes) {
@@ -2802,6 +2846,7 @@ function scannerCandidateTerms(observation) {
   const rawTerms = normalizeSearchTerms([
     observation.identity,
     observation.visualCandidateIdentity,
+    ...(Array.isArray(observation.candidateIdentities) ? observation.candidateIdentities : []),
     observation.place,
     observation.possibleLocation,
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
@@ -3012,7 +3057,12 @@ export default {
         visionEngines: [
           { name: "Gemini", configured: geminiConfigured, model: configuredGeminiVisionModel(env) },
           { name: "Groq", configured: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()), model: env.GROQ_VISION_MODEL || env.GROQ_MODEL || "qwen/qwen3.8-27b" },
-          { name: "Cloudflare Workers AI", configured: typeof env.AI?.run === "function", model: VISION_MODEL, fallbackModel: FALLBACK_VISION_MODEL },
+          { name: "Cloudflare Workers AI", configured: typeof env.AI?.run === "function", model: VISION_MODEL, fallbackModels: FALLBACK_VISION_MODELS },
+          {
+            name: "OpenRouter (free vision models)",
+            configured: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+            models: OPENROUTER_VISION_MODELS,
+          },
         ],
         reverseImageSearch: {
           openMuseumCatalogs: geminiConfigured,
@@ -3020,6 +3070,7 @@ export default {
           geminiGoogleSearch: geminiConfigured,
           groqBrowserSearch: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()),
           cloudflareWebSearch: typeof env.AI?.websearch === "function",
+          openRouterVision: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
         },
         visionProviderOrder,
         visionFallbackOrder,
@@ -3403,7 +3454,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (!independentObservations.length && geminiVisionKey) {
+        if (geminiVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
           const geminiModel = geminiVisionModels[0];
           try {
             const geminiResponse = await fetchVisionWithRetry(
@@ -3443,7 +3494,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
               ? env.GROQ_MODEL.trim()
               : "qwen/qwen3.8-27b";
-        if (groqVisionKey && !independentObservations.length) {
+        if (groqVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
           try {
             const groqResponse = await fetchVisionWithRetry(
               "https://api.groq.com/openai/v1/chat/completions",
@@ -3489,6 +3540,69 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               model: `Groq Vision (${groqVisionModel})`,
               reason: String(modelError?.message || modelError).slice(0, 180),
             });
+          }
+        }
+
+        const openRouterVisionKey = typeof env.OPENROUTER_API_KEY === "string"
+          ? env.OPENROUTER_API_KEY.trim()
+          : "";
+        if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+          for (const openRouterModel of OPENROUTER_VISION_MODELS) {
+            if (!needsAdditionalArtifactVision(independentObservations, mode)) break;
+            try {
+              const openRouterResponse = await fetchVisionWithRetry(
+                "https://openrouter.ai/api/v1/chat/completions",
+                {
+                  method: "POST",
+                  headers: {
+                    "content-type": "application/json",
+                    authorization: `Bearer ${openRouterVisionKey}`,
+                    "http-referer": "https://ektaberha500-current.sssoli5005.workers.dev",
+                    "x-title": "ATHARA Egyptian Heritage Scanner",
+                  },
+                  body: JSON.stringify({
+                    model: openRouterModel,
+                    temperature: 0.1,
+                    max_tokens: 1100,
+                    messages: [
+                      { role: "system", content: prompt },
+                      {
+                        role: "user",
+                        content: [
+                          {
+                            type: "text",
+                            text: "حلّل الصورة نفسها كقطعة أو موقع من التراث المصري. اقترح اسمًا محددًا فقط إذا كانت السمات المرئية تدعمه، واذكر قرائنك. أخرج JSON فقط.",
+                          },
+                          {
+                            type: "image_url",
+                            image_url: { url: imageDataUrl },
+                          },
+                        ],
+                      },
+                    ],
+                  }),
+                },
+                { provider: "OpenRouter " + openRouterModel, timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq },
+              );
+              const openRouterPayload = await openRouterResponse.json().catch(() => null);
+              if (!openRouterResponse.ok) {
+                throw new Error(openRouterPayload?.error?.message || `OpenRouter returned HTTP ${openRouterResponse.status}`);
+              }
+              rawVisual = openRouterPayload?.choices?.[0]?.message?.content?.trim() || "";
+              if (!rawVisual) throw new Error("OpenRouter returned an empty response.");
+              const observation = parseVisionObservation(rawVisual);
+              if (!hasUsableVisionObservation(observation, mode)) {
+                throw new Error("OpenRouter returned invalid or non-informative visual data.");
+              }
+              independentObservations.push(observation);
+              visionProviderUsed = "OpenRouter " + openRouterModel;
+            } catch (modelError) {
+              console.warn("[Image scanner] OpenRouter " + openRouterModel + " failed:", String(modelError?.message || modelError).slice(0, 180));
+              visionAttempts.push({
+                model: "OpenRouter " + openRouterModel,
+                reason: String(modelError?.message || modelError).slice(0, 180),
+              });
+            }
           }
         }
 
@@ -3562,7 +3676,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ? applyEvidenceGuard(
               correctedObservation,
               Boolean(officialVisualMatch),
-              visualObservation.identity,
+              visualObservation.identity || visualObservation.visualCandidateIdentity ||
+                visualObservation.candidateIdentities?.[0] || "",
             )
           : correctedObservation;
         const officialTextCandidates = mode === "objects"
