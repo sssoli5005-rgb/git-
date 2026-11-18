@@ -3072,13 +3072,25 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             ? env.SCANNER_FREE_FALLBACK_ENABLED.trim().toLowerCase() !== "false"
             : true;
 
+        let freeFallbackCandidate = null;
         if (identificationStatus === "unverified" && freeFallbackEnabled) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback?.sources?.length) {
-            // Keep free catalog hits as research leads, not confirmed/probable identities.
+            // Keep free catalog hits as explicit research leads, never as confirmed visual matches.
             responseSources = [...new Map(
               [...responseSources, ...freeFallback.sources].map((source) => [source.url, source]),
             ).values()].slice(0, 8);
+            if (freeFallback.name || freeFallback.story || freeFallback.location) {
+              freeFallbackCandidate = {
+                name: freeFallback.name || "",
+                description: freeFallback.story || "",
+                location: freeFallback.location || "",
+                confidence: "low",
+                status: "research_candidate",
+                visuallyMatched: false,
+                sources: freeFallback.sources.slice(0, 5),
+              };
+            }
           }
         }
 
@@ -3098,8 +3110,25 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const relatedContext = mode === "objects" && !officialVisualMatch && !sourceBackedCandidate
           ? relatedSourceSummary(responseSources, language)
           : "";
-        const analysis = [formattedAnalysis, relatedContext].filter(Boolean).join("\n\n");
-        const sourceStory = await summarizeTrustedSourceText(env, responseSourceText, language);
+        const freeCandidateContext = freeFallbackCandidate
+          ? [
+              language === "ar" ? "مرشحات بحث من كتالوجات عامة (غير مؤكدة بصريًا)" : "Public-catalog research leads (not visually confirmed)",
+              freeFallbackCandidate.name
+                ? (language === "ar" ? "اسم مرشح: " : "Candidate name: ") + freeFallbackCandidate.name
+                : "",
+              freeFallbackCandidate.location
+                ? (language === "ar" ? "الموقع الوارد في بيانات المصدر: " : "Location listed by source: ") + freeFallbackCandidate.location
+                : "",
+              freeFallbackCandidate.description
+                ? (language === "ar" ? "معلومات المصدر: " : "Source information: ") + freeFallbackCandidate.description
+                : "",
+              language === "ar"
+                ? "هذه نتائج بحث نصي مساعدة وليست تطابقًا للصورة. يلزم التحقق من صورة الكتالوج قبل اعتماد الهوية أو الموقع."
+                : "These are text-search leads, not an image match. Verify the catalog image before accepting the identity or location.",
+            ].filter(Boolean).join("\n")
+          : "";
+        const analysis = [formattedAnalysis, relatedContext, freeCandidateContext].filter(Boolean).join("\n\n");
+        const sourceStory = freeFallbackCandidate?.description || await summarizeTrustedSourceText(env, responseSourceText, language);
         const reverseImageSearchStatus = identificationStatus === "probable" && probableArtifact
           ? "no_match"
           : !reverseImageSearchConfigured
@@ -3120,7 +3149,12 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ...(mode === "objects"
             ? {
                 visualDescription: scannerVisualDescription(observation),
-                candidates: [...openScannerRankedCandidates, ...openScannerSourceCandidates, ...indexCandidates].slice(0, 5),
+                candidates: [
+                  ...openScannerRankedCandidates,
+                  ...openScannerSourceCandidates,
+                  ...indexCandidates,
+                  ...(freeFallbackCandidate ? [freeFallbackCandidate] : []),
+                ].slice(0, 5),
                 ...(identificationStatus === "probable" && probableArtifact
                   ? { matchedArtifact: probableArtifact }
                   : {}),
