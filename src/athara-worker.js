@@ -1,7 +1,6 @@
-const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
-const FALLBACK_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
+const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
-const DEFAULT_VISION_PROVIDER_ORDER = ["Gemini", "Groq", "Cloudflare"];
+const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
 const MAX_IMAGE_CHARS = 8_500_000;
 const MAX_COMPARISON_IMAGE_BYTES = 500_000;
 const DEFAULT_SCANNER_MATCH_THRESHOLD = 0.8;
@@ -148,6 +147,7 @@ function json(data, status = 200) {
 }
 
 function extractText(result) {
+  if (typeof result?.answer === "string") return result.answer;
   if (typeof result?.response === "string") return result.response;
   if (typeof result?.result === "string") return result.result;
   if (typeof result?.output_text === "string") return result.output_text;
@@ -253,7 +253,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
     commonsUrl.searchParams.set("format", "json");
     commonsUrl.searchParams.set("origin", "*");
     const response = await fetch(commonsUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(3_000),
       headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
     });
     if (response.ok) {
@@ -293,7 +293,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
     wikiUrl.searchParams.set("format", "json");
     wikiUrl.searchParams.set("origin", "*");
     const response = await fetch(wikiUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(3_000),
       headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
     });
     if (response.ok) {
@@ -325,7 +325,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
       extractUrl.searchParams.set("format", "json");
       extractUrl.searchParams.set("origin", "*");
       const response = await fetch(extractUrl.toString(), {
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(3_000),
         headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
       });
       if (response.ok) {
@@ -348,7 +348,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
     wbUrl.searchParams.set("format", "json");
     wbUrl.searchParams.set("origin", "*");
     const response = await fetch(wbUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(3_000),
       headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
     });
     if (response.ok) {
@@ -375,7 +375,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
     metUrl.searchParams.set("q", `Egyptian ${query}`);
     metUrl.searchParams.set("hasImages", "true");
     const response = await fetch(metUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(3_000),
       headers: { Accept: "application/json" },
     });
     if (response.ok) {
@@ -384,7 +384,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
       for (const id of ids.slice(0, 3)) {
         try {
           const objResponse = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, {
-            signal: AbortSignal.timeout(10000),
+            signal: AbortSignal.timeout(3_000),
           });
           if (objResponse.ok) {
             const obj = await objResponse.json();
@@ -1064,7 +1064,7 @@ async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, 
         contents: [{ role: "user", parts }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(10_000),
     },
   );
   const payload = await response.json().catch(() => null);
@@ -1358,7 +1358,7 @@ function makeScannerCandidate(candidate) {
 async function scannerJson(url, label) {
   const response = await fetch(url, {
     headers: { accept: "application/json", "user-agent": "ATHARA-ImageScanner/1.0" },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
   return response.json();
@@ -1542,7 +1542,7 @@ async function searchWikidataScannerCandidates(query) {
 }
 
 async function searchOpenScannerCandidates(observation, language = "en") {
-  const queries = scannerSearchQueries(observation);
+  const queries = scannerSearchQueries(observation).slice(0, 1);
   if (!queries.length) return { candidates: [], availableSources: 0, failedSources: 0 };
   const providers = queries.flatMap((query) => [
     [`Met (${query})`, () => searchMetScannerCandidates(query)],
@@ -1587,7 +1587,7 @@ async function downloadScannerCandidateImages(candidates) {
   const downloads = await Promise.all(candidates.slice(0, 10).map(async (candidate) => {
     try {
       const response = await fetch(candidate.imageUrl, {
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(4_500),
       });
       if (!response.ok) throw new Error(`Image returned HTTP ${response.status}`);
       const resolvedUrl = new URL(response.url || candidate.imageUrl);
@@ -1639,7 +1639,7 @@ async function compareOpenScannerCandidates(imageBytes, candidates, apiKey, mode
         contents: [{ role: "user", parts }],
         generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 700 },
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(10_000),
     },
   );
   const payload = await response.json().catch(() => null);
@@ -2558,15 +2558,46 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const imageForAnalysis = documentImageBytes || enhancedImageBytes || imageBytes;
         const ollamaModel =
           typeof env.OLLAMA_VISION_MODEL === "string" ? env.OLLAMA_VISION_MODEL : "gemma3:4b";
-        const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL, FALLBACK_VISION_MODEL];
+        const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL];
         const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
-        const geminiVisionModels = [
-          configuredGeminiVisionModel(env),
-          "gemini-3.6-flash",
-        ].filter((model, index, models) => models.indexOf(model) === index);
+        const geminiVisionModels = [configuredGeminiVisionModel(env)];
         const independentObservations = [];
+        let visionProviderUsed = "";
+        const imageDataUrl = `data:${detectImageMimeType(imageForAnalysis)};base64,${bytesToBase64(imageForAnalysis)}`;
 
-        for (const geminiModel of geminiVisionModels) {
+        // Cloudflare-hosted Moondream is the first, fast vision path. It avoids
+        // the Meta Llama license handshake and rejects busy capacity immediately.
+        if (!localOllama && typeof env.AI?.run === "function") {
+          try {
+            const cloudflareVision = await env.AI.run(VISION_MODEL, {
+              task: "query",
+              image: imageDataUrl,
+              question: `${visionPrompt}\n\nحلّل الصورة نفسها، واقترح أقرب هوية أثرية كاحتمال مع قرائن مرئية. أخرج JSON فقط بالمفاتيح المطلوبة في التعليمات. لا تدّعِ تطابقًا بصريًا أو مكانًا مؤكدًا بلا صورة مرجعية ومصدر مطابق.\nلغة الإجابة: ${LANGUAGES[language]}.`,
+              reasoning: false,
+              temperature: 0.1,
+              max_tokens: 950,
+              stream: false,
+            }, { rejectIfBusy: true });
+            rawVisual = extractText(cloudflareVision).trim();
+            if (!rawVisual) throw new Error("Cloudflare Moondream returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) {
+              throw new Error("Cloudflare Moondream returned invalid or non-informative visual data.");
+            }
+            independentObservations.push(observation);
+            visionUsed = VISION_MODEL;
+            visionProviderUsed = "Cloudflare";
+          } catch (modelError) {
+            console.error(`[Image scanner] Cloudflare Moondream failed: ${String(modelError?.message || modelError)}`);
+            visionAttempts.push({
+              model: VISION_MODEL,
+              reason: String(modelError?.message || modelError).slice(0, 180),
+            });
+          }
+        }
+
+        if (!independentObservations.length) {
+          for (const geminiModel of geminiVisionModels) {
           if (!geminiVisionKey) break;
           try {
             const geminiResponse = await fetch(
@@ -2579,7 +2610,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   contents: [{ role: "user", parts: [{ text: "حلّل هذه الصورة بصريًا وأعطني JSON فقط." }, { inlineData: { mimeType: detectImageMimeType(imageForAnalysis), data: bytesToBase64(imageForAnalysis) } }] }],
                   generationConfig: { temperature: 0.1, maxOutputTokens: 1400 },
                 }),
-                signal: AbortSignal.timeout(30_000),
+                signal: AbortSignal.timeout(12_000),"
               },
             );
             const geminiPayload = await geminiResponse.json().catch(() => null);
@@ -2592,10 +2623,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             }
             independentObservations.push(observation);
             visionUsed = `gemini:${geminiModel}`;
+            visionProviderUsed = "Gemini";
             break;
           } catch (modelError) {
             console.error(`[Image scanner] Gemini Vision (${geminiModel}) failed: ${String(modelError?.message || modelError)}`);
             visionAttempts.push({ model: `Gemini Vision (${geminiModel})`, reason: String(modelError?.message || modelError).slice(0, 180) });
+          }
+        }
+
           }
         }
 
@@ -2617,7 +2652,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               body: JSON.stringify({
                 model: groqVisionModel,
                 temperature: 0.1,
-                max_tokens: 1400,
+                max_tokens: 950,
                 messages: [{
                   role: "user",
                   content: [
@@ -2642,6 +2677,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               throw new Error("Groq Vision returned invalid or non-informative visual data.");
             }
             independentObservations.push(observation);
+            visionProviderUsed = "Groq";
           } catch (modelError) {
             console.error(`[Image scanner] Groq Vision (${groqVisionModel}) failed: ${String(modelError?.message || modelError)}`);
             visionAttempts.push({
@@ -2689,30 +2725,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (!independentObservations.length) {
-          for (const model of visionModels) {
-            try {
-              if (typeof env.AI?.run !== "function") {
-                throw new Error("Cloudflare Workers AI binding is unavailable.");
-              }
-              const visual = await env.AI.run(model, {
-                image: imageForAnalysis, prompt, max_tokens: 1400, temperature: 0.1,
-              });
-              rawVisual = extractText(visual).trim();
-              if (!rawVisual) throw new Error("Vision model returned an empty response.");
-              const observation = parseVisionObservation(rawVisual);
-              if (!hasUsableVisionObservation(observation, mode)) {
-                throw new Error("Cloudflare Vision returned invalid or non-informative visual data.");
-              }
-              independentObservations.push(observation);
-              visionUsed = model;
-              break;
-            } catch (modelError) {
-              console.error(`[Image scanner] Cloudflare Vision (${model}) failed: ${String(modelError?.message || modelError)}`);
-              visionAttempts.push({ model, reason: String(modelError?.message || modelError).slice(0, 180) });
-            }
-          }
-        }
+
 
         if (!independentObservations.length) {
           const detail = visionAttempts
@@ -2829,7 +2842,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               : observation;
             const search = await searchOpenScannerCandidates(searchObservation, language);
             openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
-            const candidateImages = await downloadScannerCandidateImages(search.candidates);
+            const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 5));
             if (!search.candidates.length) {
               openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
             } else if (!candidateImages.length) {
@@ -2849,7 +2862,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             } else {
               const comparison = await compareOpenScannerCandidates(
                 comparisonImageBytes || imageBytes,
-                candidateImages,
+                candidateImages.slice(0, 3),
                 env.GEMINI_API_KEY.trim(),
                 geminiVisionModels[0],
                 matchThreshold,
@@ -2973,7 +2986,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               .map((query) => ({ query: query.slice(0, 180), language }))
           : searchQueries;
         const searchResults = await Promise.all(
-          selectedSearchQueries.map(({ query, language: queryLanguage }) =>
+          selectedSearchQueries.slice(0, 1).map(({ query, language: queryLanguage }) =>
             searchHeritageSources(query, queryLanguage),
           ),
         );
@@ -3072,7 +3085,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : true;
 
         let freeFallbackCandidate = null;
-        if (identificationStatus === "unverified" && freeFallbackEnabled) {
+        if (identificationStatus === "unverified" && freeFallbackEnabled && responseSources.length === 0) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback?.sources?.length) {
             // Keep free catalog hits as explicit research leads, never as confirmed visual matches.
@@ -3167,20 +3180,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : localOllama
               ? `Ollama - ${visionUsed || env.OLLAMA_VISION_MODEL || ollamaModel}`
               : visionUsed === VISION_MODEL
-                ? "Cloudflare Workers AI - Llama 3.2 11B Vision"
-                : visionUsed === FALLBACK_VISION_MODEL
-                  ? "Cloudflare Workers AI - LLaVA 1.5 7B (fallback)"
-                  : `Free visual consensus (${independentObservations.length} engine)`,
+                ? "Cloudflare Workers AI - Moondream 3.1"
+                : `Free visual consensus (${independentObservations.length} engine)`,
           visionDiagnostics: {
-            provider: independentObservations.length > 1
-              ? "Independent visual consensus"
-              : localOllama
-                ? "Ollama (local)"
-                : "Cloudflare Workers AI",
+            provider: visionProviderUsed || (independentObservations.length > 1 ? "Independent visual consensus" : localOllama ? "Ollama (local)" : "Unknown"),
             providerOrder: visionProviderOrder,
             fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
             enginesCompleted: independentObservations.length,
-            usedFallback: !String(visionUsed || "").startsWith("gemini:") && !localOllama && visionUsed !== VISION_MODEL,
+            usedFallback: Boolean(visionProviderUsed && visionProviderUsed !== "Cloudflare"),
           },
           photoGps,
         });
