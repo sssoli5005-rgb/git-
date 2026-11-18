@@ -3381,7 +3381,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             candidate.similarity >= probableThreshold,
         );
         const identificationStatus =
-          sourceBackedCandidate || indexedProbable || visuallyRankedCandidate
+          indexedProbable || visuallyRankedCandidate
             ? "probable"
             : "unverified";
         const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold);
@@ -3516,6 +3516,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             fallbackOrder: visionProviderOrder.slice(1),
             enginesCompleted: independentObservations.length,
             usedFallback: Boolean(visionProviderUsed && visionProviderUsed !== "Cloudflare"),
+            failedAttempts: visionAttempts.map((attempt) => ({
+              engine: attempt.model,
+              category: safeVisionFailureCategory(attempt.reason),
+            })),
           },
           photoGps,
         });
