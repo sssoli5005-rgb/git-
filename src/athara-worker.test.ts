@@ -38,6 +38,67 @@ function expectUnverifiedScan(body: {
 }
 
 describe("ATHARA Cloudflare Worker", () => {
+  it("uses Cloudflare Web Search as the search provider when Gemini and Groq keys are absent", async () => {
+    const catalogueUrl = "https://egymonuments.gov.eg/ar/collections/wooden-figure-catalogue";
+    const websearch = vi.fn(async (args: { gatewayId: string; query: string; provider: string; limit: number }) => {
+      expect(args.gatewayId).toBe("default");
+      expect(args.provider).toBe("exa");
+      expect(args.limit).toBe(10);
+      expect(args.query).toContain("painted wooden figure");
+      return Response.json({
+        items: [{
+          title: "Painted wooden Egyptian figure — official collection",
+          url: catalogueUrl,
+          description: "An ancient Egyptian painted wooden figure recorded in the official collection.",
+        }],
+      });
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === catalogueUrl) return new Response("catalogue temporarily unavailable", { status: 503 });
+      if (url.includes("egymonuments.gov.eg") && !url.includes("/ar/collections/")) {
+        return new Response("<html><body><a href='/ar/'>Home</a></body></html>", {
+          status: 200, headers: { "content-type": "text/html" },
+        });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "A painted wooden figure with a long head covering",
+          objectType: "wooden figure",
+          material: "painted wood",
+          keywords: ["painted wooden figure"],
+          searchTerms: ["painted wooden figure"],
+        }) };
+      }
+      throw new Error("No image candidates to embed");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run: aiRun, websearch },
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(websearch).toHaveBeenCalledTimes(1);
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.reverseImageSearchStatus).not.toBe("failed");
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        title: "Painted wooden Egyptian figure — official collection",
+        url: catalogueUrl,
+        trusted: true,
+      }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses Gemini's structured Google Search results when the visual model cannot name the artifact", async () => {
     const catalogueUrl = "https://www.metmuseum.org/art/collection/search/544450";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -64,7 +64,7 @@ jobs:
 
       - name: Deploy to Cloudflare
         if: github.event_name == 'push' && steps.credentials.outputs.cloudflare_ready == 'true'
-        run: bunx wrangler@4.68.0 deploy --name ektaberha500-current
+        run: bunx wrangler@4.141.0 deploy --name ektaberha500-current
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,7 +76,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: printf '%s' "$GEMINI_API_KEY" | bunx wrangler@4.68.0 secret put GEMINI_API_KEY --name ektaberha500-current
+        run: printf '%s' "$GEMINI_API_KEY" | bunx wrangler@4.141.0 secret put GEMINI_API_KEY --name ektaberha500-current
 
       - name: Configure Groq chat secret
         if: github.event_name == 'push' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.groq_ready == 'true'
@@ -85,7 +85,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: printf '%s' "$GROQ_API_KEY" | bunx wrangler@4.68.0 secret put GROQ_API_KEY --name ektaberha500-current
+        run: printf '%s' "$GROQ_API_KEY" | bunx wrangler@4.141.0 secret put GROQ_API_KEY --name ektaberha500-current
 
       - name: Smoke test deployed application
         if: github.event_name == 'push' && steps.credentials.outputs.cloudflare_ready == 'true'
