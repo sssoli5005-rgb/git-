@@ -163,6 +163,34 @@ async function withScannerTimeout(operation, timeoutMs, label) {
   }
 }
 
+
+const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 15_000, gemini: 30_000, groq: 25_000 };
+const VISION_PROVIDER_RETRIES = 1;
+
+function isRetryableVisionNetworkError(error) {
+  return ["AbortError", "TimeoutError", "TypeError"].includes(error?.name) ||
+    /timeout|timed out|network|connection reset|socket/i.test(String(error?.message || error));
+}
+
+async function fetchVisionWithRetry(url, init, { provider, timeoutMs, retries = VISION_PROVIDER_RETRIES } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      if (!TRANSIENT_VISION_HTTP_STATUSES.has(response.status) || attempt === retries) return response;
+      try { await response.body?.cancel(); } catch { /* Continue with the retry. */ }
+      console.warn("[Image scanner] " + provider + " returned HTTP " + response.status + "; retrying attempt " + (attempt + 2) + "/" + (retries + 1) + ".");
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableVisionNetworkError(error) || attempt === retries) throw error;
+      console.warn("[Image scanner] " + provider + " failed transiently; retrying attempt " + (attempt + 2) + "/" + (retries + 1) + ": " + String(error?.message || error).slice(0, 160));
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, 350 * (2 ** attempt))));
+  }
+  throw lastError || new Error(provider + " failed after retries.");
+}
+
 function extractText(result) {
   if (typeof result?.answer === "string") return result.answer;
   if (typeof result?.response === "string") return result.response;
@@ -2418,7 +2446,7 @@ export default {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
       const visionProviderOrder = resolveVisionProviderOrder(env);
-      const visionFallbackOrder = visionProviderOrder.filter((provider) => provider !== "Gemini");
+      const visionFallbackOrder = visionProviderOrder.slice(1);
       return json({
         ok: true,
         service: "ATHARA",
@@ -2739,7 +2767,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               temperature: 0.1,
               max_tokens: 950,
               stream: false,
-            }, { rejectIfBusy: true }), 8_000, "Cloudflare Moondream");
+            }, { rejectIfBusy: true }), VISION_PROVIDER_TIMEOUT_MS.cloudflare, "Cloudflare Moondream");
             rawVisual = extractText(cloudflareVision).trim();
             if (!rawVisual) throw new Error("Cloudflare Moondream returned an empty response.");
             const observation = parseVisionObservation(rawVisual);
@@ -2761,7 +2789,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         if (!independentObservations.length && geminiVisionKey) {
           const geminiModel = geminiVisionModels[0];
           try {
-            const geminiResponse = await fetch(
+            const geminiResponse = await fetchVisionWithRetry(
               `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`,
               {
                 method: "POST",
@@ -2774,8 +2802,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ] }],
                   generationConfig: { temperature: 0.1, maxOutputTokens: 1100 },
                 }),
-                signal: AbortSignal.timeout(8_000),
               },
+              { provider: "Gemini Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.gemini },
             );
             const geminiPayload = await geminiResponse.json().catch(() => null);
             if (!geminiResponse.ok) throw new Error(geminiPayload?.error?.message || `Gemini Vision returned HTTP ${geminiResponse.status}`);
@@ -2801,31 +2829,34 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               : "qwen/qwen3.8-27b";
         if (groqVisionKey && !independentObservations.length) {
           try {
-            const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${groqVisionKey}`,
-              },
-              body: JSON.stringify({
-                model: groqVisionModel,
-                temperature: 0.1,
-                max_tokens: 950,
-                messages: [{
-                  role: "user",
-                  content: [
-                    { type: "text", text: `${prompt}\n\nحلّل هذه الصورة وأخرج JSON فقط.` },
-                    {
-                      type: "image_url",
-                      image_url: {
-                        url: `data:${detectImageMimeType(imageForAnalysis)};base64,${bytesToBase64(imageForAnalysis)}`,
+            const groqResponse = await fetchVisionWithRetry(
+              "https://api.groq.com/openai/v1/chat/completions",
+              {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${groqVisionKey}`,
+                },
+                body: JSON.stringify({
+                  model: groqVisionModel,
+                  temperature: 0.1,
+                  max_tokens: 950,
+                  messages: [{
+                    role: "user",
+                    content: [
+                      { type: "text", text: `${prompt}\n\nحلّل هذه الصورة وأخرج JSON فقط.` },
+                      {
+                        type: "image_url",
+                        image_url: {
+                          url: `data:${detectImageMimeType(imageForAnalysis)};base64,${bytesToBase64(imageForAnalysis)}`,
+                        },
                       },
-                    },
-                  ],
-                }],
-              }),
-              signal: AbortSignal.timeout(8_000),
-            });
+                    ],
+                  }],
+                }),
+              },
+              { provider: "Groq Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq },
+            );
             const groqPayload = await groqResponse.json().catch(() => null);
             if (!groqResponse.ok) throw new Error(groqPayload?.error?.message || `Groq Vision returned HTTP ${groqResponse.status}`);
             rawVisual = groqPayload?.choices?.[0]?.message?.content?.trim() || "";
@@ -3471,7 +3502,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           visionDiagnostics: {
             provider: visionProviderUsed || (independentObservations.length > 1 ? "Independent visual consensus" : localOllama ? "Ollama (local)" : "Unknown"),
             providerOrder: visionProviderOrder,
-            fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
+            fallbackOrder: visionProviderOrder.slice(1),
             enginesCompleted: independentObservations.length,
             usedFallback: Boolean(visionProviderUsed && visionProviderUsed !== "Cloudflare"),
           },
@@ -3497,9 +3528,18 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               ? { inscription: "low", translation: "low", place: "low" }
               : { identity: "low", place: "low", period: "low" },
             visionDiagnostics: {
-              provider: localOllama ? "Ollama (local)" : "Cloudflare Workers AI",
+              provider: localOllama ? "Ollama (local)" : "No vision engine completed",
               providerOrder: visionProviderOrder,
-              fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
+              fallbackOrder: visionProviderOrder.slice(1),
+              configuredProviders: {
+                Cloudflare: typeof env.AI?.run === "function",
+                Gemini: Boolean(geminiVisionKey),
+                Groq: Boolean(groqVisionKey),
+              },
+              failedAttempts: visionAttempts.map((attempt) => ({
+                engine: attempt.model,
+                reason: String(attempt.reason || "").slice(0, 180),
+              })),
             },
           },
         );
