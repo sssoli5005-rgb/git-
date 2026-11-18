@@ -409,34 +409,32 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               ].filter(Boolean).join("\n");
             } else {
               const candidates = Array.isArray(data.candidates) ? data.candidates : [];
-              const candidateLines = candidates.slice(0, 5).map((candidate, index) => {
+              // Only show candidates with a genuine image-to-image similarity score.
+              // Text-search hits and catalogue keyword matches stay in the references panel.
+              const visualCandidates = candidates
+                .filter((candidate) =>
+                  typeof candidate.similarity === "number" && Number.isFinite(candidate.similarity),
+                )
+                .sort((left, right) => (right.similarity ?? -1) - (left.similarity ?? -1))
+                .slice(0, 3);
+              const candidateLines = visualCandidates.map((candidate, index) => {
                 const place = candidate.museum || candidate.location || "";
                 const period = candidate.period || "";
                 return [
                   `${index + 1}. ${candidate.name || scanCopy.visualUnknown}`,
-                  place,
-                  period,
-                  candidate.url || "",
-                ].filter(Boolean).join(" — ");
+                  place ? `المتحف/المجموعة: ${place}` : "",
+                  period ? `الفترة المسجلة: ${period}` : "",
+                  `${scanCopy.visualSimilarity}: ${candidate.similarity!.toFixed(3)}`,
+                ].filter(Boolean).join("\n");
               });
-              const sourceLeads = Array.isArray(data.sources)
-                ? data.sources.filter((source) => source.trusted).slice(0, 5)
-                : [];
-              const sourceLines = sourceLeads
-                .filter((source) => !candidates.some((candidate) => candidate.url === source.url))
-                .map((source) => [
-                  source.title,
-                  source.snippet || "",
-                  source.url || "",
-                ].filter(Boolean).join(" — "));
-              const hasLeads = candidateLines.length > 0 || sourceLines.length > 0;
               analysis = [
                 identificationLabel || resultCopy.unverifiedStatus,
-                hasLeads
-                  ? "لم تتأكد المطابقة البصرية بعد؛ هذه سجلات متحفية/أثرية مرتبطة بالاسم أو العلامات وتحتاج إلى تأكيد:"
+                visualCandidates.length > 0
+                  ? (lang === "ar"
+                    ? "أقرب نتائج مقارنة الصور؛ التشابه وحده لا يؤكد أن القطعة هي نفسها:"
+                    : "Closest image-comparison results; similarity alone does not confirm identity:")
                   : resultCopy.notIdentified,
                 ...candidateLines,
-                ...sourceLines,
               ].filter(Boolean).join("\n");
             }
           }
@@ -862,7 +860,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 <ShieldCheck size={18} />
                 <div>
                   <strong>{resultCopy.title}</strong>
-                  <p>{scanResult}</p>
+                  <p className="whitespace-pre-line leading-7">{scanResult}</p>
                   {visionConsentRequired && (
                     <div className="mt-4 space-y-3 border-t border-current/20 pt-4">
                       <h3 className="font-bold">{scanCopy.licenseTitle}</h3>
