@@ -525,7 +525,11 @@ describe("ATHARA Cloudflare Worker", () => {
         language: "ar",
         mode: "objects",
       }),
-      { AI: { run }, ASSETS: { fetch: vi.fn() } },
+      {
+        AI: { run },
+        ASSETS: { fetch: vi.fn() },
+        SCANNER_FREE_FALLBACK_ENABLED: "false",
+      },
     );
     const body = await response.json();
     expect(response.status).toBe(200);
