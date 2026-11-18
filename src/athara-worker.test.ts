@@ -38,6 +38,7 @@ function expectUnverifiedScan(body: {
 }
 
 describe("ATHARA Cloudflare Worker", () => {
+  // Keep the regression suite aligned with trusted visual evidence and isolated free-fallback behavior.
   it("reports the two Cloudflare vision models", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
       AI: { run: vi.fn() },
@@ -225,7 +226,7 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
-  it("returns Abu Simbel as probable from matching visual details and an official catalog source", async () => {
+  it("keeps an official catalog text match unverified without an image match", async () => {
     const catalogUrl = "https://egymonuments.gov.eg/ar/archaeological-sites/abu-simbel/";
     const record = {
       id: "abu-simbel",
@@ -275,8 +276,9 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
 
-      expect(body.identificationStatus).toBe("probable");
-      expect(body.matchedArtifact.name).toBe("أبو سمبل");
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.resultType).toBe("unverified");
+      expect(body.matchedArtifact).toBeUndefined();
       expect(body.sources).toContainEqual(expect.objectContaining({
         url: "https://egymonuments.gov.eg/ar/archaeological-sites/abu-simbel",
         trusted: true,
@@ -287,7 +289,7 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
-  it("keeps a trusted Commons candidate as probable when Gemini image comparison fails", async () => {
+  it("shows a trusted Commons candidate for review but keeps identity unverified when image comparison fails", async () => {
     const candidateUrl = "https://commons.wikimedia.org/wiki/File:Abu_Simbel_temple.jpg";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestUrl = String(input instanceof Request ? input.url : input);
@@ -341,13 +343,17 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
 
-      expect(body.identificationStatus).toBe("probable");
-      expect(body.matchedArtifact.name).toBe("Abu Simbel temple");
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.resultType).toBe("unverified");
+      expect(body.matchedArtifact).toBeUndefined();
+      expect(body.candidates).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: "Abu Simbel temple" }),
+      ]));
       expect(body.sources).toContainEqual(expect.objectContaining({
         url: "https://commons.wikimedia.org/wiki/File%3AAbu_Simbel_temple.jpg",
         trusted: true,
       }));
-      expect(body.reverseImageSearchStatus).toBe("no_match");
+      expect(body.reverseImageSearchStatus).toBe("failed");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -525,7 +531,11 @@ describe("ATHARA Cloudflare Worker", () => {
         language: "ar",
         mode: "objects",
       }),
-      { AI: { run }, ASSETS: { fetch: vi.fn() } },
+      {
+        AI: { run },
+        ASSETS: { fetch: vi.fn() },
+        SCANNER_FREE_FALLBACK_ENABLED: "false",
+      },
     );
     const body = await response.json();
     expect(response.status).toBe(200);

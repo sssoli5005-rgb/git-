@@ -3034,14 +3034,26 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           sources.some((source) => scannerSourceSupportsCandidate(source, observation))
         );
         const indexedProbable = indexCandidates.some((candidate) => candidate.similarity >= probableThreshold);
-        const identificationStatus = sourceBackedCandidate || indexedProbable ||
-          officialTextCandidates.length || openScannerSourceCandidates.length
-          ? "probable"
-          : "unverified";
-        const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold) ||
-          officialTextCandidateArtifact(officialTextCandidates[0]) ||
-          openScannerCandidateArtifact(openScannerSourceCandidates[0]);
-        const responseSources = probableArtifact
+        // A probable result requires a visual candidate supported by a trusted
+        // source, or an image-index similarity above the configured threshold.
+        // Text-only free-catalog fallback results are appended later and never
+        // influence this decision.
+        // Search-result presence alone is not image evidence. A candidate becomes
+        // probable only when the visual identity is independently supported,
+        // the image index clears its threshold, or the image-comparison engine
+        // produced an above-threshold ranked visual score.
+        const visuallyRankedCandidate = openScannerRankedCandidates.some(
+          (candidate) =>
+            typeof candidate.similarity === "number" &&
+            Number.isFinite(candidate.similarity) &&
+            candidate.similarity >= probableThreshold,
+        );
+        const identificationStatus =
+          sourceBackedCandidate || indexedProbable || visuallyRankedCandidate
+            ? "probable"
+            : "unverified";
+        const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold);
+        let responseSources = probableArtifact
           ? sources.filter((source) => source.url === probableArtifact.url)
           : sources;
         const responseSourceText = probableArtifact?.description || responseSources
@@ -3053,40 +3065,20 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         // Free public fallback when no confident identification yet — no API keys needed.
         // مشغولة فقط عندما يكون SCANNER_FREE_FALLBACK_ENABLES مضبوطًا على "true".
         // لو انتهت حصة الأدوات المدفوعة أو تعذرت، تعمل المصادر المجانية تلقائيًا وتجيب اسم القطعة وقصتها ومكانها ومصدرها.
+        // Enable the no-key public-catalog fallback by default. Set the variable
+        // explicitly to "false" only to disable it for diagnostics.
         const freeFallbackEnabled =
           typeof env.SCANNER_FREE_FALLBACK_ENABLED === "string"
-            ? env.SCANNER_FREE_FALLBACK_ENABLED.trim() === "true"
-            : false;
+            ? env.SCANNER_FREE_FALLBACK_ENABLED.trim().toLowerCase() !== "false"
+            : true;
 
         if (identificationStatus === "unverified" && freeFallbackEnabled) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
-          if (freeFallback && (freeFallback.confidence === "medium" || freeFallback.confidence === "low-medium")) {
-            return json({
-              ok: true,
-              analysis: freeFallback.story || freeFallback.name || "",
-              sourceStory: freeFallback.story,
-              sources: freeFallback.sources,
-              trustedSourcesAvailable: freeFallback.sources.length > 0,
-              wikipediaAvailable: null,
-              resultType: "probable",
-              identificationStatus: "probable",
-              reverseImageSearchStatus: "no_match",
-              confidence: freeFallback.confidence === "medium" ? "medium" : "low",
-              confidenceByField: { identity: freeFallback.confidence, place: "low", period: "low" },
-              matchedArtifact: freeFallback.name
-                ? {
-                    name: freeFallback.name,
-                    museum: freeFallback.location,
-                    objectNumber: "",
-                    url: freeFallback.sources[0]?.url,
-                    similarity: null,
-                  }
-                : undefined,
-              candidates: [],
-              visualMatchMethod: "Free public sources (Wikimedia/Wikidata/Met Museum)",
-              model: "Free public sources",
-              usedFreeFallback: true,
-            });
+          if (freeFallback?.sources?.length) {
+            // Keep free catalog hits as research leads, not confirmed/probable identities.
+            responseSources = [...new Map(
+              [...responseSources, ...freeFallback.sources].map((source) => [source.url, source]),
+            ).values()].slice(0, 8);
           }
         }
 
