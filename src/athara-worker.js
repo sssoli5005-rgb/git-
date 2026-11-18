@@ -1817,26 +1817,49 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
   if (typeof env.AI?.websearch === "function") providers.push({ name: "Cloudflare Web Search", run: () =>
     searchWithCloudflareWebSearch(env, query) });
   let failedSources = 0;
+  const collected = [];
+  const providerNames = [];
   for (const provider of providers) {
     try {
       const result = await provider.run();
-      const entries = (result.entries || []).filter((x) => scannerSourceUrlAllowed(x.url)).slice(0, 8);
+      const entries = (result.entries || [])
+        .filter((entry) => scannerSourceUrlAllowed(entry.url))
+        .slice(0, 10);
       const pages = await Promise.allSettled(entries.map((entry) => readGroundedScannerSource(entry, observation)));
-      const accepted = pages.filter((x) => x.status === "fulfilled" && x.value).map((x) => x.value);
-      const unique = [...new Map(accepted.map((x) => [x.source.url, x])).values()];
-      if (unique.length) {
-        unique.sort((a,b) => SOURCE_PRIORITY.findIndex((d) => new URL(a.source.url).hostname.endsWith(d)) -
-          SOURCE_PRIORITY.findIndex((d) => new URL(b.source.url).hostname.endsWith(d)));
-        return { sources: unique.slice(0, 6).map((x) => ({ ...x.source, searchProvider: provider.name })),
-          candidates: unique.flatMap((x) => x.candidate ? [x.candidate] : []),
-          availableSources: 1, failedSources, provider: provider.name };
+      const accepted = pages
+        .filter((page) => page.status === "fulfilled" && page.value)
+        .map((page) => page.value);
+      for (const page of accepted) {
+        collected.push({
+          ...page,
+          source: { ...page.source, searchProvider: provider.name },
+        });
       }
+      if (accepted.length) providerNames.push(provider.name);
+      // Continue to the next independent provider even after finding pages:
+      // the first result may be a context page with no reference image.
     } catch (error) {
       failedSources++;
-      console.warn("[Image scanner] Search provider failed; falling back:", provider.name, String(error?.message || error).slice(0, 160));
+      console.warn("[Image scanner] Search provider failed; falling back:", provider.name,
+        String(error?.message || error).slice(0, 160));
     }
   }
-  return { sources: [], candidates: [], availableSources: 0, failedSources, provider: "" };
+  const unique = [...new Map(collected.map((entry) => [entry.source.url, entry])).values()];
+  unique.sort((left, right) => {
+    const leftPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(left.source.url).hostname.endsWith(domain));
+    const rightPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(right.source.url).hostname.endsWith(domain));
+    return (leftPriority < 0 ? 999 : leftPriority) - (rightPriority < 0 ? 999 : rightPriority) ||
+      Number(Boolean(right.candidate)) - Number(Boolean(left.candidate));
+  });
+  const sources = unique.slice(0, 8).map((entry) => entry.source);
+  const candidates = unique.flatMap((entry) => entry.candidate ? [entry.candidate] : []);
+  return {
+    sources,
+    candidates: candidates.slice(0, 12),
+    availableSources: providerNames.length,
+    failedSources,
+    provider: providerNames.join(", "),
+  };
 }
 
 async function downloadScannerCandidateImages(candidates) {
@@ -3672,7 +3695,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : true;
 
         let freeFallbackCandidate = null;
-        if (identificationStatus === "unverified" && freeFallbackEnabled && openScannerDiscoveredCandidates.length === 0) {
+        if (identificationStatus === "unverified" && freeFallbackEnabled) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback?.sources?.length) {
             // Keep free catalog hits as explicit research leads, never as confirmed visual matches.
@@ -3709,7 +3732,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const relatedContext = mode === "objects" && !officialVisualMatch && sourceBackedCandidate
           ? relatedSourceSummary(responseSources, language, observation)
           : "";
-        const freeCandidateContext = freeFallbackCandidate && officialVisualMatch
+        const freeCandidateContext = freeFallbackCandidate
           ? [
               language === "ar" ? "مرشحات بحث من كتالوجات عامة (غير مؤكدة بصريًا)" : "Public-catalog research leads (not visually confirmed)",
               freeFallbackCandidate.name
@@ -3726,7 +3749,17 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 : "These are text-search leads, not an image match. Verify the catalog image before accepting the identity or location.",
             ].filter(Boolean).join("\n")
           : "";
-        const analysis = [formattedAnalysis, relatedContext, freeCandidateContext].filter(Boolean).join("\n\n");
+        const researchLeadContext = identificationStatus === "unverified" && responseSources.length
+          ? [
+              language === "ar"
+                ? "سجلات ومصادر أثرية مرتبطة بنتائج البحث (ليست تطابقًا بصريًا مؤكدًا):"
+                : "Related museum and archaeological catalogue records (not a confirmed visual match):",
+              ...responseSources.slice(0, 4).map((source) =>
+                "- " + source.title + ": " + String(source.snippet || source.supportedClaim || "").slice(0, 900)),
+            ].join("\n")
+          : "";
+        const analysis = [formattedAnalysis, relatedContext, freeCandidateContext, researchLeadContext]
+          .filter(Boolean).join("\n\n");
         const sourceStory = freeFallbackCandidate?.description || await summarizeTrustedSourceText(env, responseSourceText, language);
         const reverseImageSearchStatus = identificationStatus === "probable" && probableArtifact
           ? "no_match"
