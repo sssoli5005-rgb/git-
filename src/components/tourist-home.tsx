@@ -401,6 +401,27 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 artifact.period ? `${resultCopy.periodLabel}: ${artifact.period}` : "",
                 story ? `${resultCopy.storyLabel}: ${story}` : "",
               ].filter(Boolean).join("\n\n");
+            } else if (data.researchCandidate?.name) {
+              // Show the best trusted catalogue lead as a research candidate, not
+              // as a visually confirmed identification.
+              const lead = data.researchCandidate;
+              const leadStory = (lead.description || data.sourceStory || "")
+                .replace(/https?:\/\/\S+/g, "")
+                .replace(/\n{3,}/g, "\n\n")
+                .trim()
+                .slice(0, 1000);
+              analysis = [
+                resultCopy.unverifiedStatus,
+                `اسم مرشح يحتاج مطابقة: ${lead.name}`,
+                lead.location || lead.museum
+                  ? `المكان المذكور في المصدر: ${lead.location || lead.museum}`
+                  : "",
+                lead.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
+                leadStory ? `${resultCopy.storyLabel}: ${leadStory}` : "",
+                lang === "ar"
+                  ? "الاسم والمعلومات أعلاه من سجل متحفي مرتبط بنتائج البحث، وليست تأكيدًا نهائيًا أن الصورة للقطعة نفسها."
+                  : "The details above come from a related museum record and do not confirm that the uploaded image shows this exact object.",
+              ].filter(Boolean).join("\n\n");
             } else {
               // Do not turn keyword-search records or low-scoring candidates into an
               // artifact identification. Keep the result honest and uncluttered.
