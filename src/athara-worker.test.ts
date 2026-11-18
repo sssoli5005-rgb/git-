@@ -38,6 +38,139 @@ function expectUnverifiedScan(body: {
 }
 
 describe("ATHARA Cloudflare Worker", () => {
+  it("uses Gemini's structured Google Search results when the visual model cannot name the artifact", async () => {
+    const catalogueUrl = "https://www.metmuseum.org/art/collection/search/544450";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://generativelanguage.googleapis.com/v1beta/interactions") {
+        const requestBody = JSON.parse(String(init?.body));
+        expect(requestBody.tools).toEqual([{ type: "google_search" }]);
+        expect(requestBody.input).toContain("painted wooden figure");
+        return Response.json({
+          steps: [
+            { type: "google_search_call", arguments: { queries: ["painted wooden figure ancient Egypt museum"] } },
+            { type: "google_search_result", result: [{
+              title: "Ancient Egyptian wooden figure",
+              url: catalogueUrl,
+              snippet: "Painted wooden figure from ancient Egypt, in the museum collection.",
+            }] },
+            { type: "model_output", content: [{ type: "text", text: "Found one collection record." }] },
+          ],
+        });
+      }
+      if (url === catalogueUrl) {
+        return new Response("temporarily unavailable", { status: 503 });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "A painted wooden figure wearing a long head covering",
+          objectType: "wooden figure",
+          material: "painted wood",
+          style: "ancient Egyptian funerary sculpture",
+          keywords: ["wooden figure", "painted wood"],
+          searchTerms: ["painted wooden figure"],
+        }) };
+      }
+      throw new Error("Embeddings not needed in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          GEMINI_API_KEY: "gemini-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.reverseImageSearchStatus).not.toBe("failed");
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        title: "Ancient Egyptian wooden figure",
+        url: catalogueUrl,
+        trusted: true,
+      }));
+      expect(body.analysis).toContain("Ancient Egyptian wooden figure");
+      expect(body.analysis).not.toContain("تعذر إكمال البحث العكسي");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves Groq structured browser citations when Gemini quota is exhausted", async () => {
+    const catalogueUrl = "https://egymonuments.gov.eg/ar/collections/wooden-statue-example";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://generativelanguage.googleapis.com/v1beta/interactions") {
+        return Response.json({ error: { message: "Gemini quota exhausted" } }, { status: 429 });
+      }
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        const requestBody = JSON.parse(String(init?.body));
+        if (requestBody.tools?.some((tool: { type?: string }) => tool.type === "browser_search")) {
+          return Response.json({
+            choices: [{
+              message: {
+                content: "Search completed.",
+                citations: [{
+                  title: "Wooden Egyptian Statue — Ministry collection",
+                  url: catalogueUrl,
+                  description: "A painted wooden figure in the Egyptian collection.",
+                }],
+              },
+            }],
+          });
+        }
+        return Response.json({
+          choices: [{ message: { content: JSON.stringify({ rankedMatches: [] }) } }],
+        });
+      }
+      if (url === catalogueUrl) {
+        return new Response("temporarily unavailable", { status: 503 });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "A painted wooden Egyptian funerary figure",
+          objectType: "wooden figure",
+          material: "wood",
+          searchTerms: ["painted wooden Egyptian statue"],
+          keywords: ["painted", "wooden figure"],
+        }) };
+      }
+      throw new Error("Embeddings not needed in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          GEMINI_API_KEY: "gemini-test-key",
+          GROQ_API_KEY: "groq-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.reverseImageSearchStatus).not.toBe("failed");
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        title: "Wooden Egyptian Statue — Ministry collection",
+        url: catalogueUrl,
+        trusted: true,
+      }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses Groq catalogue search when Gemini is unavailable and compares official ministry-hosted reference photos", async () => {
     const catalogueUrl = "https://egymonuments.gov.eg/ar/collections/wooden-statue-of-nephthys";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
