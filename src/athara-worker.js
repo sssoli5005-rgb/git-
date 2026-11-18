@@ -1736,9 +1736,6 @@ function scannerHasDistinctiveArtifactIdentity(observation) {
 
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
-  if (!scannerHasDistinctiveArtifactIdentity(observation)) {
-    return { sources: [], candidates: [], availableSources: 0, failedSources: 0, provider: "" };
-  }
   const providers = [];
   const geminiKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
   const groqKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
@@ -2503,7 +2500,7 @@ function scannerSourceSupportsCandidate(source, observation) {
     return false;
   }
   const identityTerms = scannerCandidateTerms(observation);
-  if (identityTerms.length < 2) return false;
+  if (identityTerms.length < 1) return false;
   const titleTerms = new Set(normalizeSearchTerms(source.title || ""));
   const snippetTerms = new Set(normalizeSearchTerms(source.snippet || ""));
   const genericIdentityTerms = new Set([
@@ -3264,13 +3261,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ])].slice(0, 8),
                 }
               : observation;
-            const [imageSearch, textSearch] = await Promise.all([
+            const [imageSearch, textSearch, groundedSearch] = await Promise.all([
               searchClevelandByImage(comparisonImageBytes || imageBytes),
               searchOpenScannerCandidates(searchObservation, language),
+              searchArtifactGroundedSources(env, searchObservation, language),
             ]);
-            const groundedSearch = imageSearch.candidates.length || textSearch.candidates.length
-              ? { sources: [], candidates: [], availableSources: 0, failedSources: 0 }
-              : await searchArtifactGroundedSources(env, searchObservation, language);
             openScannerWebSources = groundedSearch.sources;
             const mergedCandidates = [
               ...imageSearch.candidates,
