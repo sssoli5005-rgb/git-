@@ -1305,7 +1305,7 @@ async function searchClevelandByImage(imageBytes) {
     const response = await fetch("https://openaccess-api.clevelandart.org/api/artworks", {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) throw new Error(`Cleveland image similarity returned HTTP ${response.status}`);
     const payload = await response.json();
@@ -1613,7 +1613,7 @@ async function rankScannerCandidateImagesWithEmbeddings(ai, imageBytes, candidat
       messages: imageMessages,
       dimensions: 512,
     }),
-    10_000,
+    7_000,
     "Cloudflare EmbeddingGemma 2",
   );
   const vectors = Array.isArray(response?.data)
@@ -2510,7 +2510,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL);
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.run === "function";
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
