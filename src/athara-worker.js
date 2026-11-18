@@ -176,6 +176,16 @@ const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 500, 502, 503, 504]);
 const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 12_000, gemini: 18_000, groq: 18_000 };
 const VISION_PROVIDER_RETRIES = 1;
 
+function safeVisionDiagnosticReason(reason, env) {
+  let message = String(reason || "").replace(/\s+/g, " ").trim();
+  for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY]) {
+    if (typeof secret === "string" && secret.length > 6) {
+      message = message.split(secret).join("[redacted]");
+    }
+  }
+  return message.replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]").slice(0, 180);
+}
+
 function safeVisionFailureCategory(reason) {
   const value = String(reason || "").toLowerCase();
   if (/429|quota|rate.?limit/.test(value)) return "rate_limited";
@@ -2976,6 +2986,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       } catch {
         return json({ error: "بيانات الطلب غير صالحة." }, 400);
       }
+      const includeVisionDiagnostics = body?.diagnostics === true;
       const image = body?.image;
       const enhancedImage = body?.enhancedImage;
       const language =
@@ -4022,6 +4033,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               failedAttempts: visionAttempts.map((attempt) => ({
                 engine: attempt.model,
                 category: safeVisionFailureCategory(attempt.reason),
+                ...(includeVisionDiagnostics ? { reason: safeVisionDiagnosticReason(attempt.reason, env) } : {}),
               })),
             },
           },
