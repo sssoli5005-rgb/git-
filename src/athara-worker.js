@@ -2714,6 +2714,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         let openScannerSearchStatus = "no_match";
         let openScannerRankedCandidates = [];
         let openScannerSourceCandidates = [];
+        let openScannerDiscoveredCandidates = [];
         if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured)) {
           const candidates = rankOfficialCatalogCandidates(catalog, observation);
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
@@ -2819,6 +2820,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 }
               : observation;
             const search = await searchOpenScannerCandidates(searchObservation, language);
+            openScannerDiscoveredCandidates = search.candidates;
             openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
             const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 5));
             if (!search.candidates.length) {
@@ -3012,7 +3014,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ).values(),
         ].slice(0, 8);
         const candidateSources = [...new Map(
-          [...openScannerRankedCandidates, ...openScannerSourceCandidates]
+          [...openScannerRankedCandidates, ...openScannerSourceCandidates, ...openScannerDiscoveredCandidates]
             .map((candidate) => [candidate.url, candidate]),
         ).values()].map((candidate) => ({
           title: candidate.name,
@@ -3179,6 +3181,15 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 candidates: [
                   ...openScannerRankedCandidates,
                   ...openScannerSourceCandidates,
+                  ...openScannerDiscoveredCandidates.map((candidate) => ({
+                    name: candidate.name,
+                    museum: candidate.museum,
+                    objectNumber: candidate.objectNumber,
+                    url: candidate.url,
+                    source: candidate.source,
+                    description: candidate.sourceText || "",
+                    similarity: null,
+                  })),
                   ...indexCandidates,
                   ...(freeFallbackCandidate ? [freeFallbackCandidate] : []),
                 ].slice(0, 5),
