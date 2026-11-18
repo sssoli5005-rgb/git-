@@ -8,6 +8,10 @@ SCANNER_MATCH_THRESHOLD = "0.80"
 [ai]
 binding = "AI"
 
+[[kv_namespaces]]
+binding = "SCANNER_CACHE"
+id = "842c6c4a3a4144a090dca5ad940ec737"
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
