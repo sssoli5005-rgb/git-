@@ -3034,9 +3034,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           sources.some((source) => scannerSourceSupportsCandidate(source, observation))
         );
         const indexedProbable = indexCandidates.some((candidate) => candidate.similarity >= probableThreshold);
-        // Text/catalog overlap alone is context, never proof of visual identity.
-        // Only an indexed image-similarity score above threshold may raise confidence.
-        const identificationStatus = indexedProbable ? "probable" : "unverified";
+        // A probable result requires a visual candidate supported by a trusted
+        // source, or an image-index similarity above the configured threshold.
+        // Text-only free-catalog fallback results are appended later and never
+        // influence this decision.
+        const identificationStatus =
+          sourceBackedCandidate || indexedProbable || openScannerSourceCandidates.length
+            ? "probable"
+            : "unverified";
         const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold);
         let responseSources = probableArtifact
           ? sources.filter((source) => source.url === probableArtifact.url)
