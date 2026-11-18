@@ -4050,6 +4050,36 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
+        // Preserve one useful catalogue lead for the visitor when visual matching
+        // is inconclusive. It is explicitly returned as research context, never as
+        // a confirmed identification.
+        const researchCandidate = freeFallbackCandidate ||
+          openScannerSourceCandidates.find((candidate) => candidate?.name && candidate?.url) ||
+          openScannerDiscoveredCandidates.find((candidate) => candidate?.name && candidate?.url) ||
+          (officialTextCandidates[0]?.record
+            ? {
+                name: officialTextCandidates[0].record.title || "",
+                location: "",
+                description: officialTextCandidates[0].record.description || "",
+                source: officialTextCandidates[0].record.sourceTitle || "",
+                url: canonicalOfficialArchiveUrl(officialTextCandidates[0].record.sourceUrl),
+                status: "research_candidate",
+                visuallyMatched: false,
+              }
+            : null);
+        if (researchCandidate?.url && !responseSources.some((source) => source.url === researchCandidate.url)) {
+          responseSources = [
+            ...responseSources,
+            {
+              title: researchCandidate.name || "Museum catalogue record",
+              url: researchCandidate.url,
+              snippet: researchCandidate.description || researchCandidate.sourceText || "",
+              source: researchCandidate.source || researchCandidate.museum || "Museum catalogue",
+              trusted: true,
+            },
+          ].slice(0, 8);
+        }
+
         console.info("[Image scanner] Final decision:", {
           decision: identificationStatus,
           reason: sourceBackedCandidate
@@ -4106,6 +4136,21 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           analysis,
           sourceStory,
           sources: responseSources,
+          ...(mode === "objects" && researchCandidate
+            ? {
+                researchCandidate: {
+                  name: researchCandidate.name || "",
+                  museum: researchCandidate.museum || "",
+                  location: researchCandidate.currentLocation || researchCandidate.location || researchCandidate.museum || "",
+                  period: researchCandidate.period || "",
+                  description: researchCandidate.description || researchCandidate.sourceText || "",
+                  source: researchCandidate.source || researchCandidate.museum || "",
+                  url: researchCandidate.url || researchCandidate.sources?.[0]?.url || "",
+                  visuallyMatched: false,
+                  status: "research_candidate",
+                },
+              }
+            : {}),
           trustedSourcesAvailable,
           wikipediaAvailable,
           resultType: mode === "objects" ? "unverified" : "ai_guess",
