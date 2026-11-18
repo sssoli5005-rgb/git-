@@ -29,7 +29,7 @@ function expectUnverifiedScan(body: {
   confidenceByField?: Record<string, string>;
 }) {
   expect(body.resultType).toBe("unverified");
-  expect(body.analysis).toContain("لم يتم التأكد من الهوية بدقة");
+  expect(body.analysis).toMatch(/لم يتم التأكد من الهوية بدقة|اسم محتمل غير مؤكد/);
   expect(body.confidenceByField).toMatchObject({
     identity: "low",
     place: "low",
@@ -53,6 +53,298 @@ describe("ATHARA Cloudflare Worker", () => {
       visionModel: "@cf/meta/llama-3.2-11b-vision-instruct",
       visionFallbackModel: "@cf/llava-hf/llava-1.5-7b-hf",
     });
+  });
+
+  it("reports the configured scanner failover order", async () => {
+    const response = await worker.fetch(new Request("https://athara.test/api/health"), {
+      AI: { run: vi.fn() },
+      ASSETS: { fetch: vi.fn() },
+      GEMINI_API_KEY: "gemini-key",
+      GROQ_API_KEY: "groq-key",
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.visionProviderOrder).toEqual(["Gemini", "Groq", "Ollama"]);
+    expect(body.visionFallbackOrder).toEqual(["Groq", "Ollama"]);
+  });
+
+  it("keeps GEMINI_MODEL separate from the scanner vision model", async () => {
+    const response = await worker.fetch(new Request("https://athara.test/api/health"), {
+      GEMINI_API_KEY: "gemini-key",
+      GEMINI_MODEL: "gemini-2.5-flash",
+    });
+    const body = await response.json();
+
+    expect(body.visionModel).toBe("gemini-3.8-flash");
+    expect(body.visionEngines[0].model).toBe("gemini-3.8-flash");
+  });
+
+  it("confirms a FAISS match only when the top two results share a source entity", async () => {
+    const metadata = {
+      title_ar: "قناع توت عنخ آمون",
+      title_en: "Tutankhamun's funerary mask",
+      institution: "The Egyptian Museum",
+      city: "Cairo",
+      country: "Egypt",
+      accession_number: "JE 60672",
+      period: "18th Dynasty",
+      description: "Museum catalog description.",
+      page_url: "https://egymonuments.gov.eg/ar/collections/tutankhamun-mask/",
+      source: "Egyptian Ministry of Tourism and Antiquities",
+    };
+    const fetchMock = vi.fn(async () => Response.json({
+      results: [
+        { entityId: "Q123", similarity: 0.91, metadata },
+        { entityId: "Q123", similarity: 0.87, metadata },
+      ],
+      topTwoSameEntity: true,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { SCANNER_INDEX_URL: "http://127.0.0.1:8765", SCANNER_INDEX_MATCH_THRESHOLD: "0.85" },
+      );
+      const body = await response.json();
+
+      expect(body).toMatchObject({
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        reverseImageSearchStatus: "match",
+        matchedArtifact: {
+          name: "قناع توت عنخ آمون",
+          museum: "The Egyptian Museum",
+          objectNumber: "JE 60672",
+          location: "The Egyptian Museum, Cairo, Egypt",
+          similarity: 0.91,
+        },
+        sources: [{ url: metadata.page_url, trusted: true }],
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("uses a description-only prompt when FAISS candidates do not agree", async () => {
+    const run = vi.fn().mockResolvedValue({
+      response: JSON.stringify({ visualDescription: "A gilded funerary mask", objectType: "Mask" }),
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/search")) {
+        return Response.json({ results: [
+          { entityId: "Q123", similarity: 0.89, metadata: {
+            title_en: "Candidate A",
+            institution: "The Met",
+            page_url: "https://www.metmuseum.org/art/collection/search/123",
+            source: "The Metropolitan Museum of Art",
+            description: "Museum catalog description.",
+          } },
+          { entityId: "Q456", similarity: 0.84, metadata: {
+            title_en: "Candidate B",
+            page_url: "https://www.metmuseum.org/art/collection/search/456",
+            source: "The Metropolitan Museum of Art",
+          } },
+        ] });
+      }
+      return Response.json({ query: { pages: {} }, search: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          SCANNER_INDEX_URL: "http://127.0.0.1:8765",
+          SCANNER_INDEX_MATCH_THRESHOLD: "0.85",
+          SCANNER_PROBABLE_THRESHOLD: "0.65",
+          AI: { run },
+        },
+      );
+      const body = await response.json();
+      const prompt = run.mock.calls[0][1].prompt as string;
+
+      expect(body.identificationStatus).toBe("probable");
+      expect(prompt).toContain("دون اقتراح اسم قطعة");
+      expect(prompt).not.toContain("اقترح الاسم الأقرب");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns Abu Simbel as probable from matching visual details and an official catalog source", async () => {
+    const catalogUrl = "https://egymonuments.gov.eg/ar/archaeological-sites/abu-simbel/";
+    const record = {
+      id: "abu-simbel",
+      title: "أبو سمبل - إكتشف الآثار المصرية",
+      description: "معبد أبو سمبل الكبير تم قطعه بالكامل في الجبل. تشتهر واجهته بالتماثيل الأربعة الضخمة جالسة.",
+      keywords: ["أبو سمبل"],
+      mode: "both",
+      sourceTitle: "وزارة السياحة والآثار المصرية",
+      sourceUrl: catalogUrl,
+      imageUrls: [],
+    };
+    const distractor = {
+      id: "sehel-rock-inscriptions",
+      title: "النقوش الصخرية بجزيرة سهيل - إكتشف الآثار المصرية",
+      description: "نقوش صخرية هيروغليفية محفورة على الجرانيت في جزيرة سهيل.",
+      keywords: ["النقوش الصخرية", "جزيرة سهيل"],
+      mode: "both",
+      sourceTitle: "وزارة السياحة والآثار المصرية",
+      sourceUrl: "https://egymonuments.gov.eg/ar/monuments/rock-inscriptions-of-sehel-island/",
+      imageUrls: [],
+    };
+    const fetchMock = vi.fn(async () => Response.json({ query: { pages: {} }, search: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const run = vi.fn().mockResolvedValue({
+        response: JSON.stringify({
+          visualDescription: "واجهة معبد منحوت في الجبل، وتماثيل ضخمة جالسة",
+          objectType: "معبد صخري",
+          material: "حجر رملي",
+          symbols: ["أربعة تماثيل جالسة"],
+          style: "نحت صخري ضخم",
+          searchTerms: ["rock-cut temple facade", "four seated statues", "منحوت في الجبل"],
+          keywords: ["rock-cut", "seated", "facade"],
+        }),
+      });
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run },
+          ASSETS: { fetch: vi.fn(async (input: RequestInfo | URL) => {
+            if (String(input).endsWith("/egypt-monuments-official.json")) {
+              return Response.json({ records: [distractor, record] });
+            }
+            return new Response("", { status: 404 });
+          }) },
+        },
+      );
+      const body = await response.json();
+
+      expect(body.identificationStatus).toBe("probable");
+      expect(body.matchedArtifact.name).toBe("أبو سمبل");
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/abu-simbel",
+        trusted: true,
+      }));
+      expect(body.analysis).not.toContain("confirmed");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps a trusted Commons candidate as probable when Gemini image comparison fails", async () => {
+    const candidateUrl = "https://commons.wikimedia.org/wiki/File:Abu_Simbel_temple.jpg";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl = String(input instanceof Request ? input.url : input);
+      if (requestUrl.startsWith("https://generativelanguage.googleapis.com/")) {
+        const requestBody = JSON.parse(String(init?.body));
+        if (requestBody.systemInstruction) {
+          return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+            visualDescription: "A rock-cut temple facade with four seated colossal statues",
+            objectType: "Temple",
+            material: "Sandstone",
+            symbols: ["four seated figures"],
+            style: "Rock-cut Egyptian architecture",
+            searchTerms: ["rock-cut temple facade", "four seated colossal statues"],
+            keywords: ["rock-cut", "four", "seated", "colossal"],
+          }) }] } }] });
+        }
+        return new Response(JSON.stringify({ error: { message: "Gemini image comparison unavailable" } }), {
+          status: 503,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (requestUrl.startsWith("https://upload.wikimedia.org/")) {
+        return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      if (requestUrl.includes("commons.wikimedia.org/w/api.php") && requestUrl.includes("generator=search")) {
+        return Response.json({ query: { pages: { "123": {
+          pageid: 123,
+          ns: 6,
+          title: "File:Abu Simbel temple.jpg",
+          imageinfo: [{
+            thumburl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Abu_Simbel.jpg",
+            url: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Abu_Simbel.jpg",
+            extmetadata: { ImageDescription: { value: "A rock-cut temple facade with four seated colossal statues at Abu Simbel." } },
+          }],
+        } } } });
+      }
+      if (requestUrl.includes("collectionapi.metmuseum.org")) return Response.json({ objectIDs: [] });
+      if (requestUrl.includes("wikipedia.org") || requestUrl.includes("wikidata.org") || requestUrl.includes("commons.wikimedia.org")) {
+        return Response.json({ query: { pages: {} }, search: [], entities: {} });
+      }
+      return new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { GEMINI_API_KEY: "gemini-key", ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
+      );
+      const body = await response.json();
+
+      expect(body.identificationStatus).toBe("probable");
+      expect(body.matchedArtifact.name).toBe("Abu Simbel temple");
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        url: "https://commons.wikimedia.org/wiki/File%3AAbu_Simbel_temple.jpg",
+        trusted: true,
+      }));
+      expect(body.reverseImageSearchStatus).toBe("no_match");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("falls back from Gemini to Groq when the first provider is rate limited", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        return new Response(JSON.stringify({ error: { message: "429 Resource exhausted" } }), {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ visualDescription: "تمثال حجري", objectType: "تمثال", keywords: ["تمثال"], periodClues: [] }) } }],
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ query: { pages: {} } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          GEMINI_API_KEY: "gemini-key",
+          GEMINI_VISION_MODEL: "gemini-3.8-flash",
+          GROQ_API_KEY: "groq-key",
+          GROQ_MODEL: "qwen/qwen3.8-27b",
+          ASSETS: { fetch: vi.fn() },
+        },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.resultType).toBe("unverified");
+      expect(body.analysis).toContain("تمثال حجري");
+      expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("https://generativelanguage.googleapis.com/"))).toBe(true);
+      expect(fetchMock.mock.calls.some(([input]) => String(input) === "https://api.groq.com/openai/v1/chat/completions")).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("rejects a scan when the image is missing", async () => {
@@ -115,6 +407,54 @@ describe("ATHARA Cloudflare Worker", () => {
       error: "نسخة تجهيز النقش بصيغة غير مدعومة.",
     });
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("logs full vision provider failures without returning them to the visitor", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        return new Response(JSON.stringify({ error: { message: "Gemini full quota detail" } }), { status: 503 });
+      }
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        return new Response(JSON.stringify({ error: { message: "Groq full model detail" } }), { status: 404 });
+      }
+      if (url.endsWith("/api/generate")) {
+        return new Response(JSON.stringify({ error: "Ollama full connection detail" }), { status: 503 });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          GEMINI_API_KEY: "gemini-key",
+          GEMINI_VISION_MODEL: "gemini-3.8-flash",
+          GROQ_API_KEY: "groq-key",
+          GROQ_VISION_MODEL: "vision-test-model",
+          OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+          OLLAMA_VISION_MODEL: "gemma3:4b",
+          AI: { run: vi.fn().mockRejectedValue(new Error("Cloudflare full failure detail")) },
+        },
+      );
+      const body = await response.json();
+      const logs = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+      const visitorResponse = JSON.stringify(body);
+
+      expect(response.status).toBe(200);
+      expect(body.analysis).toContain("وصلت الصورة لكن تعذر تحليلها الآن");
+      expect(visitorResponse).not.toContain("full quota detail");
+      expect(visitorResponse).not.toContain("full model detail");
+      expect(visitorResponse).not.toContain("full connection detail");
+      expect(logs).toContain("Gemini full quota detail");
+      expect(logs).toContain("Groq full model detail");
+      expect(logs).toContain("Ollama full connection detail");
+      expect(logs).toContain("Cloudflare full failure detail");
+    } finally {
+      vi.unstubAllGlobals();
+      errorSpy.mockRestore();
+    }
   });
 
   it("returns a visual description without guessing when reverse-image search is unavailable", async () => {
@@ -297,8 +637,69 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(body.sources).toContainEqual(
         expect.objectContaining({ title: "أبو سمبل", trusted: true }),
       );
-      expect(body.analysis).toContain("وليست تأكيدًا لمطابقة الصورة");
+      expect(body.analysis).toContain("اسم محتمل غير مؤكد: أبو سمبل");
+      expect(body.analysis).not.toContain("عصر رمسيس الثاني");
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes("egymonuments.gov.eg"))).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("builds a concise name, story, and location answer from a matching official collection page", async () => {
+    const collectionUrl = "https://egymonuments.gov.eg/ar/collections/statue-of-nephthys-6";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const requestUrl = String(input instanceof Request ? input.url : input);
+      if (requestUrl.includes("egymonuments.gov.eg")) {
+        if (requestUrl === "https://egymonuments.gov.eg/ar/collections") {
+          return new Response(
+            `<html><body><main><a href="/ar/collections/statue-of-nephthys-6">تمثال نفتيس</a></main></body></html>`,
+            { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+          );
+        }
+        if (requestUrl === collectionUrl) {
+          return new Response(
+            `<html><head><title>Wooden Statue of Nephthys</title></head><body><main><p>` +
+              `A wooden statue of Nephthys, protective goddess of the dead, is displayed at the ` +
+              `Luxor Mummification Museum.</p></main></body></html>`,
+            { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+          );
+        }
+        return new Response("<html><body><main></main></body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      return Response.json({ query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const run = vi.fn().mockResolvedValue({
+        response: JSON.stringify({
+          visualDescription: "تمثال خشبي صغير لامرأة بغطاء رأس",
+          identity: "تمثال خشبي للمعبودة نفتيس",
+          identityEvidence: "الهيئة الأنثوية والغطاء المرتبط بنفتيس",
+          objectType: "تمثال خشبي",
+          material: "خشب",
+          possibleLocation: "Luxor Mummification Museum",
+          searchTerms: ["Nephthys wooden statue"],
+          keywords: ["Nephthys", "wooden statue"],
+        }),
+      });
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { AI: { run }, ASSETS: { fetch: vi.fn() } },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.resultType).toBe("unverified");
+      expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال خشبي للمعبودة نفتيس");
+      expect(body.analysis).toContain("Luxor Mummification Museum");
+      expect(body.analysis).toContain("protective goddess of the dead");
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        url: collectionUrl,
+        trusted: true,
+      }));
     } finally {
       vi.unstubAllGlobals();
     }
@@ -315,7 +716,7 @@ describe("ATHARA Cloudflare Worker", () => {
       const requestUrl = String(input);
       fetchedUrls.push(requestUrl);
       if (requestUrl.includes("wikipedia.org/w/api.php")) {
-        const searchTerm = new URL(requestUrl).searchParams.get("srsearch")?.toLowerCase() || "";
+        const searchTerm = new URL(requestUrl).searchParams.get("gsrsearch")?.toLowerCase() || "";
         if (!searchTerm.includes("khufu statue")) {
           return new Response(JSON.stringify({ query: { pages: {} } }), {
             status: 200,
@@ -375,11 +776,10 @@ describe("ATHARA Cloudflare Worker", () => {
       expectUnverifiedScan(body);
       expect(body.analysis).toContain(printedLabel);
       expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال محتمل للملك خوفو");
-      expect(body.sources).toEqual([]);
+      expect(body.sources).toContainEqual(expect.objectContaining({ url: institutionalUrl, trusted: true }));
       expect(fetchedUrls.length).toBeGreaterThan(0);
-      expect(fetchedUrls.some((url) => decodeURIComponent(url).toLowerCase().includes("khufu statue"))).toBe(false);
+      expect(fetchedUrls.filter((url) => decodeURIComponent(url).includes(printedLabel))).toEqual([]);
       expect(run).toHaveBeenCalledOnce();
-      expect(body.sources).not.toContainEqual(expect.objectContaining({ url: institutionalUrl }));
     } finally {
       vi.unstubAllGlobals();
     }
@@ -648,11 +1048,12 @@ describe("ATHARA Cloudflare Worker", () => {
           if (geminiCall === 1) {
             expect(promptParts.some((part: { inlineData?: unknown }) => part.inlineData)).toBe(true);
             const systemPrompt = requestBody.systemInstruction.parts[0].text;
-            expect(systemPrompt).toContain("objectType وmaterial وsymbols وstyle وpossibleLocation");
-            expect(systemPrompt).toContain("لا تسمِّ أثرًا أو موقعًا");
+            expect(systemPrompt).toContain("دون اقتراح اسم قطعة");
+            expect(systemPrompt).not.toContain("identityEvidence");
             return Response.json({
               candidates: [{ content: { parts: [{ text: JSON.stringify({
                 visualDescription: "Small seated bronze figure",
+                identity: "Seated Bronze Figurine",
                 objectType: "Figurine",
                 material: "Bronze",
                 searchTerms: ["ancient Egyptian bronze seated figurine"],
@@ -672,7 +1073,10 @@ describe("ATHARA Cloudflare Worker", () => {
           });
         }
         if (requestUrl.includes("collectionapi.metmuseum.org") && requestUrl.includes("/search?")) {
-          expect(new URL(requestUrl).searchParams.get("departmentId")).toBe("10");
+          const searchUrl = new URL(requestUrl);
+          expect(searchUrl.pathname).toBe("/public/collection/v1.1/search");
+          expect(searchUrl.searchParams.get("departmentId")).toBe("10");
+          expect(searchUrl.searchParams.get("limit")).toBe("4");
           return Response.json({ objectIDs: [123] });
         }
         if (requestUrl.includes("collectionapi.metmuseum.org/")) {

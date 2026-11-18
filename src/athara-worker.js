@@ -1,14 +1,22 @@
 const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
 const FALLBACK_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+const DEFAULT_VISION_PROVIDER_ORDER = ["Gemini", "Groq", "Ollama"];
 const MAX_IMAGE_CHARS = 8_500_000;
 const MAX_COMPARISON_IMAGE_BYTES = 500_000;
 const DEFAULT_SCANNER_MATCH_THRESHOLD = 0.8;
 const SCANNER_IMAGE_HOSTS = new Set([
   "images.metmuseum.org",
+  "openaccess-cdn.clevelandart.org",
   "upload.wikimedia.org",
   "commons.wikimedia.org",
 ]);
+const SCANNER_ALLOWED_SOURCE_DOMAINS = [
+  "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
+  "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
+  "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org",
+  "si.edu", "europeana.eu",
+];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
@@ -87,7 +95,7 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
-const VISION_SYSTEM = `أنت خبير بصري عالمي للماسح البصري، متخصص أيضًا في الآثار المصرية لكنه لا يقصر معرفته عليها. افحص أي صورة مهما كان موضوعها أو أصلها، وحدد نوع العنصر والقطعة والسياق والموقع والتاريخ والحكاية، ثم استخدم الأدلة والبحث المرجعي المتاح لفصل الاسم المؤكد عن الاحتمال. هذه التعليمات تخص الماسح فقط وليست تعليمات للشات النصي.
+const VISION_SYSTEM = `أنت خبير بصري للماسح المتخصص حصريًا في الآثار المصرية القديمة ومواقعها: التماثيل، الأدوات، النقوش والرسوم الجدارية، المعابد والمقابر، التوابيت والمومياوات والبرديات. افحص الصور الأصلية أو صور الكتب والشاشات. حدّد الاسم الأقرب كاحتمال بصري قابل للبحث، ثم افصل بوضوح بين الاحتمال والتطابق الذي تؤكده صورة مرجعية أو صفحة أثرية موثوقة. هذه التعليمات تخص الماسح فقط وليست تعليمات للشات النصي.
 أول مرجع بصري رسمي للآثار المصرية هو egymonuments.gov.eg. قارن ما تراه فعليًا بصورة وأوصاف الصفحات المنفذة تحت هذا الموقع، واقترح اسمه وسجله الرسمي فقط إذا تطابقت القرائن البصرية بوضوح مع ذلك السجل؛ لا تستدل على الهوية من كلمات بحث عامة فقط. إذا كانت الصفحة الرسمية تحتوي صورًا متعددة لنفس السجل، قارن الشكل والزاوية والمواد والعلامات المرئية قبل الربط.
 التزم بالتعرف قبل الوصف، واجعل النتيجة مفيدة للزائر العادي. قدّم تصنيفات واضحة مثل تمثال، أداة أو إناء، طعام، مبنى، مكان أو صورة عامة، ولا تجعل فئة مرئية واحدة وحدها دليلًا على الهوية.
 فرّق دائمًا بين النص الظاهر داخل الصورة وبين الحقائق التاريخية المثبتة من مصادر مستقلة. إذا وُجد عنوان أو اسم أو تاريخ مكتوبًا بلغة أجنبية، ترجم معناه بدقة ولا تقدمه كحق تاريخي فقط لأنه مكتوب في الصورة. قارن التواريخ والأسماء الملكية والحقب والمواقع بالبحوث الأثرية الحديثة والمراجع الأكاديمية ومواقع المتاحف والآثار الرسمية. لا تصف جبانة أو منطقة أثرية بأنها مدينة. عند تعارض المصادر اذكر الاختلاف ولا تحسمه بلا دليل. اربط كل معلومة تاريخية مهمة بمصدر يدعمها مباشرة؛ لا تُستعمل مصادر تتحدث عن كلمات مشابهة فقط. لا تختزل نقشًا أو مشهدًا في عبارة عامة عبادة أو تذكير بالميت؛ اشرح أدائه ووظيفته وسياقه من القرائن والمراجع.
@@ -191,6 +199,15 @@ function cleanVisionObservation(value) {
         ? field.map(meaningfulVisionText).filter(Boolean)
         : field,
   ]));
+}
+
+function resolveVisionProviderOrder(env) {
+  const configured = [];
+  if (typeof env.GEMINI_API_KEY === "string" && env.GEMINI_API_KEY.trim()) configured.push("Gemini");
+  if (typeof env.GROQ_API_KEY === "string" && env.GROQ_API_KEY.trim()) configured.push("Groq");
+  if (typeof env.OLLAMA_BASE_URL === "string" && env.OLLAMA_BASE_URL.trim()) configured.push("Ollama");
+  if (!configured.length) return ["Cloudflare"];
+  return [...configured, ...DEFAULT_VISION_PROVIDER_ORDER.filter((provider) => !configured.includes(provider))];
 }
 
 function parseVisionObservation(rawVisual) {
@@ -602,6 +619,152 @@ function rankOfficialCatalogCandidates(catalog, observation) {
     .slice(0, 4);
 }
 
+const GENERIC_SCANNER_DESCRIPTION_TERMS = new Set([
+  "egypt", "egyptian", "ancient", "artifact", "artifacts", "statue", "statues",
+  "temple", "stone", "sandstone", "carved", "museum", "relief", "reliefs", "inscription", "inscriptions", "hieroglyph", "hieroglyphs",
+  "مصر", "مصري", "مصريه", "مصرية", "اثار", "اثر", "اثري", "اثريه", "فرعوني", "فرعونيه",
+  "معبد", "معابد", "تمثال", "تماثيل", "حجر", "قديم", "قديمه", "خامة", "خامات", "نقش", "نقوش",
+]);
+
+const DISTINCTIVE_SCANNER_TERM_GROUPS = [
+  new Set(["rock", "cut", "جبل", "صخر", "نحت"]),
+  new Set(["seated", "sitting", "جالسه", "جلوس"]),
+  new Set(["four", "اربعه"]),
+  new Set(["baboon", "بابون"]),
+  new Set(["colossal", "giant", "عملاق", "ضخمه"]),
+  new Set(["mummy", "mummified", "مومياء", "تحنيط"]),
+  new Set(["coffin", "تابوت"]),
+  new Set(["bust", "نصفي"]),
+  new Set(["mask", "قناع"]),
+  new Set(["nemes", "نفرتيتي", "nefertiti"]),
+  new Set(["sphinx", "ابوالهول"]),
+];
+
+function countDistinctiveScannerFeatures(queryTerms, candidateTerms) {
+  return DISTINCTIVE_SCANNER_TERM_GROUPS.filter((group) =>
+    queryTerms.some((term) => group.has(term) && candidateTerms.has(term)),
+  ).length;
+}
+
+function scannerDescriptionTerms(observation) {
+  const text = [
+    observation.visualDescription,
+    observation.sceneDescription,
+    observation.objectType,
+    observation.material,
+    observation.style,
+    ...(Array.isArray(observation.symbols) ? observation.symbols : []),
+    ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation.keywords) ? observation.keywords : []),
+  ].filter(Boolean).join(" ").toLowerCase();
+  const terms = new Set(normalizeSearchTerms(text).map((term) => term.replace(/^ال/, "")));
+  if (/rock.cut|carved.*rock|منحوت|مقطوع.*جبل|صخري/.test(text)) {
+    ["جبل", "صخر", "نحت"].forEach((term) => terms.add(term));
+  }
+  if (/seated|sitting|جالسه|جالس/.test(text)) ["جالسه", "جلوس"].forEach((term) => terms.add(term));
+  if (/facade|front|واجهه/.test(text)) terms.add("واجهه");
+  if (/baboon|monkey|بابون|قرد/.test(text)) ["بابون", "قرد"].forEach((term) => terms.add(term));
+  if (/colossal|giant|huge|ضخمه|عملاق/.test(text)) ["ضخمه", "عملاق"].forEach((term) => terms.add(term));
+  if (/\bfour\b|\b4\b|اربعه/.test(text)) terms.add("اربعه");
+  if (/mumm(y|ified)|مومياء|محنط/.test(text)) ["مومياء", "تحنيط"].forEach((term) => terms.add(term));
+  if (/coffin|sarcophagus|تابوت/.test(text)) terms.add("تابوت");
+  if (/bust|نصفي/.test(text)) terms.add("نصفي");
+  if (/mask|قناع/.test(text)) terms.add("قناع");
+  if (/nefertiti|نفرتيتي/.test(text)) terms.add("نفرتيتي");
+  if (/sphinx|ابو\s*الهول/.test(text)) terms.add("ابوالهول");
+  return [...terms]
+    .map((term) => term.replace(/^ال/, ""))
+    .filter((term) => term.length > 2 && !GENERIC_SCANNER_DESCRIPTION_TERMS.has(term));
+}
+
+function rankOpenScannerCandidates(candidates, observation) {
+  const queryTerms = scannerDescriptionTerms(observation);
+  return candidates.map((candidate) => {
+    const candidateTerms = new Set(normalizeSearchTerms(
+      `${candidate.name || ""} ${candidate.sourceText || ""} ${candidate.museum || ""}`,
+    ).map((term) => term.replace(/^ال/, "")));
+    const matches = queryTerms.filter((term) => candidateTerms.has(term));
+    const distinctiveMatches = countDistinctiveScannerFeatures(queryTerms, candidateTerms);
+    return {
+      ...candidate,
+      textScore: matches.length,
+      textEvidence: distinctiveMatches,
+    };
+  })
+    .filter((candidate) => candidate.textEvidence >= 2 && candidate.textScore >= 2)
+    .sort((left, right) => right.textScore - left.textScore)
+    .slice(0, 5);
+}
+
+function rankOfficialTextCandidates(catalog, observation) {
+  const queryTerms = scannerDescriptionTerms(observation);
+  if (queryTerms.length < 3) return [];
+  const ranked = catalog
+    .filter((record) =>
+      (record.mode === "objects" || record.mode === "both") &&
+      canonicalOfficialArchiveUrl(record.sourceUrl) &&
+      /\/(?:monuments|archaeological-sites|collections|museums)\//i.test(
+        new URL(canonicalOfficialArchiveUrl(record.sourceUrl)).pathname,
+      ),
+    )
+    .map((record) => {
+      const titleTerms = new Set(normalizeSearchTerms(
+        [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),
+      ).map((term) => term.replace(/^ال/, "")));
+      const descriptionTerms = new Set(normalizeSearchTerms(record.description).map((term) => term.replace(/^ال/, "")));
+      const titleMatches = queryTerms.filter((term) => titleTerms.has(term));
+      const descriptionMatches = queryTerms.filter((term) => descriptionTerms.has(term));
+      const distinctiveMatches = countDistinctiveScannerFeatures(queryTerms, descriptionTerms);
+      return {
+        record,
+        titleMatches,
+        descriptionMatches,
+        distinctiveMatches,
+        score: titleMatches.length * 4 + descriptionMatches.length + distinctiveMatches.length * 3,
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+  if (catalog.length <= 20) {
+    console.info("[Image scanner] Local catalog text scores:", ranked.slice(0, 5).map((candidate) => ({
+      title: candidate.record.title,
+      queryTerms,
+      matchedTerms: candidate.descriptionMatches,
+      distinctiveFeatureGroups: candidate.distinctiveMatches,
+    })));
+  }
+  return ranked
+    .filter((candidate) =>
+      candidate.distinctiveMatches >= 2 &&
+      candidate.descriptionMatches.length >= 2,
+    )
+    .slice(0, 3);
+}
+
+function officialTextCandidateArtifact(candidate) {
+  const record = candidate?.record;
+  if (!record) return null;
+  const url = canonicalOfficialArchiveUrl(record.sourceUrl);
+  if (!url) return null;
+  const name = String(record.title || "").replace(/\s*[-–—]\s*(?:إكتشف|اكتشف)\s+الآثار.*$/i, "").trim();
+  const description = String(record.description || "").trim();
+  const locationMatch = description.match(/(?:تقع|يقع|توجد|يوجد)\s+(?:ب|في)?\s*([^،؛.!؟]+)/i);
+  const pageLocation = /\/(?:monuments|archaeological-sites)\//i.test(url) ? name : "";
+  return {
+    name,
+    museum: String(record.museum || record.institution || record.repository || "").trim(),
+    objectNumber: String(record.objectNumber || record.id || "").trim(),
+    location: String(record.location || pageLocation || locationMatch?.[1] || "")
+      .replace(/^(?:ب|في)\s*/u, "")
+      .trim(),
+    period: String(record.period || "").trim(),
+    objectType: String(record.objectType || "").trim(),
+    description,
+    source: String(record.sourceTitle || "").trim(),
+    similarity: null,
+    url,
+  };
+}
+
 async function findCachedOfficialImage(record) {
   const officialImageUrls = (record.imageUrls || []).filter((imageUrl) => {
     const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
@@ -731,6 +894,180 @@ function scannerMatchThreshold(env) {
   return threshold;
 }
 
+function scannerIndexThreshold(env) {
+  const threshold = Number(env.SCANNER_INDEX_MATCH_THRESHOLD ?? 0.85);
+  return Number.isFinite(threshold) && threshold >= 0 && threshold <= 1 ? threshold : 0.85;
+}
+
+function scannerProbableThreshold(env) {
+  const threshold = Number(env.SCANNER_PROBABLE_THRESHOLD ?? 0.65);
+  return Number.isFinite(threshold) && threshold >= 0 && threshold <= 1 ? threshold : 0.65;
+}
+
+function scannerSourceUrlAllowed(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && SCANNER_ALLOWED_SOURCE_DOMAINS.some(
+      (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`),
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function searchScannerIndex(env, imageBytes) {
+  const baseUrl = typeof env.SCANNER_INDEX_URL === "string" ? env.SCANNER_INDEX_URL.trim() : "";
+  if (!baseUrl) return null;
+  const timeoutValue = Number(env.SCANNER_INDEX_TIMEOUT_MS ?? 12_000);
+  const timeout = Number.isFinite(timeoutValue) && timeoutValue > 0 ? Math.min(timeoutValue, 30_000) : 12_000;
+  try {
+    const response = await fetch(new URL("/search", baseUrl), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        imageBase64: bytesToBase64(imageBytes),
+        mimeType: detectImageMimeType(imageBytes),
+        topK: 5,
+      }),
+      signal: AbortSignal.timeout(timeout),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.detail || `FAISS index returned HTTP ${response.status}`);
+    const results = Array.isArray(payload?.results)
+      ? payload.results.filter((item) => item && typeof item.entityId === "string" && item.metadata)
+          .map((item) => ({
+            entityId: item.entityId,
+            similarity: Number(item.similarity),
+            metadata: item.metadata,
+          }))
+          .filter((item) => Number.isFinite(item.similarity))
+          .slice(0, 5)
+      : [];
+    console.info("[Image scanner] FAISS top results:", results.map((item) => ({
+      name: item.metadata.title_ar || item.metadata.title_en || item.entityId,
+      entityId: item.entityId,
+      similarity: item.similarity,
+      source: item.metadata.source,
+    })));
+    return { results, topTwoSameEntity: payload?.topTwoSameEntity === true };
+  } catch (error) {
+    console.error(`[Image scanner] FAISS lookup failed: ${String(error?.message || error)}`);
+    return { results: [], topTwoSameEntity: false };
+  }
+}
+
+function scannerIndexArtifactResult(indexHit) {
+  const metadata = indexHit.metadata;
+  const title = String(metadata.title_ar || metadata.title_en || "").trim();
+  const pageUrl = String(metadata.page_url || "").trim();
+  if (!title || !scannerSourceUrlAllowed(pageUrl)) return null;
+  const description = String(metadata.description || "").trim();
+  const location = [metadata.institution, metadata.city, metadata.country]
+    .filter((part) => typeof part === "string" && part.trim())
+    .join(", ");
+  const artifact = {
+    name: title,
+    museum: String(metadata.institution || "").trim(),
+    objectNumber: String(metadata.accession_number || "").trim(),
+    location,
+    period: String(metadata.period || "").trim(),
+    objectType: String(metadata.object_type || "").trim(),
+    description,
+    similarity: Math.round(indexHit.similarity * 1000) / 1000,
+    source: String(metadata.source || "").trim(),
+    url: pageUrl,
+  };
+  return {
+    ok: true,
+    analysis: description,
+    resultType: "reference_match",
+    identificationStatus: "confirmed",
+    reverseImageSearchStatus: "match",
+    confidence: "high",
+    confidenceByField: {
+      identity: "high",
+      place: location ? "medium" : "low",
+      period: artifact.period ? "medium" : "low",
+    },
+    matchedArtifact: artifact,
+    sources: [{
+      title,
+      url: pageUrl,
+      snippet: description,
+      source: artifact.source,
+      trusted: true,
+    }],
+    candidates: [],
+    visualMatchMethod: "OpenCLIP ViT-B-32 + FAISS",
+  };
+}
+
+function scannerIndexCandidates(indexResult) {
+  return (indexResult?.results || []).flatMap((hit) => {
+    const metadata = hit.metadata || {};
+    const name = String(metadata.title_ar || metadata.title_en || "").trim();
+    const url = String(metadata.page_url || "").trim();
+    if (!name || !scannerSourceUrlAllowed(url)) return [];
+    return [{
+      name,
+      museum: String(metadata.institution || "").trim(),
+      objectNumber: String(metadata.accession_number || "").trim(),
+      url,
+      similarity: Math.round(hit.similarity * 1000) / 1000,
+      source: String(metadata.source || "").trim(),
+      sourceText: String(metadata.description || "").trim(),
+      entityId: hit.entityId,
+    }];
+  }).slice(0, 5);
+}
+
+function openScannerCandidateArtifact(candidate) {
+  if (!candidate || !scannerSourceUrlAllowed(candidate.url)) return null;
+  return {
+    name: candidate.name,
+    museum: candidate.museum || "",
+    objectNumber: candidate.objectNumber || "",
+    location: candidate.museum || "",
+    period: "",
+    objectType: "",
+    description: candidate.sourceText || "",
+    source: candidate.source || "",
+    similarity: null,
+    url: candidate.url,
+  };
+}
+
+async function summarizeTrustedSourceText(env, sourceText, language) {
+  const text = String(sourceText || "").trim().slice(0, 6000);
+  const key = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+  if (!text || !key) return "";
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim() ? env.GROQ_MODEL.trim() : "qwen/qwen3.8-27b",
+        temperature: 0.1,
+        max_tokens: 300,
+        messages: [{ role: "user", content: `لخّص النص المرجعي التالي بلغة ${LANGUAGES[language]} فقط. لا تضف أي معلومة من معرفتك، ولا تخترع مكانًا أو تاريخًا أو قصة. أعد الملخص فقط.\n\n${text}` }],
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error?.message || `Groq returned HTTP ${response.status}`);
+    return payload?.choices?.[0]?.message?.content?.trim() || "";
+  } catch (error) {
+    console.error(`[Image scanner] Source-only summary failed: ${String(error?.message || error)}`);
+    return "";
+  }
+}
+
+function configuredGeminiVisionModel(env) {
+  return typeof env.GEMINI_VISION_MODEL === "string" && env.GEMINI_VISION_MODEL.trim()
+    ? env.GEMINI_VISION_MODEL.trim()
+    : "gemini-3.8-flash";
+}
+
 function scannerVisualDescription(observation) {
   return {
     object_type: observation.objectType || observation.visualDescription || "",
@@ -742,15 +1079,18 @@ function scannerVisualDescription(observation) {
 }
 
 function scannerSearchQueries(observation) {
+  const identityTerms = [observation.identity, observation.visualCandidateIdentity];
   const searchTerms = [
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
+    ...identityTerms,
   ]
     .filter((term) => typeof term === "string" && term.trim())
     .map((term) => term.trim())
     .filter((term, index, list) => list.indexOf(term) === index)
     .slice(0, 8);
   const visualTerms = [
+    ...identityTerms,
     observation.objectType,
     observation.material,
     ...(Array.isArray(observation.symbols) ? observation.symbols : []),
@@ -781,8 +1121,9 @@ function makeScannerCandidate(candidate) {
     pageUrl.protocol !== "https:" ||
     imageUrl.protocol !== "https:" ||
     !SCANNER_IMAGE_HOSTS.has(imageUrl.hostname) ||
-    !["metmuseum.org", "www.metmuseum.org", "commons.wikimedia.org", "www.wikidata.org", "wikidata.org"]
-      .includes(pageUrl.hostname)
+    !SCANNER_ALLOWED_SOURCE_DOMAINS.some(
+      (domain) => pageUrl.hostname === domain || pageUrl.hostname.endsWith(`.${domain}`),
+    )
   ) {
     return null;
   }
@@ -807,11 +1148,12 @@ async function scannerJson(url, label) {
 }
 
 async function searchMetScannerCandidates(query) {
-  const searchUrl = new URL("https://collectionapi.metmuseum.org/public/collection/v1/search");
+  const searchUrl = new URL("https://collectionapi.metmuseum.org/public/collection/v1.1/search");
   searchUrl.search = new URLSearchParams({
     departmentId: "10",
     q: query,
     hasImages: "true",
+    limit: "4",
   }).toString();
   const search = await scannerJson(searchUrl, "Met collection search");
   const ids = (Array.isArray(search.objectIDs) ? search.objectIDs : []).slice(0, 4);
@@ -841,6 +1183,56 @@ async function searchMetScannerCandidates(query) {
     .map((result) => result.value);
 }
 
+async function searchClevelandScannerCandidates(query) {
+  const url = new URL("https://openaccess-api.clevelandart.org/api/artworks/");
+  url.search = new URLSearchParams({
+    q: query,
+    department: "Egyptian and Ancient Near Eastern Art",
+    cc0: "",
+    has_image: "1",
+    limit: "5",
+  }).toString();
+  const data = await scannerJson(url, "Cleveland collection search");
+  return (Array.isArray(data?.data) ? data.data : []).map((item) => makeScannerCandidate({
+    name: item.title,
+    museum: "Cleveland Museum of Art",
+    objectNumber: item.accession_number,
+    url: item.url,
+    imageUrl: item.images?.web?.url,
+    source: "Cleveland Museum of Art",
+    sourceText: [item.description, item.tombstone, item.culture?.join(" "), item.creation_date]
+      .filter(Boolean).join(" "),
+  })).filter(Boolean);
+}
+
+async function searchWikipediaScannerCandidates(query, language) {
+  const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
+  url.search = new URLSearchParams({
+    action: "query",
+    generator: "search",
+    gsrsearch: query,
+    gsrnamespace: "0",
+    gsrlimit: "5",
+    prop: "pageimages|extracts|info",
+    inprop: "url",
+    exintro: "1",
+    explaintext: "1",
+    piprop: "thumbnail",
+    pithumbsize: "640",
+    format: "json",
+  }).toString();
+  const data = await scannerJson(url, `Wikipedia ${language} search`);
+  return Object.values(data?.query?.pages || {}).map((page) => makeScannerCandidate({
+    name: page.title,
+    museum: "",
+    objectNumber: "",
+    url: page.fullurl || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(String(page.title || "").replace(/ /g, "_"))}`,
+    imageUrl: page.thumbnail?.source,
+    source: `Wikipedia (${language})`,
+    sourceText: page.extract || "",
+  })).filter(Boolean);
+}
+
 async function searchCommonsScannerCandidates(query) {
   const url = new URL("https://commons.wikimedia.org/w/api.php");
   url.search = new URLSearchParams({
@@ -861,7 +1253,7 @@ async function searchCommonsScannerCandidates(query) {
       const metadata = info.extmetadata || {};
       const title = String(page?.title || "").replace(/^File:/, "");
       return makeScannerCandidate({
-        name: title,
+        name: title.replace(/\.(?:jpe?g|png|webp|tiff?)$/i, ""),
         museum: metadata.Institution?.value || "",
         url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(String(page?.title || "").replace(/ /g, "_"))}`,
         imageUrl: info.thumburl || info.url,
@@ -932,13 +1324,16 @@ async function searchWikidataScannerCandidates(query) {
   }).filter(Boolean);
 }
 
-async function searchOpenScannerCandidates(observation) {
+async function searchOpenScannerCandidates(observation, language = "en") {
   const queries = scannerSearchQueries(observation);
   if (!queries.length) return { candidates: [], availableSources: 0, failedSources: 0 };
   const providers = queries.flatMap((query) => [
     [`Met (${query})`, () => searchMetScannerCandidates(query)],
+    [`Cleveland (${query})`, () => searchClevelandScannerCandidates(query)],
     [`Wikimedia Commons (${query})`, () => searchCommonsScannerCandidates(query)],
     [`Wikidata (${query})`, () => searchWikidataScannerCandidates(query)],
+    [`Wikipedia en (${query})`, () => searchWikipediaScannerCandidates(query, "en")],
+    ...(language === "ar" ? [[`Wikipedia ar (${query})`, () => searchWikipediaScannerCandidates(query, "ar")]] : []),
   ]);
   const results = await Promise.allSettled(providers.map(([, search]) => search()));
   const candidates = [];
@@ -953,8 +1348,19 @@ async function searchOpenScannerCandidates(observation) {
     failedSources += 1;
     console.error(`[Image scanner] ${providers[index][0]} search failed: ${String(result.reason?.message || result.reason).slice(0, 180)}`);
   });
+  const rankedCandidates = [...new Map(candidates.map((candidate) => [candidate.url, candidate])).values()].slice(0, 10);
+  console.info("[Image scanner] Source searches completed:", {
+    queries,
+    checked: providers.map(([name], index) => ({
+      source: name,
+      status: results[index]?.status === "fulfilled" ? "available" : "failed",
+    })),
+    availableSources,
+    failedSources,
+    candidateCount: rankedCandidates.length,
+  });
   return {
-    candidates: [...new Map(candidates.map((candidate) => [candidate.url, candidate])).values()].slice(0, 10),
+    candidates: rankedCandidates,
     availableSources,
     failedSources,
   };
@@ -1127,6 +1533,21 @@ function unconfirmedCandidateLabel(language) {
   return labels[language] || labels.en;
 }
 
+function unverifiedLocationText(language) {
+  const labels = {
+    ar: "لم يذكر المصدر مكان العرض بوضوح.",
+    en: "The source does not clearly state where it is displayed.",
+    fr: "La source ne précise pas clairement son lieu d’exposition.",
+    de: "Die Quelle nennt den Ausstellungsort nicht eindeutig.",
+    es: "La fuente no indica claramente dónde se exhibe.",
+    it: "La fonte non indica chiaramente dove è esposto.",
+    ru: "Источник не указывает, где именно экспонат выставлен.",
+    zh: "来源未明确说明其展出地点。",
+    ja: "出典には展示場所が明確に記載されていません。",
+  };
+  return labels[language] || labels.en;
+}
+
 function formatScannerResult(observation, sources, mode, language, confidenceByField = {}) {
   const [seeing, location, story, highlights, , , uncertain] = scanOutputLabels(language);
   const identity = String(observation.identity || "").trim();
@@ -1183,6 +1604,32 @@ function formatScannerResult(observation, sources, mode, language, confidenceByF
   }
   const highlightsText = [observation.significance, observation.keyFeatures, observation.visualHighlights]
     .filter((part) => typeof part === "string" && part.trim()).join("\n");
+  if (mode === "objects" && observation.visualCandidateIdentity) {
+    const relatedSources = sources.filter((source) => scannerSourceSupportsCandidate(source, observation));
+    const groundedSource = relatedSources[0];
+    if (groundedSource) {
+      const candidateLocation = [observation.possibleLocation, observation.place, observation.city]
+        .filter((value) => typeof value === "string" && value.trim())
+        .find((value) => {
+          const locationTerms = normalizeSearchTerms(value).filter(
+            (term) => !/^(?:egypt|egyptian|مصر|المصرية|مصري|في|من|the|of|in)$/.test(term),
+          );
+          const sourceText = normalizeSearchTerms(
+            `${groundedSource.title || ""} ${groundedSource.snippet || ""}`,
+          );
+          return (
+            locationTerms.length > 0 &&
+            locationTerms.every((term) => sourceText.includes(term))
+          );
+        });
+      const sourceStory = groundedSource.snippet || groundedSource.title;
+      return [
+        section(seeing, `${unconfirmedCandidateLabel(language)}${observation.visualCandidateIdentity}`),
+        section(location, candidateLocation || unverifiedLocationText(language)),
+        section(story, sourceStory),
+      ].filter(Boolean).join("\n\n");
+    }
+  }
   const uncertainty = !identity && Array.isArray(observation.possibilities) && observation.possibilities.length
     ? `${uncertain}\n${observation.possibilities.join("\n")}`
     : !identity ? uncertain : "";
@@ -1432,8 +1879,38 @@ function normalizeSearchTerms(value) {
     .filter((term, index, terms) => terms.indexOf(term) === index);
 }
 
+function scannerCandidateTerms(observation) {
+  const genericTerms = new Set([
+    "statue",
+    "artifact",
+    "egyptian",
+    "ancient",
+    "temple",
+    "wooden",
+    "المحتمل", "محتمل", "تمثال", "أثري", "أثر", "مصرية", "مصري", "القديمة", "قديم",
+  ]);
+  return normalizeSearchTerms([
+    observation.visualCandidateIdentity,
+    ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation.keywords) ? observation.keywords : []),
+  ].filter(Boolean).join(" "))
+    .filter((term) => !genericTerms.has(term));
+}
+
+function scannerSourceSupportsCandidate(source, observation) {
+  if (source?.trusted !== true) return false;
+  const sourceTerms = normalizeSearchTerms(`${source.title || ""} ${source.snippet || ""}`);
+  return scannerCandidateTerms(observation).some((term) => sourceTerms.includes(term));
+}
+
 async function searchOfficialMonumentsArchive(query) {
-  const terms = normalizeSearchTerms(query);
+  const genericTerms = new Set([
+    "egypt", "egyptian", "ancient", "antiquities", "artifact", "artifacts",
+    "statue", "statues", "temple", "tomb", "museum", "mummy", "hieroglyph",
+    "مصر", "مصري", "مصرية", "اثار", "اثر", "تمثال", "تماثيل", "معبد",
+    "مقبرة", "متحف", "فرعوني", "فرعونية", "قديم", "قديمة",
+  ]);
+  const terms = normalizeSearchTerms(query).filter((term) => !genericTerms.has(term));
   if (!terms.length) return [];
   const egyptianSignals = /مصر|فرعون|هرم|معبد|تمثال|مقبرة|نقش|اثر|آثار|اثار|سقارة|الاقصر|اسوان|أبو سمبل|دهشور|ابو سمبل|متحف|pyramid|temple|statue|tomb|artifact|egypt|pharaoh|hieroglyph|obelisk|mummy/i;
   if (!egyptianSignals.test(query)) return [];
@@ -1445,54 +1922,96 @@ async function searchOfficialMonumentsArchive(query) {
     "https://egymonuments.gov.eg/ar/monuments",
     "https://egymonuments.gov.eg/ar/archaeological-sites",
     "https://egymonuments.gov.eg/ar/museums",
+    "https://egymonuments.gov.eg/ar/collections",
+    "https://egymonuments.gov.eg/en/collections",
   ];
   const results = new Map();
-  for (const pageUrl of pageUrls) {
+  const pageResponses = await Promise.allSettled(pageUrls.map(async (pageUrl) => {
     try {
       const response = await fetch(pageUrl, fetchOptions);
-      if (!response.ok) continue;
-      const html = await response.text();
-      const anchors = [...html.matchAll(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
-      for (const match of anchors) {
-        const href = String(match[1] || "").trim();
-        const label = String(match[2] || "")
-          .replace(/<[^>]*>/g, " ")
-          .replace(/&nbsp;/gi, " ")
-          .replace(/&amp;/gi, "&")
-          .replace(/&quot;/gi, '"')
-          .replace(/&#39;|&apos;/gi, "'")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!href || !label) continue;
-        let resolvedUrl = href;
-        if (!/^https?:\/\//i.test(href)) {
-          resolvedUrl = href.startsWith("/") ? "https://egymonuments.gov.eg" + href : href;
-        }
-        try {
-          const nextUrl = new URL(resolvedUrl);
-          if (!/egymonuments\.gov\.eg$/i.test(nextUrl.hostname) && !nextUrl.hostname.endsWith(".egymonuments.gov.eg")) continue;
-          const normalizedLabel = normalizeSearchTerms(label).join(" ");
-          const labelMatches = terms.filter((term) => normalizedLabel.includes(term));
-          if (!labelMatches.length && !terms.some((term) => nextUrl.pathname.toLowerCase().includes(term))) continue;
-          const snippet = label.length > 180 ? label.slice(0, 180) : label;
-          if (!results.has(nextUrl.href)) {
-            results.set(nextUrl.href, {
-              title: label,
-              url: nextUrl.href,
-              snippet,
-              source: "egymonuments.gov.eg",
-              trusted: true,
-            });
-          }
-        } catch {
-          continue;
-        }
-      }
+      if (!response.ok) return "";
+      return response.text();
     } catch {
-      continue;
+      console.warn("ATHARA official archive index lookup failed:", {
+        path: new URL(pageUrl).pathname,
+      });
+      return "";
+    }
+  }));
+  for (const pageResponse of pageResponses) {
+    if (pageResponse.status !== "fulfilled" || !pageResponse.value) continue;
+    const anchors = [...pageResponse.value.matchAll(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+    for (const match of anchors) {
+      const href = String(match[1] || "").trim();
+      const label = String(match[2] || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!href || !label) continue;
+      const resolvedUrl = /^https?:\/\//i.test(href)
+        ? href
+        : href.startsWith("/")
+          ? "https://egymonuments.gov.eg" + href
+          : href;
+      try {
+        const nextUrl = new URL(resolvedUrl);
+        if (!/egymonuments\.gov\.eg$/i.test(nextUrl.hostname) && !nextUrl.hostname.endsWith(".egymonuments.gov.eg")) continue;
+        const normalizedLabel = normalizeSearchTerms(label).join(" ");
+        const labelMatches = terms.filter((term) => normalizedLabel.includes(term));
+        if (!labelMatches.length && !terms.some((term) => nextUrl.pathname.toLowerCase().includes(term))) continue;
+        const snippet = label.length > 180 ? label.slice(0, 180) : label;
+        if (!results.has(nextUrl.href)) {
+          results.set(nextUrl.href, {
+            title: label,
+            url: nextUrl.href,
+            snippet,
+            source: "egymonuments.gov.eg",
+            trusted: true,
+          });
+        }
+      } catch {
+        continue;
+      }
     }
   }
-  return [...results.values()].slice(0, 6);
+  const matchedRecords = [...results.values()].slice(0, 4);
+  const enrichedRecords = await Promise.allSettled(matchedRecords.map(async (source) => {
+    try {
+      const response = await fetch(source.url, {
+        headers: fetchOptions.headers,
+        signal: AbortSignal.timeout(3500),
+      });
+      if (!response.ok || !/^(?:text\/html|application\/xhtml\+xml)/i.test(response.headers.get("content-type") || "")) {
+        return source;
+      }
+      const html = await readLimitedHtml(response, 350_000);
+      const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+        ?.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+      const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
+        html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] || html;
+      const snippet = main
+        .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<(br|\/p|\/div|\/li|\/h[1-6])\b[^>]*>/gi, " ")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'").replace(/\s+/g, " ").trim().slice(0, 520);
+      return snippet.length >= 80 ? { ...source, title: title || source.title, snippet } : source;
+    } catch (error) {
+      console.warn("ATHARA official collection detail lookup failed:", {
+        host: "egymonuments.gov.eg",
+        reason: String(error?.message || error).slice(0, 120),
+      });
+      return source;
+    }
+  }));
+  return enrichedRecords
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value)
+    .slice(0, 4);
 }
 
 async function readLimitedHtml(response, maxBytes) {
@@ -1520,13 +2039,15 @@ export default {
     if (url.pathname === "/api/health" && request.method === "GET") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const visionProviderOrder = resolveVisionProviderOrder(env);
+      const visionFallbackOrder = visionProviderOrder.filter((provider) => provider !== "Gemini");
       return json({
         ok: true,
         service: "ATHARA",
         aiBound: Boolean(env.AI),
         guideModel: TEXT_MODEL,
         visionEngines: [
-          { name: "Gemini", configured: geminiConfigured, model: env.GEMINI_VISION_MODEL || "gemini-2.5-flash" },
+          { name: "Gemini", configured: geminiConfigured, model: configuredGeminiVisionModel(env) },
           { name: "Qwen2.5-VL", configured: typeof env.OLLAMA_BASE_URL === "string" && Boolean(env.OLLAMA_BASE_URL.trim()), model: env.QWEN_VISION_MODEL || "qwen2.5vl:7b", license: "Apache-2.0" },
           { name: "InternVL3", configured: typeof env.OLLAMA_BASE_URL === "string" && Boolean(env.OLLAMA_BASE_URL.trim()), model: env.INTERNVL_VISION_MODEL || "internvl3:8b", license: "Apache-2.0/Qwen license" },
         ],
@@ -1534,8 +2055,10 @@ export default {
           openMuseumCatalogs: geminiConfigured,
           officialCatalogGemini: geminiConfigured,
         },
+        visionProviderOrder,
+        visionFallbackOrder,
         visionModel: geminiConfigured
-          ? env.GEMINI_VISION_MODEL || "gemini-2.5-flash"
+          ? configuredGeminiVisionModel(env)
           : localOllama
             ? env.OLLAMA_VISION_MODEL
             : VISION_MODEL,
@@ -1625,6 +2148,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
     if (url.pathname === "/api/scan" && request.method === "POST") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const visionProviderOrder = resolveVisionProviderOrder(env);
       let body;
       try {
         body = await request.json();
@@ -1636,7 +2160,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = geminiConfigured;
+      const reverseImageSearchConfigured = geminiConfigured || Boolean(env.SCANNER_INDEX_URL);
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
@@ -1702,6 +2226,34 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         return json({ error: "ملف الصورة تالف أو غير صالح." }, 400);
       }
       if (!imageBytes.length) return json({ error: "الصورة فاضية." }, 400);
+      let scannerIndexResult = null;
+      if (mode === "objects" && env.SCANNER_INDEX_URL) {
+        scannerIndexResult = await searchScannerIndex(env, imageBytes);
+        const [best, runnerUp] = scannerIndexResult?.results || [];
+        const sameEntity = Boolean(best && runnerUp && best.entityId === runnerUp.entityId);
+        const threshold = scannerIndexThreshold(env);
+        if (best) {
+          const decision = best.similarity >= threshold && sameEntity ? "confirmed" : "candidate";
+          console.info("[Image scanner] FAISS decision:", {
+            decision,
+            reason: decision === "confirmed" ? "threshold-and-top-two-entity-agreement" : "insufficient-score-or-entity-agreement",
+            threshold,
+            bestSimilarity: best.similarity,
+            topTwoSameEntity: sameEntity,
+          });
+          if (decision === "confirmed") {
+            const result = scannerIndexArtifactResult(best);
+            if (result) {
+              result.sourceStory = await summarizeTrustedSourceText(env, best.metadata.description, language);
+              if (result.sourceStory) result.analysis = result.sourceStory;
+              return json(result);
+            }
+            console.warn("[Image scanner] FAISS hit rejected because its source URL or title is not allowed.");
+          }
+        } else {
+          console.info("[Image scanner] FAISS decision:", { decision: "unverified", reason: "no-index-results" });
+        }
+      }
       let comparisonImageBytes = imageBytes.length <= MAX_COMPARISON_IMAGE_BYTES ? imageBytes : null;
       if (body?.searchImage !== undefined) {
         if (typeof body.searchImage !== "string" || body.searchImage.length > 700_000) {
@@ -1724,18 +2276,26 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       // كل سجل: id, title, mode, keywords[], description, period, location, sourceTitle, sourceUrl.
       // لا نضيف سجلًا للنتائج المرجعية إلا لو له مصدر واضح.
       let catalog = [];
-      const officialCatalogUrl = env.ASSETS
-        ? new URL("/egypt-monuments-official.json", "https://athara.local").toString()
-        : "";
-      if (officialCatalogUrl && typeof env.ASSETS.fetch === "function") {
+      const assetsFetch = typeof env.ASSETS?.fetch === "function" ? env.ASSETS.fetch.bind(env.ASSETS) : null;
+      const developmentCatalogFallback = !assetsFetch &&
+        typeof process !== "undefined" && process.env.NODE_ENV === "development";
+      if (assetsFetch || developmentCatalogFallback) {
         try {
-          const officialResponse = await env.ASSETS.fetch(officialCatalogUrl);
+          const officialCatalogUrl = assetsFetch
+            ? new URL("/egypt-monuments-official.json", "https://athara.local").toString()
+            : new URL("/egypt-monuments-official.json", request.url).toString();
+          const officialResponse = assetsFetch
+            ? await assetsFetch(officialCatalogUrl)
+            : await fetch(officialCatalogUrl, {
+                headers: { accept: "application/json" },
+                signal: AbortSignal.timeout(5_000),
+              });
           if (officialResponse.ok) {
             const officialData = await officialResponse.json();
             catalog.push(...(Array.isArray(officialData.records) ? officialData.records : []));
           }
-        } catch {
-          // Optional local catalog: external recognition remains available if asset loading fails.
+        } catch (error) {
+          console.warn(`[Image scanner] Official catalog asset unavailable: ${String(error?.message || error).slice(0, 180)}`);
         }
       }
       try {
@@ -1763,7 +2323,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const visionPrompt =
         mode === "hieroglyphs"
           ? `أنت محلل متخصص في الكتابات والآثار المصرية القديمة؛ استفد من معرفتك الداخلية والتاريخية، حتى لو لم تتوفر مراجع على الإنترنت. اتبع هذا الترتيب: (1) حدّد هل الصورة كتابة مصرية فعلًا أم لغة/خط آخر، وميّز الهيروغليفية عن الهيراطيقية والديموطيقية واليونانية والقبطية إن أمكن؛ لا تسمّ كل كتابة قديمة هيروغليفية. (2) صف العلامات واتجاه القراءة، واقرأ فقط ما يظهر بوضوح، ثم قدّم نقلًا صوتيًا وترجمة حرفية ومعنى النص عند توافر القرائن، واذكر هل يبدو النص دينيًا أو ملكيًا أو جنائزيًا أو إداريًا أو غير ذلك ولماذا. (3) رشّح أقرب نص أو أثر معروف فقط كاحتمال مع قرينة محددة؛ لا تدّعِ تطابقًا بصريًا. (4) لا تذكر اسم موقع محدد إلا إذا كانت هناك قرينة فريدة ومقروءة في الصورة؛ الرمز الشائع أو الأسلوب الفني أو نتيجة البحث النصي لا يثبت الموقع. وإلا اترك place فارغًا واكتفِ بنوع عام مثل معبد أو مقبرة أو لوحة، مع التنبيه أن الموقع غير مؤكد. لا تخلط مكان التصوير أو العثور بمكان العرض. (5) افصل النص الظاهر عن التحقق التاريخي المستقل؛ انقل العنوان المطبوع حرفيًا في printedLabels وترجم معناه بدقة في printedTextTranslation، ولا تعتبر تاريخًا أو ملكًا مدونًا في الصورة نهائيًا قبل مقارنته بالدراسات الحديثة. افحص أسماء الملوك والأسر والمواقع من المصادر المتخصصة؛ لا تصف جبانة بأنها مدينة. اشرح وظيفة المنظر والنقش وسياقه بدقة. عند تعارض المراجع اذكر الاختلاف دون تحيز. لا تخترع قراءة أو اسمًا أو تاريخًا أو مكانًا. أنشئ searchTerms قصيرة ودقيقة، وقدّم تهجئة عربية ولاتينية للاسم فقط إذا ظهرت قرينة واضحة. أخرج JSON فقط بالشكل: {"visualDescription":"وصف ما يظهر","scriptType":"نوع اللغة أو الخط، أو غير محسوم","visibleText":"العلامات المقروءة فقط أو فارغ","printedLabels":"العنوان أو بيانات القطعة المطبوعة حرفيًا، أو فارغ","printedTextTranslation":"ترجمة دقيقة للنص الظاهر أو فارغ","transliteration":"النقل الصوتي أو فارغ","translation":"الترجمة الحرفية أو فارغ","interpretation":"المعنى والسياق المقترح أو فارغ","objectOrTextPurpose":"الغرض الوظيفي والسياق المقيد بالأدلة أو غير محسوم","identity":"أقرب نص أو أثر معروف، أو فارغ","identityEvidence":"قرينة الترشيح أو سبب تعذر المطابقة","historicalVerification":"ما ثبت تاريخيًا من المصادر المستقلة وما يُفصل عن النص الظاهر","sourceConflicts":"اختلاف موثق بين المصادر أو فارغ","place":"الموقع المحدد أو فارغ","placeType":"نوع المكان العام، لا اسم موقع، أو غير محسوم","placeEvidence":"قرينة مرئية محددة أو سبب عدم كفايتها","period":"الفترة المحتملة أو فارغ","contextualStory":"سياق تاريخي عام لا ينسب النقش إلى موقع غير مؤكد","writingHistory":"تاريخ الخط واستخداماته","siteHistory":"تاريخ نوع المكان فقط، دون ادعاء تاريخ موقع محدد غير مثبت","searchTerms":["مصطلحات قصيرة ومميزة للبحث"],"confidence":"high أو medium أو low","confidenceByField":{"inscription":"high أو medium أو low","translation":"high أو medium أو low","place":"high أو medium أو low"},"keywords":["موضوعات ظاهرة"],"periodClues":[]}. لا تدّع إجراء بحث خارجي أو ترجمة أكاديمية مؤكدة.`
-          : `حلل محتوى الصورة بصريًا مهما كان مصدرها أو لونها، بما في ذلك الصور الملونة والأبيض والأسود واللقطات المطبوعة في كتاب أو المعروضة على شاشة. لا تكتفِ بوصف العناصر؛ حاول أولًا تسمية الشيء أو المكان المصوّر بدقة. افصل القطعة عن التعليقات والعناوين المطبوعة. لا تنتج قصة تاريخية أو ملكًا أو حقبة أو موقعًا بناءً على التشابه العام؛ إذا لم تكن الهوية ثابتة بصريًا اترك period وcontextualStory وsignificance وkeyFeatures والتواريخ فارغة. لا تخلط واجهة معبد جالسة تماثيل داخل صالة، ولا أبو سمبل بالكرنك، ولا تسند ملكًا بالتخمين. لا تخلط مكان التصوير بمكان الأصل. استخدم فقط قرائن مرئية أو معلومات موثقة لتحديد الدولة والمدينة والمتحف أو الموقع الداخلي. قدّم سياقًا مفيدًا للزائر، لا وصفًا بصريًا مطولًا. إذا احتوى النص الظاهر على عنوان أو تاريخ أو اسم بلغة أجنبية فترجم المعنى بدقة وأفصل معناه عن التحقق التاريخي المستقل، ولا تجعل النص المدون مصدرًا نهائيًا للتاريخ. تحقق أسماء الملوك والأسر والمواقع وأصحاب الوظائف من الأدلة المرجعية ولا تصنف الجبانة أو المقبرة أو المنطقة الأثرية كمدينة. اشرح وظيفة المنظر أو النقش وسياقه وفق الأدلة. ميّز المكتشف عن عالم الآثار الذي درس الأثر وعن الرسام أو الناشر الذي وثق الصورة، وافصل تاريخ الاكتشاف والنشر وصنع الأثر. لا تصف شخصًا في النقش بحارس أو خادم دون دليل. احذف المعلومة العامة غير المرتبطة بالصورة. عند تعارض المصادر اذكر الاختلاف، ولا تقل إن هناك توافقًا إلا إذا قورنت مصادر فعلية. لا تخترع معطىً. إذا لم تتأكد اترك identity وأدوار الاكتشاف والتواريخ فارغة وأضف possibilities مدعومة بالأدلة. أخرج JSON فقط بالشكل: {"identity":"الاسم الدقيق المؤكد أو مقترح مدعوم أو فارغ","objectType":"نوع الشيء أو المكان بوصف قصير","country":"الدولة أو فارغ","city":"المدينة أو فارغ","place":"اسم المتحف أو الموقع أو فارغ","siteLocation":"المكان المحدد داخل الموقع أو فارغ","period":"الحقبة أو التاريخ التقريبي مع تمييزه كتقدير عند عدم اليقين أو فارغ","contextualStory":"قصته وخلفيته والغرض وأهميته بشرح بسيط أو فارغ","significance":"أهميته التاريخية والأثرية أو فارغ","keyFeatures":"أبرز تفاصيل معرفية تستحق الانتباه من دون وصف بصري مطول","builder":"من بناه أو أنشأه، إن كان معروفًا ومدعومًا أو فارغ","creator":"صانع القطعة إن كان معروفًا ومدعومًا أو فارغ","printedLabels":"النص الظاهر حرفيًا أو فارغ","printedTextTranslation":"ترجمة دقيقة للنص الظاهر أو فارغ","historicalVerification":"ماذا ثبت تاريخيًا من المراجع المستقلة وما يجب فصل المصدر فيه أو فارغ","sourceConflicts":"اختلاف موثوق بين المصادر وما التقدير المدعوم أو فارغ","additionalInformation":"معلومة إضافية موثقة تضيف قيمة للزائر أو فارغ","possibilities":["احتمال مدعوم بقرينة محددة"],"searchTerms":["مصطلحات قصيرة للبحث المراجع"],"keywords":["موضوعات ظاهرة"],"periodClues":[],"confidence":"high أو medium أو low","confidenceByField":{"identity":"high أو medium أو low","place":"high أو medium أو low","period":"high أو medium أو low"}}. لا تتضمن حقولًا عامة عندما لا تضيفها الصورة أو تكون غير مثبتة.`;
+          : `حلل الصورة باعتبارها أثرًا مصريًا قديمًا أو صورة له من كتاب أو شاشة. ابدأ بأقرب اسم معروف يمكن أن يفسر السمات المميزة، لا بمجرد وصف عام؛ اذكره كاحتمال إذا لم توجد علامة فريدة، واتركه فارغًا فقط إذا تعذر اقتراح احتمال مفيد. حدّد نوع الأثر وخامته والرموز أو النقوش والحقبة والموقع المحتمل، واذكر القرينة التي جعلتك تقترح الاسم. افصل التعليقات المطبوعة عن الأثر نفسه. لا تخترع اسمًا أو قصة أو تاريخًا أو مكانًا. يمكن اقتراح اسم ومكان محتملين بصريًا للبحث، لكن لا تصفهما بالمؤكدين إلا بعد دعم صفحة متحف/آثار موثوقة أو مطابقة صورة مرجعية. عند توفر مصدر موثوق في السياق، لخّص منه قصة الأثر ومكان عرضه، ولا تنسب للمصدر معلومات لا يقولها. اترك حقائق القصة والمكان فارغة إذا لم يوجد سند. أخرج JSON فقط بالشكل: {"identity":"أقرب اسم محتمل، أو فارغ إذا تعذر","identityEvidence":"السمات الفارقة التي تدعم الاحتمال أو سبب تعذر التحديد","visualDescription":"وصف مختصر للسمات المرئية","objectType":"نوع الأثر","material":"الخامة المحتملة أو غير متأكد","symbols":["رموز أو نقوش ظاهرة"],"style":"الأسلوب أو غير متأكد","possibleLocation":"المتحف أو الموقع المحتمل أو غير متأكد","country":"الدولة المحتملة أو غير متأكد","city":"المدينة المحتملة أو غير متأكد","place":"المتحف أو الموقع المحتمل أو غير متأكد","period":"العصر المحتمل أو غير متأكد","contextualStory":"القصة/الوظيفة المحتملة فقط إن كنت تعرفها، وإلا فارغ","significance":"الأهمية المحتملة أو فارغ","keyFeatures":"تفاصيل فارقة تساعد في التحقق","searchTerms":["اسم أو كلمات بحث قصيرة بالعربية والإنجليزية"],"keywords":["كلمات دقيقة للبحث"],"possibilities":["حتى 3 أسماء محتملة مع قرينة قصيرة لكل منها"],"confidence":"high أو medium أو low","confidenceByField":{"identity":"high أو medium أو low","place":"high أو medium أو low","period":"high أو medium أو low"}}. لا تدّع أن الاحتمال حقيقة، ولا تدّع إجراء بحث لم يُجرَ.`;
+      const visualOnlyPrompt = mode === "objects"
+        ? `صف ما تراه في الصورة فقط، دون اقتراح اسم قطعة أو شخصية أو موقع، ودون الاعتماد على أسماء المرشحين. اذكر النوع والخامة والرموز والوضعية والكتابة الظاهرة فقط. أخرج JSON فقط بالشكل: {"visualDescription":"وصف بصري","objectType":"النوع","material":"الخامة أو غير محسومة","symbols":["رموز ظاهرة"],"style":"الأسلوب أو غير محسوم","visibleText":"النص المقروء فقط أو فارغ","searchTerms":["عبارات وصفية قصيرة بالعربية والإنجليزية"],"keywords":["كلمات بصرية" ]}. لا تستنتج هوية أو مكانًا أو قصة.`
+        : visionPrompt;
       const visionAttempts = [];
       try {
         let rawVisual = "";
@@ -1773,9 +2336,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           "\n\n" +
           ICONOGRAPHY_RULES +
           "\n\n" +
-          visionPrompt +
+          visualOnlyPrompt +
           (mode === "objects"
-            ? "\n\nتجاوز أي تعليمات سابقة تطلب تحديد الهوية أو التاريخ. هذه الجولة لوصف سمات مرئية فقط لتكوين كلمات بحث: لا تسمِّ أثرًا أو موقعًا ولا تذكر قصة أو حقبة أو اسم شخصية. أخرج JSON فقط بالحقول visualDescription وobjectType وmaterial وsymbols وstyle وpossibleLocation وsearchTerms وkeywords. صف المادة والرموز والأسلوب والمكان المحتمل فقط عند ظهور قرينة بصرية؛ وإلا استخدم غير متأكد. اجعل searchTerms كلمات إنجليزية قصيرة مستندة إلى الشكل الظاهر، لا إلى هوية مفترضة. اترك identity وplace وperiod وcontextualStory وsignificance فارغة."
+            ? "\n\nلا تذكر أسماء أو هوية. اقتصر على السمات المرئية والكلمات الوصفية."
             : "") +
           "\nOutput language: " +
           LANGUAGES[language];
@@ -1785,10 +2348,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL, FALLBACK_VISION_MODEL];
         const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
         const geminiVisionModels = [
-          typeof env.GEMINI_VISION_MODEL === "string" && env.GEMINI_VISION_MODEL.trim()
-            ? env.GEMINI_VISION_MODEL.trim()
-            : "gemini-2.5-flash",
-          "gemini-2.0-flash",
+          configuredGeminiVisionModel(env),
+          "gemini-3.6-flash",
         ].filter((model, index, models) => models.indexOf(model) === index);
         const independentObservations = [];
 
@@ -1816,6 +2377,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             visionUsed = `gemini:${geminiModel}`;
             break;
           } catch (modelError) {
+            console.error(`[Image scanner] Gemini Vision (${geminiModel}) failed: ${String(modelError?.message || modelError)}`);
             visionAttempts.push({ model: `Gemini Vision (${geminiModel})`, reason: String(modelError?.message || modelError).slice(0, 180) });
           }
         }
@@ -1824,7 +2386,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const groqVisionModel =
           typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
             ? env.GROQ_VISION_MODEL.trim()
-            : "meta-llama/llama-4-scout-17b-16e-instruct";
+            : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
+              ? env.GROQ_MODEL.trim()
+              : "qwen/qwen3.8-27b";
         if (groqVisionKey) {
           try {
             const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1858,6 +2422,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             if (!rawVisual) throw new Error("Groq Vision returned an empty response.");
             independentObservations.push(parseVisionObservation(rawVisual));
           } catch (modelError) {
+            console.error(`[Image scanner] Groq Vision (${groqVisionModel}) failed: ${String(modelError?.message || modelError)}`);
             visionAttempts.push({
               model: `Groq Vision (${groqVisionModel})`,
               reason: String(modelError?.message || modelError).slice(0, 180),
@@ -1893,6 +2458,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               if (!output) throw new Error(`${engine} returned an empty response.`);
               independentObservations.push(parseVisionObservation(output));
             } catch (modelError) {
+              console.error(`[Image scanner] ${engine} (${model}) failed: ${String(modelError?.message || modelError)}`);
               visionAttempts.push({ model: `${engine} (${model})`, reason: String(modelError?.message || modelError).slice(0, 180) });
             }
           }
@@ -1911,6 +2477,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               visionUsed = model;
               break;
             } catch (modelError) {
+              console.error(`[Image scanner] Cloudflare Vision (${model}) failed: ${String(modelError?.message || modelError)}`);
               visionAttempts.push({ model, reason: String(modelError?.message || modelError).slice(0, 180) });
             }
           }
@@ -1934,6 +2501,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               visualObservation.identity,
             )
           : correctedObservation;
+        const officialTextCandidates = mode === "objects"
+          ? rankOfficialTextCandidates(catalog, observation)
+          : [];
         let matchThreshold = DEFAULT_SCANNER_MATCH_THRESHOLD;
         if (mode === "objects" && geminiConfigured) {
           try {
@@ -1946,6 +2516,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         let geminiCatalogComparisonFailed = false;
         let openScannerSearchStatus = reverseImageSearchConfigured ? "no_match" : "unavailable";
         let openScannerRankedCandidates = [];
+        let openScannerSourceCandidates = [];
         if (mode === "objects" && !officialVisualMatch && geminiConfigured) {
           const candidates = rankOfficialCatalogCandidates(catalog, observation);
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
@@ -1970,6 +2541,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         }
         if (officialVisualMatch) {
           const item = officialVisualMatch.item;
+          const sourceStory = await summarizeTrustedSourceText(env, item.description || "", language);
           const sources = [{
             title: item.sourceTitle,
             url: item.sourceUrl,
@@ -1979,11 +2551,13 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }];
           return json({
             ok: true,
-            analysis: item.description || "",
+            analysis: sourceStory || item.description || "",
+            sourceStory,
             sources,
             trustedSourcesAvailable: true,
             wikipediaAvailable: null,
             resultType: "reference_match",
+            identificationStatus: "confirmed",
             reverseImageSearchStatus: "match",
             confidence: "medium",
             confidenceByField: {
@@ -2007,14 +2581,40 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           });
         }
 
-        if (mode === "objects" && !officialVisualMatch && geminiConfigured) {
+        if (mode === "objects" && !officialVisualMatch && reverseImageSearchConfigured) {
           try {
-            const search = await searchOpenScannerCandidates(observation);
+            const probableThreshold = scannerProbableThreshold(env);
+            const indexNames = scannerIndexCandidates(scannerIndexResult)
+              .filter((candidate) => candidate.similarity >= probableThreshold)
+              .map((candidate) => candidate.name);
+            const searchObservation = indexNames.length
+              ? {
+                  ...observation,
+                  searchTerms: [...new Set([
+                    ...indexNames,
+                    ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
+                  ])].slice(0, 8),
+                }
+              : observation;
+            const search = await searchOpenScannerCandidates(searchObservation, language);
+            openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
             const candidateImages = await downloadScannerCandidateImages(search.candidates);
             if (!search.candidates.length) {
-              openScannerSearchStatus = search.failedSources ? "failed" : "no_match";
+              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
             } else if (!candidateImages.length) {
-              openScannerSearchStatus = "failed";
+              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
+            } else if (!geminiConfigured) {
+              openScannerRankedCandidates = openScannerSourceCandidates.map((candidate) => ({
+                ...candidate,
+                similarity: null,
+              }));
+                      console.info("[Image scanner] Extracted visual search terms:", {
+                        objectType: visualObservation.objectType || "",
+                        material: visualObservation.material || "",
+                        symbols: Array.isArray(visualObservation.symbols) ? visualObservation.symbols : [],
+                        searchTerms: Array.isArray(visualObservation.searchTerms) ? visualObservation.searchTerms : [],
+                      });
+              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
             } else {
               const comparison = await compareOpenScannerCandidates(
                 comparisonImageBytes || imageBytes,
@@ -2024,9 +2624,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 matchThreshold,
               );
               openScannerRankedCandidates = comparison.ranked;
-              openScannerSearchStatus = search.failedSources ? "failed" : "no_match";
+              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
               if (comparison.match) {
                 const candidate = comparison.match.candidate;
+                const sourceStory = await summarizeTrustedSourceText(env, candidate.sourceText || "", language);
                 const matchedArtifact = {
                   name: candidate.name,
                   museum: candidate.museum,
@@ -2043,11 +2644,13 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 };
                 return json({
                   ok: true,
-                  analysis: candidate.sourceText,
+                  analysis: sourceStory || candidate.sourceText,
+                  sourceStory,
                   sources: [source],
                   trustedSourcesAvailable: true,
                   wikipediaAvailable: null,
                   resultType: "reference_match",
+                  identificationStatus: "confirmed",
                   reverseImageSearchStatus: "match",
                   confidence: "medium",
                   confidenceByField: {
@@ -2064,7 +2667,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             }
           } catch (error) {
             geminiCatalogComparisonFailed = true;
-            openScannerSearchStatus = "failed";
+            openScannerSearchStatus = openScannerSourceCandidates.length ? "no_match" : "failed";
             visionAttempts.push({
               model: "Gemini open-catalog comparison",
               reason: String(error?.message || error).slice(0, 180),
@@ -2074,9 +2677,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         }
 
         const specificSearchParts = [
-          observation.printedLabels,
+          ...officialTextCandidates.slice(0, 2).map((candidate) => candidate.record.title),
           ...(Array.isArray(observation.searchTerms) ? observation.searchTerms.slice(0, 3) : []),
-          observation.identity,
+          observation.identity || observation.visualCandidateIdentity,
+          observation.printedLabels,
           observation.visibleText,
           observation.transliteration,
           observation.translation,
@@ -2124,9 +2728,12 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           );
         const selectedSearchQueries = mode === "objects"
           ? [[
+              ...officialTextCandidates.slice(0, 2).map((candidate) => candidate.record.title),
+              observation.visualCandidateIdentity,
+              ...(Array.isArray(observation.searchTerms) ? observation.searchTerms.slice(0, 4) : []),
               observation.objectType,
               observation.visualDescription,
-              observation.printedLabels ? "" : observation.visualCandidateIdentity,
+              observation.visualCandidateIdentity ? "Egyptian antiquities" : "",
             ]
               .filter((part) => typeof part === "string" && part.trim())
               .join(" ")]
@@ -2143,15 +2750,36 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             searchResults.flatMap((result) => result.sources).map((source) => [source.url, source]),
           ).values(),
         ].slice(0, 8);
-        const candidateSources = openScannerRankedCandidates.map((candidate) => ({
+        const candidateSources = [...new Map(
+          [...openScannerRankedCandidates, ...openScannerSourceCandidates]
+            .map((candidate) => [candidate.url, candidate]),
+        ).values()].map((candidate) => ({
           title: candidate.name,
           url: candidate.url,
           snippet: "",
           source: candidate.museum || candidate.name,
           trusted: true,
         }));
+        const officialTextSources = officialTextCandidates.map(({ record }) => ({
+          title: record.title,
+          url: canonicalOfficialArchiveUrl(record.sourceUrl),
+          snippet: record.description || "",
+          source: record.sourceTitle || "",
+          trusted: true,
+        })).filter((source) => source.url);
+        const indexCandidates = scannerIndexCandidates(scannerIndexResult);
+        const probableThreshold = scannerProbableThreshold(env);
+        const indexSources = indexCandidates
+          .filter((candidate) => candidate.similarity >= probableThreshold)
+          .map((candidate) => ({
+            title: candidate.name,
+            url: candidate.url,
+            snippet: candidate.sourceText,
+            source: candidate.source || candidate.museum || candidate.name,
+            trusted: true,
+          }));
         sources = [...new Map(
-          [...sources, ...candidateSources].map((source) => [source.url, source]),
+          [...sources, ...candidateSources, ...indexSources, ...officialTextSources].map((source) => [source.url, source]),
         ).values()].slice(0, 8);
         if (
           mode === "objects" &&
@@ -2168,30 +2796,73 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         );
         const confidenceByField = scanConfidence(observation, mode);
         const formattedAnalysis = formatScannerResult(observation, sources, mode, language, confidenceByField);
-        const relatedContext = mode === "objects" && !officialVisualMatch
-          ? relatedSourceSummary(sources, language)
+        const sourceBackedCandidate = Boolean(
+          observation.visualCandidateIdentity &&
+          sources.some((source) => scannerSourceSupportsCandidate(source, observation))
+        );
+        const indexedProbable = indexCandidates.some((candidate) => candidate.similarity >= probableThreshold);
+        const identificationStatus = sourceBackedCandidate || indexedProbable ||
+          officialTextCandidates.length || openScannerSourceCandidates.length
+          ? "probable"
+          : "unverified";
+        const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold) ||
+          officialTextCandidateArtifact(officialTextCandidates[0]) ||
+          openScannerCandidateArtifact(openScannerSourceCandidates[0]);
+        const responseSources = probableArtifact
+          ? sources.filter((source) => source.url === probableArtifact.url)
+          : sources;
+        const responseSourceText = probableArtifact?.description || responseSources
+          .filter((source) => source?.trusted === true && typeof source.snippet === "string")
+          .slice(0, 1)
+          .map((source) => source.snippet)
+          .filter(Boolean)
+          .join("\n");
+        console.info("[Image scanner] Final decision:", {
+          decision: identificationStatus,
+          reason: sourceBackedCandidate
+            ? "trusted-source-support"
+            : indexedProbable
+              ? "medium-faiss-match-with-source"
+              : officialTextCandidates.length
+                ? "local-official-text-correlation"
+                : openScannerSourceCandidates.length
+                  ? "trusted-source-text-overlap"
+                : "no-sufficient-source-match",
+          sourcesChecked: sources.map((source) => source.source || source.title),
+        });
+        const relatedContext = mode === "objects" && !officialVisualMatch && !sourceBackedCandidate
+          ? relatedSourceSummary(responseSources, language)
           : "";
         const analysis = [formattedAnalysis, relatedContext].filter(Boolean).join("\n\n");
-        return json({
-          ok: true,
-          analysis,
-          sources,
-          trustedSourcesAvailable,
-          wikipediaAvailable,
-          resultType: mode === "objects" ? "unverified" : "ai_guess",
-          reverseImageSearchStatus: !reverseImageSearchConfigured
+        const sourceStory = await summarizeTrustedSourceText(env, responseSourceText, language);
+        const reverseImageSearchStatus = identificationStatus === "probable" && probableArtifact
+          ? "no_match"
+          : !reverseImageSearchConfigured
             ? "unavailable"
             : openScannerSearchStatus === "failed" || geminiCatalogComparisonFailed
               ? "failed"
-              : openScannerSearchStatus,
+              : openScannerSearchStatus;
+        return json({
+          ok: true,
+          analysis,
+          sourceStory,
+          sources: responseSources,
+          trustedSourcesAvailable,
+          wikipediaAvailable,
+          resultType: mode === "objects" ? "unverified" : "ai_guess",
+          identificationStatus: mode === "objects" ? identificationStatus : "unverified",
+          reverseImageSearchStatus,
           ...(mode === "objects"
             ? {
                 visualDescription: scannerVisualDescription(observation),
-                candidates: openScannerRankedCandidates,
-                visualMatchMethod: "Gemini multimodal comparison; not CLIP",
+                candidates: [...openScannerRankedCandidates, ...openScannerSourceCandidates, ...indexCandidates].slice(0, 5),
+                ...(identificationStatus === "probable" && probableArtifact
+                  ? { matchedArtifact: probableArtifact }
+                  : {}),
+                visualMatchMethod: indexCandidates.length ? "OpenCLIP ViT-B-32 + FAISS candidates" : "visual observation; no confirmed image match",
               }
             : {}),
-          confidence: mode === "objects" ? "low" : observation.confidence || "غير محسوبة",
+          confidence: mode === "objects" ? identificationStatus === "probable" ? "medium" : "low" : observation.confidence || "غير محسوبة",
           confidenceByField,
           model: independentObservations.length > 1
             ? `Free visual consensus (${independentObservations.length} engines)`
@@ -2208,14 +2879,16 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               : localOllama
                 ? "Ollama (local)"
                 : "Cloudflare Workers AI",
+            providerOrder: visionProviderOrder,
+            fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
             enginesCompleted: independentObservations.length,
             usedFallback: !String(visionUsed || "").startsWith("gemini:") && !localOllama && visionUsed !== VISION_MODEL,
-            attempts: visionAttempts,
           },
           photoGps,
         });
       } catch (error) {
         const detail = String(error?.message || error).slice(0, 500);
+        console.error(`[Image scanner] Vision analysis failed: ${detail}`);
         const needsAgreement = /agree|license|acceptable use|policy/i.test(detail);
         return json(
           {
@@ -2234,6 +2907,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               : { identity: "low", place: "low", period: "low" },
             visionDiagnostics: {
               provider: localOllama ? "Ollama (local)" : "Cloudflare Workers AI",
+              providerOrder: visionProviderOrder,
+              fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
             },
           },
         );

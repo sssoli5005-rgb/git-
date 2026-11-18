@@ -37,9 +37,11 @@ export function Login({ onAuthenticated }: { onAuthenticated: () => void }) {
         return;
       }
       const payload = await response.json().catch(() => null) as { code?: string } | null;
-      setError(payload?.code === "auth_not_configured" ? t.auth.unavailable : t.auth.invalid);
+      const isUnavailable = response.status === 503 || payload?.code === "auth_not_configured";
+      const isInvalid = response.status === 401 || payload?.code === "invalid_credentials";
+      setError(isUnavailable ? t.auth.unavailable : isInvalid ? t.auth.invalid : t.auth.unavailable);
     } catch {
-      setError(t.auth.invalid);
+      setError(t.auth.unavailable);
     } finally {
       setSubmitting(false);
     }

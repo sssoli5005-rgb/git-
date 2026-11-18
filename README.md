@@ -70,7 +70,7 @@ The Cloudflare Workers Free plan has a daily request allowance. AI providers als
 
 ## AI provider configuration
 
-The selected hosted chat providers are Groq first, then Gemini as its backup. Defaults are `qwen/qwen3.8-27b`, then `openai/gpt-oss-20b` on Groq; if Groq cannot answer, Gemini tries `gemini-3.8-flash`, then `gemini-3.6-flash`. Set both `GROQ_API_KEY` and `GEMINI_API_KEY` to enable both providers. Optional primary-model overrides are `GROQ_MODEL` and `GEMINI_MODEL`; the source-controlled fallback code keeps the alternate models. If a model is throttled, unavailable, returns invalid-language text, or reaches its output limit, the server tries its configured alternate before moving to the next provider, then uses Cloudflare Workers AI when available. These fallbacks reduce interruptions but do not bypass provider-wide quotas or outages; replacing a key is not a remedy for HTTP 429 or 503. Keep keys server-side only. The image scanner uses Gemini first, retries with a backup Gemini model, then uses Cloudflare Workers AI when available. It also searches Wikipedia for related article summaries; those text results are references, not proof that the photographed object was identified. Optional scanner model overrides are `GEMINI_VISION_MODEL` and `GEMINI_VISION_FALLBACK_MODEL`. Free-tier usage is subject to provider quotas and availability. Local Ollama is supported for development only when the server can reach the Ollama host; a deployed Cloudflare Worker cannot call Ollama at `localhost` on your personal computer.
+The selected hosted chat providers are Groq first, then Gemini as its backup. Defaults are `qwen/qwen3.8-27b`, then `openai/gpt-oss-20b` on Groq; if Groq cannot answer, Gemini tries `gemini-3.8-flash`, then `gemini-3.6-flash`. Set both `GROQ_API_KEY` and `GEMINI_API_KEY` to enable both providers. Optional primary-model overrides are `GROQ_MODEL` and `GEMINI_MODEL`; the source-controlled fallback code keeps the alternate models. If a model is throttled, unavailable, returns invalid-language text, or reaches its output limit, the server tries its configured alternate before moving to the next provider, then uses Cloudflare Workers AI when available. These fallbacks reduce interruptions but do not bypass provider-wide quotas or outages; replacing a key is not a remedy for HTTP 429 or 503. Keep keys server-side only. The image scanner uses the failover order `Gemini -> Groq -> Ollama`. If one provider is rate limited, rejects the request, or returns unusable JSON, the worker advances to the next provider without failing the scan. The scanner still keeps the Cloudflare Workers AI models as a final local fallback when no hosted provider is configured. Optional scanner model overrides are `GEMINI_VISION_MODEL` and `GEMINI_VISION_FALLBACK_MODEL`. Free-tier usage is subject to provider quotas and availability. Local Ollama is supported for development only when the server can reach the Ollama host; a deployed Cloudflare Worker cannot call Ollama at `localhost` on your personal computer.
 
 Questions about Egyptian history and heritage trigger live retrieval from approved government, university, museum, and archaeological-mission websites. Wikipedia may be used only as a public index to discover links to those sites; its article text is not used as answer evidence. Source links are shown when the user asks for them. If live retrieval fails, the request continues to the configured AI provider with relevant curated knowledge and an instruction to answer cautiously, distinguish generally established context from facts verified during that turn, and never invent sources. Search failure alone does not stop the conversation. Topics with a reviewed, directly answerable entry in `src/lib/knowledge-base.ts` can use that answer instead of generated text, protecting those answers from provider hallucinations and allowing them to work during provider outages. The verified response about deity iconography separates style, symbolism, religion, and political patronage, and uses the UCL Amarna-period evidence rather than an invented sequence of Amun depictions.
 
@@ -90,10 +90,53 @@ For local development, add `GROQ_API_KEY` and/or `GEMINI_API_KEY` to the root `.
 
 ### Image scanner engines
 
-The scanner uses independent free vision engines when they are configured: Gemini with a free-tier API key, plus local Qwen2.5-VL and InternVL3 through Ollama. Qwen2.5-VL 7B is available through Ollama as `qwen2.5vl`; InternVL3 availability depends on the local Ollama build/tag catalog, so verify the exact installed tag with `ollama list` before setting `INTERNVL_VISION_MODEL`. Set `OLLAMA_BASE_URL=http://127.0.0.1:11434`. Override `QWEN_VISION_MODEL` or `INTERNVL_VISION_MODEL` when using different installed tags. Qwen2.5-VL 7B and InternVL3-8B list Apache-2.0-compatible model metadata, but deployments must retain and review each model repository's license terms. The worker combines only agreed observations and records unavailable engines instead of presenting unsupported guesses as facts. Search references remain public web results or official collection records, not proof of visual identity.
+The scanner's optional recognition path uses an OpenCLIP `ViT-B-32` image embedding index and FAISS. The index builder only includes Met Public Domain records, Cleveland CC0 records, and Wikimedia Commons files with an allowlisted free license; Wikidata records must have a P18 image and P195 collection in Egypt. Google Vision, SerpApi, Smithsonian, and Europeana connectors are not included, so this setup needs no paid API or credit balance. The legacy vision fallback can still describe a photo, but it does not establish an artifact identity.
 
-#### Cloudflare-native visual matching
+#### Build the index locally
 
-The scanner runs inside the Cloudflare Worker. Gemini describes the submitted image and compares it with candidate images returned by the Met collection API (department 10), Wikimedia Commons, and Wikidata. It returns a match only when Gemini's approximate visual score reaches `SCANNER_MATCH_THRESHOLD` (default `0.80`) and it reports at least two distinctive visual details; otherwise it marks the result unconfirmed and shows up to three candidates. This score is not a CLIP embedding or calibrated cosine similarity, and should be treated as an estimate. A match's historical context is copied only from the linked museum or catalog record. The scanner uses the existing server-side `GEMINI_API_KEY`; no Google Vision or SerpApi key, separate Python service, or new paid API key is required. Gemini free-tier limits still apply.
+Use Python 3.12 on Linux for local builds. The current Windows Python 3.15 environment cannot install FAISS; on Windows use WSL2 Ubuntu, or build in Colab below. All packages and sources are free. The first run downloads OpenCLIP weights; later runs reuse them and resume from SQLite checkpoints.
 
-To tune the matching threshold, change `SCANNER_MATCH_THRESHOLD` in `wrangler.toml` and redeploy the Worker.
+```sh
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r scanner/requirements.txt
+python scanner/build_index.py --device auto
+```
+
+Use the same build command again to resume. Add `--max-items 20` for a small connectivity test; that capped index is not suitable for real identification. Generated files live under `scanner/index_data/` and are ignored by Git.
+
+#### Build in Google Colab
+
+Use a free Colab runtime with GPU enabled, clone/upload the repository, install `scanner/requirements.txt`, and run:
+
+```python
+!pip install -r scanner/requirements.txt
+!python scanner/build_index.py --device cuda --output /content/athara-index
+```
+
+Zip and download the complete `/content/athara-index` directory, then extract it as `scanner/index_data/` in the project. Keep `index.faiss`, `index-map.json`, `manifest.json`, and `metadata.sqlite` together. The same script runs in Colab; no paid search connector is used.
+
+#### Run the local FAISS service
+
+Keep this service running beside the Vite app. On Windows, run it inside WSL2 Ubuntu with Python 3.12; WSL2 forwards its localhost port to the Windows host. Set `SCANNER_INDEX_URL=http://127.0.0.1:8765` in the root `.env.local`, then start the sidecar:
+
+```sh
+source .venv/bin/activate
+python scanner/search_server.py
+```
+
+In a second terminal, start the app:
+
+```powershell
+npm run dev
+```
+
+With the index and app running, verify the mask, Nefertiti, and Sphinx using:
+
+```sh
+python scanner/smoke_test.py --app-url http://127.0.0.1:4173
+```
+
+The scanner resizes and validates each upload before querying the index for five nearest records. It returns `confirmed` only when the best score is at least `SCANNER_INDEX_MATCH_THRESHOLD` (default `0.85`), the first two hits share the same entity, and the record URL belongs to an allowed source domain. A supported source-backed candidate above `SCANNER_PROBABLE_THRESHOLD` (default `0.65`) is `probable`; otherwise it remains `unverified`. A failed or unconfigured local index falls through without exposing internal errors to visitors. Restart Vite after changing `.env.local`.
+
+FAISS and SQLite run in this local Python sidecar; a Cloudflare Worker cannot load local FAISS files. For Cloudflare deployment, the index service must be hosted separately at an HTTPS `SCANNER_INDEX_URL`; do not point a deployed Worker at your computer's `localhost`. The public museum, Commons, Wikipedia, and Wikidata APIs used for source lookup are free but may rate-limit requests. Source details and license information are retained with each indexed record and shown as links in results.

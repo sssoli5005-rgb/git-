@@ -67,7 +67,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
       expect(response?.status).toBe(200);
       await expect(response?.json()).resolves.toMatchObject({
         visionProvider: "Gemini Vision",
-        visionModel: "gemini-2.5-flash",
+        visionModel: "gemini-3.8-flash",
       });
     } finally {
       vi.unstubAllEnvs();

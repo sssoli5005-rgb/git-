@@ -26,15 +26,9 @@ import {
 } from "@/lib/image-enhancement";
 
 type ScanConfidence = Record<string, "high" | "medium" | "low" | "unavailable">;
-type ScanProviderAttempt = {
-  model: string;
-  reason: string;
-};
-
 type ScanDiagnostics = {
   provider?: string;
   usedFallback?: boolean;
-  attempts?: ScanProviderAttempt[];
 };
 type ScanVisualDescription = {
   object_type?: string;
@@ -47,6 +41,11 @@ type ScanArtifactCandidate = {
   name?: string;
   museum?: string;
   objectNumber?: string;
+  location?: string;
+  period?: string;
+  objectType?: string;
+  description?: string;
+  source?: string;
   url?: string;
   similarity?: number;
 };
@@ -315,6 +314,8 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             visualDescription?: ScanVisualDescription;
             matchedArtifact?: ScanArtifactCandidate | null;
             candidates?: ScanArtifactCandidate[];
+            identificationStatus?: "confirmed" | "probable" | "unverified";
+            sourceStory?: string;
           };
           let analysis = data.analysis || "";
           if (data.visualDescription) {
@@ -357,7 +358,55 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             }
             analysis = details.join("\n");
           }
-          const reverseSearchNotice = scanMode !== "objects"
+          const identificationLabel = data.identificationStatus === "confirmed"
+            ? resultCopy.confirmedStatus
+            : data.identificationStatus === "probable"
+              ? resultCopy.probableStatus
+              : data.identificationStatus === "unverified"
+                ? resultCopy.unverifiedStatus
+                : "";
+          if (data.matchedArtifact) {
+            const artifact = data.matchedArtifact;
+            const sourceStory = data.sourceStory || artifact.description || analysis;
+            analysis = [
+              identificationLabel,
+              artifact.name ? `${resultCopy.nameLabel}: ${artifact.name}` : "",
+              artifact.location || artifact.museum
+                ? `${resultCopy.locationLabel}: ${artifact.location || artifact.museum}`
+                : "",
+              artifact.objectNumber ? `${scanCopy.visualObjectNumber}: ${artifact.objectNumber}` : "",
+              artifact.period ? `${resultCopy.periodLabel}: ${artifact.period}` : "",
+              artifact.objectType ? `${scanCopy.visualObjectType}: ${artifact.objectType}` : "",
+              sourceStory ? `${resultCopy.storyLabel}: ${sourceStory}` : "",
+            ].filter(Boolean).join("\n");
+          } else if (identificationLabel) {
+            analysis = [
+              identificationLabel,
+              data.sourceStory ? `${resultCopy.storyLabel}: ${data.sourceStory}` : "",
+              analysis,
+            ].filter(Boolean).join("\n");
+          }
+          if (scanMode === "objects") {
+            const artifact = data.matchedArtifact;
+            if (artifact?.name) {
+              const story = data.sourceStory || artifact.description ||
+                data.sources?.find((source) => source.trusted)?.snippet || "";
+              analysis = [
+                identificationLabel,
+                `${resultCopy.nameLabel}: ${artifact.name}`,
+                artifact.location || artifact.museum
+                  ? `${resultCopy.locationLabel}: ${artifact.location || artifact.museum}`
+                  : "",
+                story ? `${resultCopy.storyLabel}: ${story}` : "",
+              ].filter(Boolean).join("\n");
+            } else {
+              analysis = [
+                identificationLabel || resultCopy.unverifiedStatus,
+                resultCopy.notIdentified,
+              ].join("\n");
+            }
+          }
+          const reverseSearchNotice = scanMode !== "objects" || data.identificationStatus === "probable"
             ? ""
             : data.reverseImageSearchStatus === "unavailable"
               ? scanCopy.reverseImageSearchUnavailable
@@ -367,12 +416,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                   ? scanCopy.reverseImageSearchFailed
                   : "";
           if (!response.ok || !data.ok || (!analysis && !reverseSearchNotice)) {
-            const providerFailures = (data.visionDiagnostics?.attempts || []).map(
-              ({ model, reason }) => `${model}: ${reason}`,
-            );
-            throw new Error(
-              [data.error || "تحليل الصورة ما اكتملش.", ...providerFailures].join(" — "),
-            );
+            throw new Error(data.error || "تحليل الصورة ما اكتملش.");
           }
           if (!cancelled) {
             setScanResult([reverseSearchNotice, analysis].filter(Boolean).join("\n\n"));
@@ -406,7 +450,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
       window.clearTimeout(requestTimeout);
       controller.abort();
     };
-  }, [scannerOpen, captured, cameraError, scanMode, lang, scanAttempt]);
+  }, [scannerOpen, captured, cameraError, scanMode, lang, scanAttempt, resultCopy, scanCopy]);
 
   const acceptVisionLicense = async () => {
     if (!visionConsentChecked || visionConsentSubmitting) {
