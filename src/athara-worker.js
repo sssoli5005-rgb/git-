@@ -4376,7 +4376,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 Cloudflare: typeof env.AI?.run === "function",
                 Gemini: Boolean(geminiVisionKey),
                 Groq: Boolean(groqVisionKey),
-                OpenRouter: Boolean(openRouterVisionKey),
+                OpenRouter: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
               },
               cloudflareFallbackModels: typeof env.AI?.run === "function" ? FALLBACK_VISION_MODELS : [],
               failedAttempts: visionAttempts.map((attempt) => ({
