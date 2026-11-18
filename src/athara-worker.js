@@ -168,6 +168,17 @@ const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 50
 const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 15_000, gemini: 30_000, groq: 25_000 };
 const VISION_PROVIDER_RETRIES = 1;
 
+function safeVisionFailureCategory(reason) {
+  const value = String(reason || "").toLowerCase();
+  if (/429|quota|rate.?limit/.test(value)) return "rate_limited";
+  if (/timeout|timed out|abort/.test(value)) return "timeout";
+  if (/license|agree|acceptable use|policy/.test(value)) return "provider_consent_required";
+  if (/401|403|unauthorized|forbidden|api.?key/.test(value)) return "authentication_or_permission";
+  if (/503|502|500|overload|busy|capacity/.test(value)) return "provider_unavailable";
+  if (/empty|non-informative|invalid/.test(value)) return "invalid_provider_response";
+  return "request_failed";
+}
+
 function isRetryableVisionNetworkError(error) {
   return ["AbortError", "TimeoutError", "TypeError"].includes(error?.name) ||
     /timeout|timed out|network|connection reset|socket/i.test(String(error?.message || error));
@@ -3538,7 +3549,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               },
               failedAttempts: visionAttempts.map((attempt) => ({
                 engine: attempt.model,
-                reason: String(attempt.reason || "").slice(0, 180),
+                category: safeVisionFailureCategory(attempt.reason),
               })),
             },
           },
