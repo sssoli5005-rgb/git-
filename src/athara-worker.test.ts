@@ -1421,7 +1421,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(groqCalls.length).toBeGreaterThan(0);
     const body = await response.json();
     expectUnverifiedScan(body);
-    expect(body.reverseImageSearchStatus).toBe("unavailable");
+    expect(body.reverseImageSearchStatus).toBe("no_match");
     expect(body.analysis).toContain("اسم محتمل غير مؤكد: واجهة أثرية في مصر");
   });
 
