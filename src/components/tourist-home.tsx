@@ -393,20 +393,20 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           if (scanMode === "objects") {
             const artifact = data.matchedArtifact;
             if (artifact?.name) {
-              const story = data.sourceStory || artifact.description ||
-                data.sources?.find((source) => source.trusted)?.snippet || "";
+              const story = (data.sourceStory || artifact.description ||
+                data.sources?.find((source) => source.trusted)?.snippet || "")
+                .replace(/https?:\/\/\S+/g, "")
+                .replace(/\n{3,}/g, "\n\n")
+                .trim();
+              const displayLocation = artifact.currentLocation || artifact.museum || artifact.location || "";
               analysis = [
                 identificationLabel || resultCopy.confirmedStatus,
                 `${resultCopy.nameLabel}: ${artifact.name}`,
-                artifact.museum ? `${resultCopy.locationLabel}: ${artifact.museum}` : "",
-                artifact.currentLocation ? `مكان العرض: ${artifact.currentLocation}` : "",
-                artifact.findSpot ? `مكان العثور: ${artifact.findSpot}` : "",
-                artifact.objectNumber ? `رقم التسجيل: ${artifact.objectNumber}` : "",
-                artifact.period ? `الفترة التاريخية: ${artifact.period}` : "",
-                artifact.material ? `الخامة: ${artifact.material}` : "",
-                artifact.provenance ? `سجل الملكية: ${artifact.provenance}` : "",
-                story ? `${resultCopy.storyLabel}: ${story}` : "",
-              ].filter(Boolean).join("\n");
+                displayLocation ? `مكان وجودها/عرضها: ${displayLocation}` : "",
+                artifact.findSpot ? `مكان العثور عليها: ${artifact.findSpot}` : "",
+                artifact.period ? `العصر/الفترة: ${artifact.period}` : "",
+                story ? `${resultCopy.storyLabel}: ${story.slice(0, 1400)}` : "",
+              ].filter(Boolean).join("\n\n");
             } else {
               const candidates = Array.isArray(data.candidates) ? data.candidates : [];
               // Only show candidates with a genuine image-to-image similarity score.
@@ -438,17 +438,9 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               ].filter(Boolean).join("\n");
             }
           }
-          const reverseSearchNotice = scanMode !== "objects" || data.identificationStatus === "probable"
-            ? ""
-            : data.reverseImageSearchStatus === "unavailable"
-              ? scanCopy.reverseImageSearchUnavailable
-              : data.reverseImageSearchStatus === "no_match"
-                ? scanCopy.reverseImageSearchNoMatch
-                : data.reverseImageSearchStatus === "failed"
-                  ? scanCopy.reverseImageSearchFailed
-                  : "";
+
           if (!cancelled) {
-            setScanResult([reverseSearchNotice, analysis].filter(Boolean).join("\n\n"));
+            setScanResult(analysis);
             setScanSources(Array.isArray(data.sources) ? data.sources : []);
             setScanConfidence(data.confidenceByField ?? null);
             setScanWikipediaAvailable(data.wikipediaAvailable ?? null);
@@ -917,34 +909,31 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                       {resultCopy.showReferences}
                     </summary>
                     <div className="mt-2">
-                      <strong>{resultCopy.references}</strong>
                       <p className="text-xs opacity-75">{scanCopy.referenceDisclaimer}</p>
                       {scanSources.length > 0 ? (
-                        <ul className="mt-2 space-y-2">
-                          {scanSources.map((source, index) => (
-                            <li key={source.url + index}>
-                              <a
-                                href={source.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="underline font-medium"
-                              >
-                                {source.title}
-                              </a>
-                              <small className="block opacity-70">
-                                {source.trusted ? scanCopy.institutionalSource : source.source}
-                                {source.snippet ? " — " + source.snippet : ""}
-                              </small>
-                            </li>
-                          ))}
+                        <ul className="mt-2 space-y-1">
+                          {[...scanSources]
+                            .sort((a, b) => Number(Boolean(b.trusted)) - Number(Boolean(a.trusted)))
+                            .slice(0, 3)
+                            .map((source, index) => (
+                              <li key={source.url + index}>
+                                <a
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={source.title}
+                                  className="inline-block max-w-full truncate text-sm underline font-medium"
+                                >
+                                  {source.title.length > 46 ? source.title.slice(0, 43) + "…" : source.title}
+                                </a>
+                                <small className="block text-xs opacity-65">
+                                  {source.source || (source.trusted ? scanCopy.institutionalSource : "")}
+                                </small>
+                              </li>
+                            ))}
                         </ul>
-                      ) : null}
-                      {scanWikipediaAvailable === false ? (
-                        <p className="mt-2 text-sm">{wikipediaUnavailableCopy}</p>
                       ) : (
-                        scanSources.length === 0 && (
-                          <p className="mt-2 text-sm">{scanCopy.noSources}</p>
-                        )
+                        <p className="mt-2 text-sm">{scanCopy.noSources}</p>
                       )}
                     </div>
                   </details>
