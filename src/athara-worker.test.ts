@@ -1359,7 +1359,7 @@ describe("ATHARA Cloudflare Worker", () => {
           messages: expect.any(Array),
           dimensions: 512,
         }));
-        expect(geminiCall).toBe(2);
+        expect(geminiCall).toBe(3);
       } finally {
         vi.unstubAllGlobals();
       }
