@@ -4022,7 +4022,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               failedAttempts: visionAttempts.map((attempt) => ({
                 engine: attempt.model,
                 category: safeVisionFailureCategory(attempt.reason),
-              reason: safeVisionDiagnosticReason(attempt.reason, env),
               })),
             },
           },
