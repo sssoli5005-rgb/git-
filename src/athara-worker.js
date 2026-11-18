@@ -1,7 +1,7 @@
 const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
 const FALLBACK_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
-const DEFAULT_VISION_PROVIDER_ORDER = ["Gemini", "Groq", "Ollama"];
+const DEFAULT_VISION_PROVIDER_ORDER = ["Gemini", "Groq", "Cloudflare"];
 const MAX_IMAGE_CHARS = 8_500_000;
 const MAX_COMPARISON_IMAGE_BYTES = 500_000;
 const DEFAULT_SCANNER_MATCH_THRESHOLD = 0.8;
@@ -201,13 +201,8 @@ function cleanVisionObservation(value) {
   ]));
 }
 
-function resolveVisionProviderOrder(env) {
-  const configured = [];
-  if (typeof env.GEMINI_API_KEY === "string" && env.GEMINI_API_KEY.trim()) configured.push("Gemini");
-  if (typeof env.GROQ_API_KEY === "string" && env.GROQ_API_KEY.trim()) configured.push("Groq");
-  if (typeof env.OLLAMA_BASE_URL === "string" && env.OLLAMA_BASE_URL.trim()) configured.push("Ollama");
-  if (!configured.length) return ["Cloudflare"];
-  return [...configured, ...DEFAULT_VISION_PROVIDER_ORDER.filter((provider) => !configured.includes(provider))];
+function resolveVisionProviderOrder(_env) {
+  return [...DEFAULT_VISION_PROVIDER_ORDER];
 }
 
 function stripHtml(html) {
@@ -495,6 +490,17 @@ function parseVisionObservation(rawVisual) {
     observation[field] = decodePartialJsonString(rawVisual.slice(valueStart + 1, valueEnd));
   }
   return cleanVisionObservation(observation);
+}
+
+function hasUsableVisionObservation(observation, mode) {
+  if (!observation || typeof observation !== "object" || Array.isArray(observation)) return false;
+  const fields = mode === "hieroglyphs"
+    ? ["visualDescription", "sceneDescription", "scriptType", "visibleText", "printedLabels", "identity", "objectType"]
+    : ["visualDescription", "sceneDescription", "objectType", "material", "identity", "style", "keyFeatures"];
+  if (fields.some((field) => meaningfulVisionText(observation[field]))) return true;
+  return ["symbols", "keywords", "searchTerms", "possibilities"].some((field) =>
+    Array.isArray(observation[field]) && observation[field].some((value) => meaningfulVisionText(value)),
+  );
 }
 
 function consensusValue(observations, field) {
@@ -2257,8 +2263,8 @@ export default {
         guideModel: TEXT_MODEL,
         visionEngines: [
           { name: "Gemini", configured: geminiConfigured, model: configuredGeminiVisionModel(env) },
-          { name: "Qwen2.5-VL", configured: typeof env.OLLAMA_BASE_URL === "string" && Boolean(env.OLLAMA_BASE_URL.trim()), model: env.QWEN_VISION_MODEL || "qwen2.5vl:7b", license: "Apache-2.0" },
-          { name: "InternVL3", configured: typeof env.OLLAMA_BASE_URL === "string" && Boolean(env.OLLAMA_BASE_URL.trim()), model: env.INTERNVL_VISION_MODEL || "internvl3:8b", license: "Apache-2.0/Qwen license" },
+          { name: "Groq", configured: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()), model: env.GROQ_VISION_MODEL || env.GROQ_MODEL || "qwen/qwen3.8-27b" },
+          { name: "Cloudflare Workers AI", configured: typeof env.AI?.run === "function", model: VISION_MODEL, fallbackModel: FALLBACK_VISION_MODEL },
         ],
         reverseImageSearch: {
           openMuseumCatalogs: geminiConfigured,
@@ -2582,7 +2588,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             if (!geminiResponse.ok) throw new Error(geminiPayload?.error?.message || `Gemini Vision returned HTTP ${geminiResponse.status}`);
             rawVisual = geminiPayload?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join("").trim() || "";
             if (!rawVisual) throw new Error("Gemini Vision returned an empty response.");
-            independentObservations.push(parseVisionObservation(rawVisual));
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) {
+              throw new Error("Gemini Vision returned invalid or non-informative visual data.");
+            }
+            independentObservations.push(observation);
             visionUsed = `gemini:${geminiModel}`;
             break;
           } catch (modelError) {
@@ -2598,7 +2608,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
               ? env.GROQ_MODEL.trim()
               : "qwen/qwen3.8-27b";
-        if (groqVisionKey) {
+        if (groqVisionKey && !independentObservations.length) {
           try {
             const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
               method: "POST",
@@ -2629,7 +2639,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             if (!groqResponse.ok) throw new Error(groqPayload?.error?.message || `Groq Vision returned HTTP ${groqResponse.status}`);
             rawVisual = groqPayload?.choices?.[0]?.message?.content?.trim() || "";
             if (!rawVisual) throw new Error("Groq Vision returned an empty response.");
-            independentObservations.push(parseVisionObservation(rawVisual));
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) {
+              throw new Error("Groq Vision returned invalid or non-informative visual data.");
+            }
+            independentObservations.push(observation);
           } catch (modelError) {
             console.error(`[Image scanner] Groq Vision (${groqVisionModel}) failed: ${String(modelError?.message || modelError)}`);
             visionAttempts.push({
@@ -2639,7 +2653,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (typeof env.OLLAMA_BASE_URL === "string" && env.OLLAMA_BASE_URL.trim()) {
+        if (localOllama && typeof env.OLLAMA_BASE_URL === "string" && env.OLLAMA_BASE_URL.trim()) {
           const ollamaModels = [
             ["Qwen2.5-VL", typeof env.QWEN_VISION_MODEL === "string" && env.QWEN_VISION_MODEL.trim()
               ? env.QWEN_VISION_MODEL.trim() : "qwen2.5vl:7b"],
@@ -2665,7 +2679,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               if (!ollamaResponse.ok) throw new Error(ollamaResult?.error || `${engine} returned HTTP ${ollamaResponse.status}`);
               const output = typeof ollamaResult?.response === "string" ? ollamaResult.response.trim() : "";
               if (!output) throw new Error(`${engine} returned an empty response.`);
-              independentObservations.push(parseVisionObservation(output));
+              const observation = parseVisionObservation(output);
+              if (!hasUsableVisionObservation(observation, mode)) {
+                throw new Error(`${engine} returned invalid or non-informative visual data.`);
+              }
+              independentObservations.push(observation);
             } catch (modelError) {
               console.error(`[Image scanner] ${engine} (${model}) failed: ${String(modelError?.message || modelError)}`);
               visionAttempts.push({ model: `${engine} (${model})`, reason: String(modelError?.message || modelError).slice(0, 180) });
@@ -2676,13 +2694,19 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         if (!independentObservations.length) {
           for (const model of visionModels) {
             try {
+              if (typeof env.AI?.run !== "function") {
+                throw new Error("Cloudflare Workers AI binding is unavailable.");
+              }
               const visual = await env.AI.run(model, {
                 image: imageForAnalysis, prompt, max_tokens: 1400, temperature: 0.1,
               });
               rawVisual = extractText(visual).trim();
               if (!rawVisual) throw new Error("Vision model returned an empty response.");
-              independentObservations.push(parseVisionObservation(rawVisual));
-              visionUsed = model;
+              const observation = parseVisionObservation(rawVisual);
+              if (!hasUsableVisionObservation(observation, mode)) {
+                throw new Error("Cloudflare Vision returned invalid or non-informative visual data.");
+              }
+              independentObservations.push(observation);
               visionUsed = model;
               break;
             } catch (modelError) {

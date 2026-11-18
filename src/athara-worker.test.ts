@@ -66,8 +66,60 @@ describe("ATHARA Cloudflare Worker", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.visionProviderOrder).toEqual(["Gemini", "Groq", "Ollama"]);
-    expect(body.visionFallbackOrder).toEqual(["Groq", "Ollama"]);
+    expect(body.visionProviderOrder).toEqual(["Gemini", "Groq", "Cloudflare"]);
+    expect(body.visionFallbackOrder).toEqual(["Groq", "Cloudflare"]);
+  });
+
+  it("falls through Gemini and Groq failures to Cloudflare, and stops at the first usable result", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        return new Response(JSON.stringify({ error: { message: "Gemini quota exhausted" } }), {
+          status: 429, headers: { "content-type": "application/json" },
+        });
+      }
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ query: { pages: {} } }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const run = vi.fn().mockResolvedValue({
+      response: JSON.stringify({
+        visualDescription: "نقش بارز على جدار حجري",
+        objectType: "نقش جداري",
+        keywords: ["نقش", "حجر"],
+      }),
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          GEMINI_API_KEY: "gemini-key",
+          GROQ_API_KEY: "groq-key",
+          AI: { run },
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(true);
+      expect(body.analysis).toContain("نقش بارز على جدار حجري");
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(run.mock.calls[0][0]).toBe("@cf/meta/llama-3.2-11b-vision-instruct");
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
+      )).toBe(true);
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("api.groq.com"),
+      )).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps GEMINI_MODEL separate from the scanner vision model", async () => {
@@ -449,7 +501,7 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(visitorResponse).not.toContain("full connection detail");
       expect(logs).toContain("Gemini full quota detail");
       expect(logs).toContain("Groq full model detail");
-      expect(logs).toContain("Ollama full connection detail");
+      expect(logs).toContain("Cloudflare full failure detail");
       expect(logs).toContain("Cloudflare full failure detail");
     } finally {
       vi.unstubAllGlobals();
