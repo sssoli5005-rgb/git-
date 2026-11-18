@@ -333,6 +333,36 @@ describe("ATHARA Cloudflare Worker", () => {
     });
   });
 
+  it("reports when Cloudflare Web Search is genuinely available on the AI binding", async () => {
+    const response = await worker.fetch(new Request("https://athara.test/api/health"), {
+      AI: {
+        run: vi.fn(),
+        websearch: vi.fn(),
+      },
+      ASSETS: { fetch: vi.fn() },
+      GEMINI_API_KEY: "gemini-key",
+      GROQ_API_KEY: "groq-key",
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.reverseImageSearch).toMatchObject({
+      geminiGoogleSearch: true,
+      groqBrowserSearch: true,
+      cloudflareWebSearch: true,
+    });
+  });
+
+  it("does not claim Cloudflare Web Search is configured when the binding lacks websearch", async () => {
+    const response = await worker.fetch(new Request("https://athara.test/api/health"), {
+      AI: { run: vi.fn() },
+      ASSETS: { fetch: vi.fn() },
+    });
+    const body = await response.json();
+
+    expect(body.reverseImageSearch.cloudflareWebSearch).toBe(false);
+  });
+
   it("reports the configured scanner failover order", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
       AI: { run: vi.fn() },

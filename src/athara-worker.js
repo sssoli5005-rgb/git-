@@ -2865,6 +2865,9 @@ export default {
         reverseImageSearch: {
           openMuseumCatalogs: geminiConfigured,
           officialCatalogGemini: geminiConfigured,
+          geminiGoogleSearch: geminiConfigured,
+          groqBrowserSearch: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()),
+          cloudflareWebSearch: typeof env.AI?.websearch === "function",
         },
         visionProviderOrder,
         visionFallbackOrder,
