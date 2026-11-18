@@ -3264,11 +3264,13 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ])].slice(0, 8),
                 }
               : observation;
-            const [imageSearch, textSearch, groundedSearch] = await Promise.all([
+            const [imageSearch, textSearch] = await Promise.all([
               searchClevelandByImage(comparisonImageBytes || imageBytes),
               searchOpenScannerCandidates(searchObservation, language),
-              searchArtifactGroundedSources(env, searchObservation, language),
             ]);
+            const groundedSearch = imageSearch.candidates.length || textSearch.candidates.length
+              ? { sources: [], candidates: [], availableSources: 0, failedSources: 0 }
+              : await searchArtifactGroundedSources(env, searchObservation, language);
             openScannerWebSources = groundedSearch.sources;
             const mergedCandidates = [
               ...imageSearch.candidates,
