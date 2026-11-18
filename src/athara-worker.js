@@ -3027,8 +3027,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           .filter(Boolean)
           .join("\n");
         // Free public fallback when no confident identification yet — no API keys needed.
+        // مشغولة فقط عندما يكون SCANNER_FREE_FALLBACK_ENABLES مضبوطًا على "true".
         // لو انتهت حصة الأدوات المدفوعة أو تعذرت، تعمل المصادر المجانية تلقائيًا وتجيب اسم القطعة وقصتها ومكانها ومصدرها.
-        if (identificationStatus === "unverified") {
+        const freeFallbackEnabled =
+          typeof env.SCANNER_FREE_FALLBACK_ENABLED === "string"
+            ? env.SCANNER_FREE_FALLBACK_ENABLED.trim() === "true"
+            : false;
+
+        if (identificationStatus === "unverified" && freeFallbackEnabled) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback && (freeFallback.confidence === "medium" || freeFallback.confidence === "low-medium")) {
             return json({
