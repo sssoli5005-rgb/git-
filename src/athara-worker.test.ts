@@ -181,7 +181,7 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
-  it("uses a description-only prompt when FAISS candidates do not agree", async () => {
+  it("uses an evidence-qualified artifact identity prompt when FAISS candidates do not agree", async () => {
     const run = vi.fn().mockResolvedValue({
       response: JSON.stringify({ visualDescription: "A gilded funerary mask", objectType: "Mask" }),
     });
@@ -219,8 +219,10 @@ describe("ATHARA Cloudflare Worker", () => {
       const prompt = run.mock.calls[0][1].prompt as string;
 
       expect(body.identificationStatus).toBe("probable");
-      expect(prompt).toContain("دون اقتراح اسم قطعة");
-      expect(prompt).not.toContain("اقترح الاسم الأقرب");
+      expect(prompt).toContain("أقرب اسم معروف");
+      expect(prompt).toContain("identityEvidence");
+      expect(prompt).toContain("احتمال");
+      expect(prompt).not.toContain("لا تذكر أسماء أو هوية");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1110,8 +1112,9 @@ describe("ATHARA Cloudflare Worker", () => {
           if (geminiCall === 1) {
             expect(promptParts.some((part: { inlineData?: unknown }) => part.inlineData)).toBe(true);
             const systemPrompt = requestBody.systemInstruction.parts[0].text;
-            expect(systemPrompt).toContain("دون اقتراح اسم قطعة");
-            expect(systemPrompt).not.toContain("identityEvidence");
+            expect(systemPrompt).toContain("أقرب اسم معروف");
+            expect(systemPrompt).toContain("identityEvidence");
+            expect(systemPrompt).not.toContain("لا تذكر أسماء أو هوية");
             return Response.json({
               candidates: [{ content: { parts: [{ text: JSON.stringify({
                 visualDescription: "Small seated bronze figure",
