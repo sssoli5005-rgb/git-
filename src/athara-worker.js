@@ -3282,17 +3282,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         ) {
           sources = sources.filter((source) => source?.trusted === true);
         }
-        // Do not attach generic keyword-search articles to an unidentified object.
-        // Keep catalogue leads only when an actual catalogue record was retrieved.
-        if (
-          mode === "objects" &&
-          !openScannerDiscoveredCandidates.length &&
-          !scannerIndexCandidates(scannerIndexResult).some(
-            (candidate) => candidate.similarity >= scannerProbableThreshold(env),
-          )
-        ) {
-          sources = [];
-        }
+        // The trust filter above excludes broad, untrusted keyword-search pages.
+        // Keep trusted museum and official-archive records as contextual references
+        // even when the image itself has not been visually matched. A cited source
+        // is context, not proof of the uploaded object's identity.
         const wikipediaAvailable = searchResults.some(
           (result) => result.wikipediaAvailable === true,
         );
