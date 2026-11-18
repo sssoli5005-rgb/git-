@@ -68,7 +68,7 @@ describe("ATHARA Cloudflare Worker", () => {
 
     expect(response.status).toBe(200);
     expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
-    expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
+    expect(body.visionFallbackOrder).toEqual(["Cloudflare", "Groq"]);
   });
 
   it("falls through Gemini and Groq failures to Cloudflare, and stops at the first usable result", async () => {
