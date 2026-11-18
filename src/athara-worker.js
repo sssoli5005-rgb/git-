@@ -188,7 +188,8 @@ function safeVisionDiagnosticReason(reason, env) {
 
 function safeVisionFailureCategory(reason) {
   const value = String(reason || "").toLowerCase();
-  if (/429|quota|rate.?limit/.test(value)) return "rate_limited";
+  if (/4006|daily free allocation|10,000 neurons|daily neuron allocation/.test(value)) return "daily_quota_exhausted";
+  if (/429|quota|rate.?limit|tokens per day|daily limit/.test(value)) return "rate_limited";
   if (/timeout|timed out|abort/.test(value)) return "timeout";
   if (/license|agree|acceptable use|policy/.test(value)) return "provider_consent_required";
   if (/401|403|unauthorized|forbidden|api.?key/.test(value)) return "authentication_or_permission";
@@ -2281,8 +2282,21 @@ function scanOutputLabels(language) {
   return labels[language] || labels.en;
 }
 
-function scanProviderUnavailableMessage(language) {
-  const messages = {
+function scanProviderUnavailableMessage(language, attempts = []) {
+  const quotaCategories = new Set(["daily_quota_exhausted", "rate_limited"]);
+  const quotaExhausted = attempts.length > 0 &&
+    attempts.every((attempt) => quotaCategories.has(safeVisionFailureCategory(attempt.reason)));
+  const messages = quotaExhausted ? {
+    ar: "وصلت الصورة، لكن حدود الاستخدام أو الحصص اليومية لمحركات تحليل الصور المتصلة خلصت حاليًا. لم يتم تحليل الصورة أو مطابقتها، ومش هخمن اسم القطعة. جرّبي بعد تجدد الحصص أو تفعيل حصة إضافية لأحد المحركات.",
+    en: "The image was received, but the connected image-analysis providers have exhausted their current quotas or rate limits. The image was not analyzed or matched. Try again after the quotas reset or enable additional provider capacity.",
+    fr: "L’image a été reçue, mais les quotas ou limites des moteurs d’analyse sont épuisés. Aucune analyse ni correspondance n’a été effectuée. Réessayez après le renouvellement des quotas.",
+    de: "Das Bild wurde empfangen, aber die Kontingente oder Ratenlimits der Bildanalyseanbieter sind ausgeschöpft. Das Bild wurde nicht analysiert oder abgeglichen. Bitte versuchen Sie es nach Zurücksetzen der Kontingente erneut.",
+    es: "La imagen se recibió, pero se agotaron las cuotas o límites de los proveedores de análisis. No se analizó ni se comparó la imagen. Inténtalo cuando se renueven las cuotas.",
+    it: "L’immagine è stata ricevuta, ma le quote o i limiti dei provider di analisi sono esauriti. L’immagine non è stata analizzata né confrontata. Riprova quando le quote si saranno rinnovate.",
+    ru: "Изображение получено, но квоты или ограничения провайдеров анализа исчерпаны. Изображение не было проанализировано или сопоставлено. Повторите попытку после обновления квот.",
+    zh: "已收到图片，但图像分析服务的配额或速率限制已用尽。图片尚未分析或匹配。请在配额重置后重试。",
+    ja: "画像は受信されましたが、画像分析プロバイダーの使用量上限またはレート制限に達しました。画像の分析や照合は行われていません。制限がリセットされた後に再試行してください。",
+  } : {
     ar: "وصلت الصورة لكن تعذر تحليلها الآن. مش هخمن اسم القطعة أو قصتها من غير دليل. جرّب مرة تانية بعد شوية أو ارفع صورة أوضح.",
     en: "The image arrived, but could not be analyzed right now. I will not guess its identity or story without evidence. Try again shortly or upload a clearer image.",
     fr: "L’image a été reçue, mais ne peut pas être analysée pour le moment. Je ne devinerai pas son identité ni son histoire sans preuve. Réessayez bientôt ou envoyez une image plus nette.",
@@ -3215,7 +3229,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         // Try independent Cloudflare-hosted vision models before leaving the
         // Cloudflare provider. Model availability can differ by account; move on
         // immediately when a model is not enabled or is temporarily unavailable.
-        if (!localOllama && !independentObservations.length && typeof env.AI?.run === "function") {
+        const cloudflareDailyQuotaExhausted = visionAttempts.some((attempt) =>
+          safeVisionFailureCategory(attempt.reason) === "daily_quota_exhausted",
+        );
+        if (!localOllama && !independentObservations.length &&
+            typeof env.AI?.run === "function" && !cloudflareDailyQuotaExhausted) {
           for (const fallbackVisionModel of FALLBACK_VISION_MODELS) {
             if (independentObservations.length) break;
             const fallbackVisionLabel = fallbackVisionModel === "@cf/mistralai/mistral-small-3.1-24b-instruct"
@@ -3254,6 +3272,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 model: fallbackVisionModel,
                 reason: String(modelError?.message || modelError).slice(0, 180),
               });
+              if (safeVisionFailureCategory(modelError?.message || modelError) === "daily_quota_exhausted") {
+                console.warn("[Image scanner] Cloudflare daily Workers AI quota is exhausted; skipping remaining Cloudflare vision models.");
+                break;
+              }
             }
           }
         }
@@ -4010,7 +4032,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             ok: true,
             analysis: needsAgreement && language === "ar"
               ? "خدمة تحليل الصور محتاجة تفعيل موافقة ترخيص نموذج الرؤية في Cloudflare قبل أول استخدام. لازم صاحب الحساب يراجع ويوافق بنفسه."
-              : scanProviderUnavailableMessage(language),
+              : scanProviderUnavailableMessage(language, visionAttempts),
             resultType: "unverified",
             reverseImageSearchStatus: reverseImageSearchConfigured ? "failed" : "unavailable",
             sources: [],
