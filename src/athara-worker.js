@@ -147,6 +147,20 @@ function json(data, status = 200) {
   });
 }
 
+async function withScannerTimeout(operation, timeoutMs, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function extractText(result) {
   if (typeof result?.answer === "string") return result.answer;
   if (typeof result?.response === "string") return result.response;
@@ -2421,7 +2435,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         // the Meta Llama license handshake and rejects busy capacity immediately.
         if (!localOllama && typeof env.AI?.run === "function") {
           try {
-            const cloudflareVision = await env.AI.run(VISION_MODEL, {
+            const cloudflareVision = await withScannerTimeout(env.AI.run(VISION_MODEL, {
               task: "query",
               image: imageDataUrl,
               question: `${prompt}\n\nحلّل الصورة نفسها، واقترح أقرب هوية أثرية كاحتمال مع قرائن مرئية. أخرج JSON فقط بالمفاتيح المطلوبة في التعليمات. لا تدّعِ تطابقًا بصريًا أو مكانًا مؤكدًا بلا صورة مرجعية ومصدر مطابق.\nلغة الإجابة: ${LANGUAGES[language]}.`,
@@ -2429,7 +2443,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               temperature: 0.1,
               max_tokens: 950,
               stream: false,
-            }, { rejectIfBusy: true });
+            }, { rejectIfBusy: true }), 12_000, "Cloudflare Moondream");
             rawVisual = extractText(cloudflareVision).trim();
             if (!rawVisual) throw new Error("Cloudflare Moondream returned an empty response.");
             const observation = parseVisionObservation(rawVisual);
