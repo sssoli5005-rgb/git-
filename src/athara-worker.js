@@ -2514,7 +2514,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.run === "function";
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL);
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
