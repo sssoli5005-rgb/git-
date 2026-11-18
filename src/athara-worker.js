@@ -1667,10 +1667,13 @@ async function searchWithGeminiGrounding(query, apiKey, model) {
   }, { provider: "Gemini Google Search grounding", timeoutMs: 12_000 });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || "Gemini search HTTP " + response.status);
-  const blocks = [], citations = [], issuedQueries = [];
+  const blocks = [], citations = [], issuedQueries = [], structuredEntries = [];
   for (const step of Array.isArray(payload?.steps) ? payload.steps : []) {
     if (step?.type === "google_search_call" && Array.isArray(step.arguments?.queries)) {
       issuedQueries.push(...step.arguments.queries.filter((item) => typeof item === "string"));
+    }
+    if (step?.type === "google_search_result") {
+      structuredEntries.push(...scannerStructuredSearchEntries(step.result || step));
     }
     if (step?.type !== "model_output") continue;
     for (const part of Array.isArray(step.content) ? step.content : []) {
@@ -1685,7 +1688,11 @@ async function searchWithGeminiGrounding(query, apiKey, model) {
   }
   const summary = blocks.join("\n") || String(payload?.output_text || "");
   return {
-    entries: [...new Map([...citations, ...scannerUrlsFromText(summary)].map((item) => [item.url, item])).values()],
+    entries: [...new Map([
+      ...structuredEntries,
+      ...citations,
+      ...scannerUrlsFromText(summary),
+    ].map((item) => [item.url, item])).values()],
     summary,
     issuedQueries: [...new Set(issuedQueries)].slice(0, 6),
   };
@@ -1749,11 +1756,11 @@ async function searchWithGroqBrowser(query, apiKey, model) {
   if (!response.ok) throw new Error(payload?.error?.message || "Groq search HTTP " + response.status);
   const message = payload?.choices?.[0]?.message || {};
   const summary = typeof message.content === "string" ? message.content.trim() : "";
-  const structuredEntries = scannerStructuredSearchEntries(message.executed_tools || []);
-  const annotationEntries = scannerStructuredSearchEntries(message.annotations || []);
+  const structuredEntries = scannerStructuredSearchEntries(message);
+  const payloadEntries = scannerStructuredSearchEntries(payload);
   const entries = [...new Map([
     ...structuredEntries,
-    ...annotationEntries,
+    ...payloadEntries,
     ...scannerUrlsFromText(summary),
   ].map((entry) => [entry.url, entry])).values()];
   if (!summary && !entries.length) throw new Error("Groq browser search returned no text or structured results.");
@@ -1876,18 +1883,6 @@ async function readGroundedScannerSource(entry, observation) {
   }
 }
 
-function scannerHasDistinctiveArtifactIdentity(observation) {
-  const generic = new Set([
-    "statue","artifact","egyptian","ancient","temple","wooden","bust","plaster","stone","painted","royal","figurine",
-    "تمثال","اثري","اثر","مصرية","مصري","القديمة","قديم","ملون","حجر","جص","ملكي","خشبي","ملك","ملكه","اله","الهه","فرعون",
-  ]);
-  const identity = [
-    observation?.visualCandidateIdentity,
-  ].filter((value) => typeof value === "string").join(" ");
-  const terms = normalizeSearchTerms(identity).filter((term) => !generic.has(term));
-  return terms.some((term) => term.length >= 5);
-}
-
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
   const providers = [];
@@ -1903,7 +1898,9 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
   // engine must not delay or cancel results returned by the others.
   const results = await Promise.allSettled(providers.map((provider) => provider.run()));
   let failedSources = 0;
+  let successfulProviders = 0;
   const pageTasks = [];
+  const sourceLeads = [];
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
     if (result.status === "rejected") {
@@ -1912,10 +1909,30 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
         String(result.reason?.message || result.reason).slice(0, 160));
       continue;
     }
+    successfulProviders++;
     const entries = (result.value.entries || [])
       .filter((entry) => scannerSourceUrlAllowed(entry.url))
       .slice(0, 10);
     for (const entry of entries) {
+      let entryUrl;
+      try { entryUrl = new URL(entry.url); } catch { continue; }
+      // Keep search-engine catalogue evidence even if the institution blocks a
+      // Worker fetch, serves a timeout, or changes its HTML template.
+      if (scannerSpecificCataloguePage(entryUrl) || scannerSourceSupportsCandidate({
+        title: entry.title || "",
+        url: entryUrl.href,
+        snippet: entry.snippet || "",
+        trusted: true,
+      }, observation)) {
+        sourceLeads.push({
+          title: String(entry.title || entryUrl.hostname),
+          url: entryUrl.href,
+          snippet: String(entry.snippet || "").slice(0, 1200),
+          source: entryUrl.hostname,
+          trusted: true,
+          searchProvider: provider.name,
+        });
+      }
       pageTasks.push(readGroundedScannerSource(entry, observation).then((page) => {
         if (!page) return null;
         return { ...page, source: { ...page.source, searchProvider: provider.name } };
@@ -1927,6 +1944,10 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
     }
   }
   const collected = (await Promise.all(pageTasks)).filter(Boolean);
+  const pageSources = collected.map((entry) => entry.source);
+  const preservedSources = [...new Map(
+    [...pageSources, ...sourceLeads].map((source) => [source.url, source]),
+  ).values()];
   const unique = [...new Map(collected.map((entry) => [entry.source.url, entry])).values()];
   unique.sort((left, right) => {
     const leftPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(left.source.url).hostname.endsWith(domain));
@@ -1934,14 +1955,18 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
     return (leftPriority < 0 ? 999 : leftPriority) - (rightPriority < 0 ? 999 : rightPriority) ||
       Number(Boolean(right.candidate)) - Number(Boolean(left.candidate));
   });
-  const sources = unique.slice(0, 8).map((entry) => entry.source);
+  const sources = [...new Map([
+    ...unique.map((entry) => entry.source),
+    ...preservedSources,
+  ].map((source) => [source.url, source])).values()].slice(0, 8);
   const candidates = unique.flatMap((entry) => entry.candidate ? [entry.candidate] : []);
   return {
     sources,
     candidates: candidates.slice(0, 12),
-    availableSources: new Set(sources.map((source) => source.searchProvider)).size,
+    availableSources: successfulProviders,
     failedSources,
-    provider: [...new Set(sources.map((source) => source.searchProvider))].join(", "),
+    provider: providers.filter((provider, index) => results[index]?.status === "fulfilled")
+      .map((provider) => provider.name).join(", "),
   };
 }
 
