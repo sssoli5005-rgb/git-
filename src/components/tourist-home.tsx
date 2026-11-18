@@ -452,9 +452,15 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const initialIdentification = sectionText(1);
               const initialLocation = sectionText(2);
               const initialStory = sectionText(3);
+              // Some older worker responses put an uncertainty sentence before
+              // a useful candidate name in the same paragraph. Extract that name
+              // explicitly instead of treating the whole paragraph as a failure.
+              const embeddedCandidateName = sourceAnalysis.match(
+                /(?:اسم\\s+(?:محتمل|مرشح)(?:\\s+غير\\s+مؤكد)?|(?:possible|candidate)\\s+name)\\s*[:：-]\\s*([^\\n]+)/i,
+              )?.[1]?.trim() || "";
               const lead = data.researchCandidate ||
                 candidates.find((candidate) => Boolean(candidate.name && candidate.url)) ||
-                null;
+                (embeddedCandidateName ? { name: embeddedCandidateName } : null);
               const trustedSource = data.sources?.find((source) => source.trusted);
               const story = cleanText(
                 lead?.description || data.sourceStory || trustedSource?.snippet || initialStory,
@@ -468,23 +474,29 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 /^(?:لم يتم التأكد|لم أستطع تحديد|لا أستطيع تحديد|غير مؤكد|unknown|not identified|not confirmed)/i
                   .test(initialIdentification);
               const nameOrVisualLead = lead?.name
-                ? `اسم مرشح من سجل متحفي: ${lead.name}`
+                ? `اسم مرشح يحتاج تأكيدًا: ${lead.name}`
                 : !initialTextIsOnlyFailure
                   ? `التعرّف المبدئي من الصورة: ${initialIdentification}`
                   : "";
+              const fallbackNarrative = !nameOrVisualLead && !story
+                ? cleanText(sourceAnalysis)
+                    .replace(/^(?:لم يتم تأكيد هوية القطعة|لم أستطع تحديد القطعة من الصورة)[^\\n]*\\n?/i, "")
+                    .slice(0, 1100)
+                : "";
               analysis = [
                 resultCopy.unverifiedStatus,
                 nameOrVisualLead,
                 reliableLocation ? `المكان الوارد في المصدر: ${reliableLocation}` : "",
                 lead?.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
                 story ? `${resultCopy.storyLabel}: ${story.slice(0, 1100)}` : "",
-                !nameOrVisualLead && !story
+                fallbackNarrative,
+                nameOrVisualLead || story || fallbackNarrative
                   ? (lang === "ar"
-                    ? "لم يظهر اسم موثوق للقطعة في هذه المحاولة. جرّبي صورة أوضح أو زاوية أمامية."
-                    : resultCopy.notIdentified)
-                  : (lang === "ar"
                     ? "المعلومات المبدئية لا تعني أن المطابقة البصرية مع سجل المتحف قد تأكدت."
-                    : "These preliminary details do not mean that a visual match to the museum record has been confirmed."),
+                    : "These preliminary details do not mean that a visual match to the museum record has been confirmed.")
+                  : (lang === "ar"
+                    ? "لم يظهر اسم مفيد للقطعة في هذه المحاولة. جرّبي صورة أوضح أو زاوية أمامية."
+                    : resultCopy.notIdentified),
               ].filter(Boolean).join("\n\n");
             }
           }
