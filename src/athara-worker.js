@@ -1588,6 +1588,174 @@ async function searchOpenScannerCandidates(observation, language = "en") {
   };
 }
 
+
+function scannerGroundedResearchQuery(observation, language = "en") {
+  const terms = [
+    observation?.visualCandidateIdentity, observation?.identity,
+    ...(Array.isArray(observation?.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation?.keywords) ? observation.keywords : []),
+    observation?.objectType, observation?.material,
+    ...(Array.isArray(observation?.symbols) ? observation.symbols : []),
+    observation?.visualDescription,
+  ].filter((value) => typeof value === "string" && value.trim())
+   .map((value) => value.trim().replace(/\s+/g, " "))
+   .filter((value, index, values) => values.indexOf(value) === index).slice(0, 8);
+  return [...terms, language === "ar" ? "Egyptian antiquities" : "ancient Egyptian artifact",
+    "official museum collection catalogue record"].join(" ").slice(0, 420);
+}
+
+function scannerUrlsFromText(value) {
+  const text = String(value || "");
+  const markdown = [...text.matchAll(/\[([^\]]{2,160})\]\((https:\/\/[^\s)]+)\)/g)]
+    .map((m) => ({ title: m[1].trim(), url: m[2].replace(/[.,;]+$/, "") }));
+  const plain = [...text.matchAll(/https:\/\/[^\s<>"')\]]+/g)]
+    .map((m) => ({ title: "", url: m[0].replace(/[.,;]+$/, "") }));
+  return [...new Map([...markdown, ...plain].map((x) => [x.url, x])).values()];
+}
+
+async function searchWithGeminiGrounding(query, apiKey, model) {
+  const response = await fetchVisionWithRetry("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      model,
+      input: `ابحث على الويب عن سجل القطعة الأثرية المطابق. كلمات الصورة: ${query}. استخدم Google Search فعليًا، وأعط الأولوية لسجل القطعة نفسه في موقع وزارة السياحة والآثار المصرية أو المتحف الرسمي. استبعد الصفحة الرئيسية والأسئلة الشائعة والشروط وصفحات العصور. أرجع الاسم وروابط السجلات الأصلية ولا تختلق معلومات.`,
+      tools: [{ type: "google_search" }],
+    }),
+  }, { provider: "Gemini Google Search grounding", timeoutMs: 16_000 });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Gemini search HTTP ${response.status}`);
+  const blocks = [], citations = [];
+  for (const step of Array.isArray(payload?.steps) ? payload.steps : []) {
+    if (step?.type !== "model_output") continue;
+    for (const part of Array.isArray(step.content) ? step.content : []) {
+      if (typeof part?.text === "string") blocks.push(part.text);
+      for (const a of Array.isArray(part?.annotations) ? part.annotations : []) {
+        const url = a?.url || a?.uri;
+        if (a?.type === "url_citation" && typeof url === "string") citations.push({ title: a.title || "", url });
+      }
+    }
+  }
+  const summary = blocks.join("\n") || String(payload?.output_text || "");
+  return { entries: [...new Map([...citations, ...scannerUrlsFromText(summary)].map((x) => [x.url, x])).values()], summary };
+}
+
+async function searchWithGroqBrowser(query, apiKey, model) {
+  const response = await fetchVisionWithRetry("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model, temperature: 1, max_completion_tokens: 1600, tool_choice: "required",
+      tools: [{ type: "browser_search" }],
+      messages: [{ role: "user", content: `Use browser search to find the exact official Egyptian antiquities/museum catalogue record for: ${query}. Ignore generic home, FAQ, terms and broad history pages. Return original URLs and evidence only; do not invent records.` }],
+    }),
+  }, { provider: "Groq browser search", timeoutMs: 18_000 });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Groq search HTTP ${response.status}`);
+  const summary = payload?.choices?.[0]?.message?.content?.trim() || "";
+  if (!summary) throw new Error("Groq browser search returned no text.");
+  return { entries: scannerUrlsFromText(summary), summary };
+}
+
+async function searchWithCloudflareWebSearch(env, query) {
+  if (typeof env.AI?.websearch !== "function") throw new Error("Cloudflare Web Search binding unavailable.");
+  const response = await withScannerTimeout(env.AI.websearch({
+    gatewayId: "default", query: query.slice(0, 1024), provider: "exa", limit: 8,
+  }), 14_000, "Cloudflare Web Search");
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Cloudflare search HTTP ${response.status}`);
+  return { entries: (Array.isArray(payload?.items) ? payload.items : [])
+    .filter((x) => typeof x?.url === "string")
+    .map((x) => ({ title: x.title || "", url: x.url, snippet: x.description || "" })), summary: "" };
+}
+
+function scannerMeta(html, key) {
+  for (const tag of html.match(/<meta\b[^>]*>/gi) || []) {
+    const name = tag.match(/(?:property|name)=["']([^"']+)["']/i)?.[1];
+    const value = tag.match(/content=["']([^"']+)["']/i)?.[1];
+    if (name?.toLowerCase() === key.toLowerCase() && value) return stripHtml(value);
+  }
+  return "";
+}
+
+async function readGroundedScannerSource(entry, observation) {
+  let url;
+  try { url = new URL(entry.url); } catch { return null; }
+  if (!scannerSourceUrlAllowed(url.href)) return null;
+  const path = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  if (url.hostname.endsWith("egymonuments.gov.eg")) {
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length < 3 || !["ar", "en"].includes(parts[0]) ||
+      !["monuments", "archaeological-sites", "collections", "museums"].includes(parts[1]) ||
+      /(?:faqs?|terms|privacy|historical-periods|events|children|about|news)/i.test(parts.slice(2).join("/"))) return null;
+  }
+  const initial = { title: String(entry.title || url.hostname), url: url.href,
+    snippet: String(entry.snippet || "").slice(0, 800), source: url.hostname, trusted: true };
+  try {
+    const response = await fetch(url.href, {
+      headers: { accept: "text/html,application/xhtml+xml", "user-agent": "ATHARA-Heritage-Guide/1.0" },
+      redirect: "follow", signal: AbortSignal.timeout(5_000),
+    });
+    const finalUrl = new URL(response.url || url.href);
+    if (!response.ok || !scannerSourceUrlAllowed(finalUrl.href)) return null;
+    const html = await readLimitedHtml(response, 600_000);
+    const title = stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "") || initial.title;
+    const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
+      html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] || html;
+    const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<[^>]*>/g, " ")).slice(0, 6000);
+    const source = { ...initial, title, url: finalUrl.href, snippet: snippet.length > 50 ? snippet : initial.snippet };
+    if (!scannerSourceSupportsCandidate(source, observation)) return null;
+    const imageRef = scannerMeta(html, "og:image") || scannerMeta(html, "twitter:image");
+    let candidate = null;
+    if (imageRef) {
+      const imageUrl = new URL(imageRef, finalUrl.href);
+      if (imageUrl.protocol === "https:" && SCANNER_IMAGE_HOSTS.has(imageUrl.hostname)) {
+        candidate = makeScannerCandidate({ name: title, url: finalUrl.href, imageUrl: imageUrl.href,
+          source: url.hostname, sourceText: source.snippet });
+      }
+    }
+    return { source, candidate };
+  } catch (error) {
+    console.warn("[Image scanner] Could not read grounded page:", url.hostname, String(error?.message || error).slice(0, 120));
+    return scannerSourceSupportsCandidate(initial, observation) ? { source: initial, candidate: null } : null;
+  }
+}
+
+async function searchArtifactGroundedSources(env, observation, language = "en") {
+  const query = scannerGroundedResearchQuery(observation, language);
+  const providers = [];
+  const geminiKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
+  const groqKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+  if (geminiKey) providers.push({ name: "Gemini Google Search", run: () =>
+    searchWithGeminiGrounding(query, geminiKey, configuredGeminiVisionModel(env)) });
+  if (groqKey) providers.push({ name: "Groq browser search", run: () =>
+    searchWithGroqBrowser(query, groqKey, env.GROQ_WEB_SEARCH_MODEL || "openai/gpt-oss-20b") });
+  if (typeof env.AI?.websearch === "function") providers.push({ name: "Cloudflare Web Search", run: () =>
+    searchWithCloudflareWebSearch(env, query) });
+  let failedSources = 0;
+  for (const provider of providers) {
+    try {
+      const result = await provider.run();
+      const entries = (result.entries || []).filter((x) => scannerSourceUrlAllowed(x.url)).slice(0, 8);
+      const pages = await Promise.allSettled(entries.map((entry) => readGroundedScannerSource(entry, observation)));
+      const accepted = pages.filter((x) => x.status === "fulfilled" && x.value).map((x) => x.value);
+      const unique = [...new Map(accepted.map((x) => [x.source.url, x])).values()];
+      if (unique.length) {
+        unique.sort((a,b) => SOURCE_PRIORITY.findIndex((d) => new URL(a.source.url).hostname.endsWith(d)) -
+          SOURCE_PRIORITY.findIndex((d) => new URL(b.source.url).hostname.endsWith(d)));
+        return { sources: unique.slice(0, 6).map((x) => ({ ...x.source, searchProvider: provider.name })),
+          candidates: unique.flatMap((x) => x.candidate ? [x.candidate] : []),
+          availableSources: 1, failedSources, provider: provider.name };
+      }
+    } catch (error) {
+      failedSources++;
+      console.warn("[Image scanner] Search provider failed; falling back:", provider.name, String(error?.message || error).slice(0, 160));
+    }
+  }
+  return { sources: [], candidates: [], availableSources: 0, failedSources, provider: "" };
+}
+
 async function downloadScannerCandidateImages(candidates) {
   const downloads = await Promise.all(candidates.slice(0, 5).map(async (candidate) => {
     try {
