@@ -400,10 +400,37 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 story ? `${resultCopy.storyLabel}: ${story}` : "",
               ].filter(Boolean).join("\n");
             } else {
+              const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+              const candidateLines = candidates.slice(0, 5).map((candidate, index) => {
+                const place = candidate.museum || candidate.location || "";
+                const period = candidate.period || "";
+                const description = candidate.description || "";
+                return [
+                  `${index + 1}. ${candidate.name || scanCopy.visualUnknown}`,
+                  place,
+                  period,
+                  description,
+                  candidate.url || "",
+                ].filter(Boolean).join(" — ");
+              });
+              const visual = data.visualDescription
+                ? [
+                    `${scanCopy.visualObjectType}: ${data.visualDescription.object_type || scanCopy.visualUnknown}`,
+                    `${scanCopy.visualMaterial}: ${data.visualDescription.material || scanCopy.visualUnknown}`,
+                    `${scanCopy.visualSymbols}: ${data.visualDescription.symbols?.join(", ") || scanCopy.visualUnknown}`,
+                    `${scanCopy.visualStyle}: ${data.visualDescription.style || scanCopy.visualUnknown}`,
+                    `${scanCopy.visualPossibleLocation}: ${data.visualDescription.possible_location || scanCopy.visualUnknown}`,
+                  ]
+                : [];
               analysis = [
                 identificationLabel || resultCopy.unverifiedStatus,
-                resultCopy.notIdentified,
-              ].join("\n");
+                candidates.length ? scanCopy.visualCandidates : "",
+                ...candidateLines,
+                data.sourceStory ? `${resultCopy.storyLabel}: ${data.sourceStory}` : "",
+                data.analysis || "",
+                ...visual,
+                candidates.length || data.analysis || data.visualDescription ? "" : resultCopy.notIdentified,
+              ].filter(Boolean).join("\n");
             }
           }
           const reverseSearchNotice = scanMode !== "objects" || data.identificationStatus === "probable"
