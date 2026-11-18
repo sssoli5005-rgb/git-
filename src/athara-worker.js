@@ -3053,10 +3053,12 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         // Free public fallback when no confident identification yet — no API keys needed.
         // مشغولة فقط عندما يكون SCANNER_FREE_FALLBACK_ENABLES مضبوطًا على "true".
         // لو انتهت حصة الأدوات المدفوعة أو تعذرت، تعمل المصادر المجانية تلقائيًا وتجيب اسم القطعة وقصتها ومكانها ومصدرها.
+        // Enable the no-key public-catalog fallback by default. Set the variable
+        // explicitly to "false" only to disable it for diagnostics.
         const freeFallbackEnabled =
           typeof env.SCANNER_FREE_FALLBACK_ENABLED === "string"
-            ? env.SCANNER_FREE_FALLBACK_ENABLED.trim() === "true"
-            : false;
+            ? env.SCANNER_FREE_FALLBACK_ENABLED.trim().toLowerCase() !== "false"
+            : true;
 
         if (identificationStatus === "unverified" && freeFallbackEnabled) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
