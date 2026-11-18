@@ -678,6 +678,45 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("ar.wikipedia.org"))).toBe(true);
   });
 
+  it("does not show ministry home, FAQ, terms, or period pages as artifact evidence", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("egymonuments.gov.eg")) {
+        return new Response(
+          '<html><body><a href="/ar/">إكتشف الآثار المصرية</a><a href="/ar/faqs">الأسئلة المكررة</a><a href="/ar/terms-and-conditions">الشروط والأحكام</a><a href="/ar/historical-periods/predynastic-period">عصر ما قبل الأسرات</a></body></html>',
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      }
+      return Response.json({ query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const run = vi.fn().mockResolvedValue({
+        response: JSON.stringify({
+          visualDescription: "تمثال جانبي بغطاء رأس ملون",
+          objectType: "تمثال",
+          material: "خشب",
+          keywords: ["تمثال", "خشبي", "ملون"],
+          periodClues: [],
+        }),
+      });
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { AI: { run }, ASSETS: { fetch: vi.fn() }, SCANNER_FREE_FALLBACK_ENABLED: "false" },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.sources).toEqual([]);
+      expect(body.analysis).not.toContain("الأسئلة المكررة");
+      expect(body.analysis).not.toContain("الشروط والأحكام");
+      expect(body.analysis).not.toContain("عصر ما قبل الأسرات");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses official monument records as related context without claiming a visual match", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const requestUrl = String(input);
