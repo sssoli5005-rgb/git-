@@ -99,11 +99,13 @@ jobs:
             process.stdin.on("data", chunk => input += chunk);
             process.stdin.on("end", () => {
               const health = JSON.parse(input);
-              if (!health.ok || health.service !== "ATHARA" || !health.aiBound) {
-                console.error("Health check failed:", health);
+              const search = health.reverseImageSearch || {};
+              if (!health.ok || health.service !== "ATHARA" || !health.aiBound ||
+                  !search.geminiGoogleSearch || !search.groqBrowserSearch || !search.cloudflareWebSearch) {
+                console.error("Health or search-provider capability check failed:", health);
                 process.exit(1);
               }
-              console.log("ATHARA health check passed; AI binding is available.");
+              console.log("ATHARA health check passed; Gemini, Groq, and Cloudflare Web Search are available.");
             });
           '
           AUTH_STATUS="$(curl --silent --show-error -o /tmp/athara-auth.json -w "%{http_code}" "$BASE_URL/api/auth")"
