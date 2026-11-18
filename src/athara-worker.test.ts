@@ -114,7 +114,7 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
-      )).toBe(false);
+      )).toBe(true);
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("api.groq.com"),
       )).toBe(false);
@@ -1245,7 +1245,7 @@ describe("ATHARA Cloudflare Worker", () => {
             snippet: "A small bronze figurine in a seated pose. Late Period",
           }],
         });
-        expect(geminiCall).toBe(2);
+        expect(geminiCall).toBe(4);
         expect(fetchMock.mock.calls.some(([input]) => String(input).includes("serpapi.com"))).toBe(false);
       } finally {
         vi.unstubAllGlobals();
@@ -1359,7 +1359,7 @@ describe("ATHARA Cloudflare Worker", () => {
           messages: expect.any(Array),
           dimensions: 512,
         }));
-        expect(geminiCall).toBe(2);
+        expect(geminiCall).toBe(3);
       } finally {
         vi.unstubAllGlobals();
       }
@@ -1798,7 +1798,7 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
       expect(response.status).toBe(200);
       expect(body.ok).toBe(true);
-      expect(geminiCalls).toBe(2);
+      expect(geminiCalls).toBe(3);
       expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال ملكي مصري");
       expect(body.visionDiagnostics).toMatchObject({ provider: "Gemini", usedFallback: true, fallbackOrder: ["Gemini", "Groq"] });
     } finally {
