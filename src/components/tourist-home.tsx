@@ -362,80 +362,52 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             }
             analysis = details.join("\n");
           }
-          const identificationLabel = data.identificationStatus === "confirmed"
-            ? resultCopy.confirmedStatus
-            : data.identificationStatus === "probable"
-              ? resultCopy.probableStatus
-              : data.identificationStatus === "unverified"
-                ? resultCopy.unverifiedStatus
-                : "";
-          if (data.matchedArtifact) {
-            const artifact = data.matchedArtifact;
-            const sourceStory = data.sourceStory || artifact.description || analysis;
-            analysis = [
-              identificationLabel,
-              artifact.name ? `${resultCopy.nameLabel}: ${artifact.name}` : "",
-              artifact.location || artifact.museum
-                ? `${resultCopy.locationLabel}: ${artifact.location || artifact.museum}`
-                : "",
-              artifact.objectNumber ? `${scanCopy.visualObjectNumber}: ${artifact.objectNumber}` : "",
-              artifact.period ? `${resultCopy.periodLabel}: ${artifact.period}` : "",
-              artifact.objectType ? `${scanCopy.visualObjectType}: ${artifact.objectType}` : "",
-              sourceStory ? `${resultCopy.storyLabel}: ${sourceStory}` : "",
-            ].filter(Boolean).join("\n");
-          } else if (identificationLabel) {
-            analysis = [
-              identificationLabel,
-              data.sourceStory ? `${resultCopy.storyLabel}: ${data.sourceStory}` : "",
-              analysis,
-            ].filter(Boolean).join("\n");
-          }
           if (scanMode === "objects") {
-            const artifact = data.matchedArtifact;
-            if (artifact?.name) {
+            const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+            const bestVisualCandidate = candidates
+              .filter((candidate) =>
+                Boolean(candidate.name) &&
+                typeof candidate.similarity === "number" &&
+                Number.isFinite(candidate.similarity),
+              )
+              .sort((left, right) => (right.similarity ?? -1) - (left.similarity ?? -1))[0];
+            // Use the structured artifact record first. A ranked visual candidate is
+            // shown only when the scanner itself marked the identification as probable.
+            const artifact = data.matchedArtifact ||
+              (data.identificationStatus === "probable" ? bestVisualCandidate : null);
+            const isIdentified = data.identificationStatus === "confirmed" ||
+              data.identificationStatus === "probable";
+            const identificationLabel = data.identificationStatus === "confirmed"
+              ? resultCopy.confirmedStatus
+              : data.identificationStatus === "probable"
+                ? resultCopy.probableStatus
+                : resultCopy.unverifiedStatus;
+
+            if (isIdentified && artifact?.name) {
+              const displayLocation =
+                artifact.currentLocation || artifact.museum || artifact.location || "";
               const story = (data.sourceStory || artifact.description ||
                 data.sources?.find((source) => source.trusted)?.snippet || "")
                 .replace(/https?:\/\/\S+/g, "")
+                .replace(/^(?:قصتها|القصة|من وصف المصدر|Story|Description|From the source description)\s*[:：-]\s*/i, "")
                 .replace(/\n{3,}/g, "\n\n")
-                .trim();
-              const displayLocation = artifact.currentLocation || artifact.museum || artifact.location || "";
+                .trim()
+                .slice(0, 1200);
               analysis = [
-                identificationLabel || resultCopy.confirmedStatus,
+                identificationLabel,
                 `${resultCopy.nameLabel}: ${artifact.name}`,
-                displayLocation ? `مكان وجودها/عرضها: ${displayLocation}` : "",
-                artifact.findSpot ? `مكان العثور عليها: ${artifact.findSpot}` : "",
-                artifact.period ? `العصر/الفترة: ${artifact.period}` : "",
-                story ? `${resultCopy.storyLabel}: ${story.slice(0, 1400)}` : "",
+                displayLocation ? `${resultCopy.locationLabel}: ${displayLocation}` : "",
+                artifact.findSpot ? `مكان اكتشافها: ${artifact.findSpot}` : "",
+                artifact.period ? `${resultCopy.periodLabel}: ${artifact.period}` : "",
+                story ? `${resultCopy.storyLabel}: ${story}` : "",
               ].filter(Boolean).join("\n\n");
             } else {
-              const candidates = Array.isArray(data.candidates) ? data.candidates : [];
-              // Only show candidates with a genuine image-to-image similarity score.
-              // Text-search hits and catalogue keyword matches stay in the references panel.
-              const visualCandidates = candidates
-                .filter((candidate) =>
-                  typeof candidate.similarity === "number" && Number.isFinite(candidate.similarity),
-                )
-                .sort((left, right) => (right.similarity ?? -1) - (left.similarity ?? -1))
-                .slice(0, 3);
-              const candidateLines = visualCandidates.map((candidate, index) => {
-                const place = candidate.museum || candidate.location || "";
-                const period = candidate.period || "";
-                return [
-                  `${index + 1}. ${candidate.name || scanCopy.visualUnknown}`,
-                  place ? `المتحف/المجموعة: ${place}` : "",
-                  period ? `الفترة المسجلة: ${period}` : "",
-                  `${scanCopy.visualSimilarity}: ${candidate.similarity!.toFixed(3)}`,
-                ].filter(Boolean).join("\n");
-              });
+              // Do not turn keyword-search records or low-scoring candidates into an
+              // artifact identification. Keep the result honest and uncluttered.
               analysis = [
-                identificationLabel || resultCopy.unverifiedStatus,
-                visualCandidates.length > 0
-                  ? (lang === "ar"
-                    ? "أقرب نتائج مقارنة الصور؛ التشابه وحده لا يؤكد أن القطعة هي نفسها:"
-                    : "Closest image-comparison results; similarity alone does not confirm identity:")
-                  : resultCopy.notIdentified,
-                ...candidateLines,
-              ].filter(Boolean).join("\n");
+                resultCopy.unverifiedStatus,
+                resultCopy.notIdentified,
+              ].join("\n\n");
             }
           }
 
@@ -852,7 +824,21 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 <ShieldCheck size={18} />
                 <div>
                   <strong>{resultCopy.title}</strong>
-                  <p className="whitespace-pre-line leading-7">{scanResult}</p>
+                  <div className="mt-3 space-y-3 text-sm leading-7">
+                    {scanResult.split(/\n{2,}/).map((paragraph, index) => {
+                      const separator = paragraph.indexOf(": ");
+                      return (
+                        <p key={index}>
+                          {separator > 0 ? (
+                            <>
+                              <strong>{paragraph.slice(0, separator + 1)}</strong>
+                              {paragraph.slice(separator + 1)}
+                            </>
+                          ) : paragraph}
+                        </p>
+                      );
+                    })}
+                  </div>
                   {visionConsentRequired && (
                     <div className="mt-4 space-y-3 border-t border-current/20 pt-4">
                       <h3 className="font-bold">{scanCopy.licenseTitle}</h3>
@@ -914,23 +900,24 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                         <ul className="mt-2 space-y-1">
                           {[...scanSources]
                             .sort((a, b) => Number(Boolean(b.trusted)) - Number(Boolean(a.trusted)))
-                            .slice(0, 3)
-                            .map((source, index) => (
-                              <li key={source.url + index}>
-                                <a
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title={source.title}
-                                  className="inline-block max-w-full truncate text-sm underline font-medium"
-                                >
-                                  {source.title.length > 46 ? source.title.slice(0, 43) + "…" : source.title}
-                                </a>
-                                <small className="block text-xs opacity-65">
-                                  {source.source || (source.trusted ? scanCopy.institutionalSource : "")}
-                                </small>
-                              </li>
-                            ))}
+                            .slice(0, 2)
+                            .map((source, index) => {
+                              const label = (source.source || source.title || "").trim();
+                              const shortLabel = label.length > 34 ? label.slice(0, 31) + "…" : label;
+                              return (
+                                <li key={source.url + index}>
+                                  <a
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={source.title}
+                                    className="inline-block max-w-full truncate text-xs underline font-medium"
+                                  >
+                                    {shortLabel || (lang === "ar" ? "فتح المصدر" : "Open source")}
+                                  </a>
+                                </li>
+                              );
+                            })}
                         </ul>
                       ) : (
                         <p className="mt-2 text-sm">{scanCopy.noSources}</p>
