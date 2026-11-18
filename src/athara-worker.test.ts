@@ -660,7 +660,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain(
       encodeURIComponent("ancient Egyptian offering scene"),
     );
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("en.wikipedia.org"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("ar.wikipedia.org"))).toBe(true);
   });
 
   it("uses official monument records as related context without claiming a visual match", async () => {
