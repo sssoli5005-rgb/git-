@@ -1289,7 +1289,7 @@ describe("ATHARA Cloudflare Worker", () => {
       }),
       { rejectIfBusy: true },
     );
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
+    expect(run).toHaveBeenCalledTimes(2);
   });
 
   it("uses Cloudflare Moondream vision as the primary scanner even when chat provider keys exist", async () => {
