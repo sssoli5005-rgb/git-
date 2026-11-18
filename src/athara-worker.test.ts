@@ -1283,6 +1283,44 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.sources).toEqual([]);
   });
 
+  it("stops same-account Cloudflare vision retries after the daily neuron quota is exhausted", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        return Response.json({ error: { message: "429 Gemini quota exhausted" } }, { status: 429 });
+      }
+      if (url.includes("api.groq.com")) {
+        return Response.json({ error: { message: "429 Groq daily token limit reached" } }, { status: 429 });
+      }
+      return Response.json({ query: { pages: {} }, data: [], objectIDs: [], search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const run = vi.fn().mockRejectedValue(
+      new Error("4006: you have used up your daily free allocation of 10,000 neurons"),
+    );
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run },
+          GEMINI_API_KEY: "gemini-key",
+          GROQ_API_KEY: "groq-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(body.analysis).toContain("الحصص اليومية");
+      expect(body.analysis).toContain("لم يتم تحليل الصورة أو مطابقتها");
+      expect(body.visionDiagnostics.failedAttempts.map((attempt: { category: string }) => attempt.category))
+        .toEqual(["daily_quota_exhausted", "rate_limited", "rate_limited"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("falls back from Moondream to Cloudflare Mistral Vision before using external providers", async () => {
     const fetchMock = stubEmptyHeritageSearch();
     const run = vi.fn()
