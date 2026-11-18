@@ -3038,8 +3038,18 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         // source, or an image-index similarity above the configured threshold.
         // Text-only free-catalog fallback results are appended later and never
         // influence this decision.
+        // Search-result presence alone is not image evidence. A candidate becomes
+        // probable only when the visual identity is independently supported,
+        // the image index clears its threshold, or the image-comparison engine
+        // produced an above-threshold ranked visual score.
+        const visuallyRankedCandidate = openScannerRankedCandidates.some(
+          (candidate) =>
+            typeof candidate.similarity === "number" &&
+            Number.isFinite(candidate.similarity) &&
+            candidate.similarity >= probableThreshold,
+        );
         const identificationStatus =
-          sourceBackedCandidate || indexedProbable || openScannerSourceCandidates.length
+          sourceBackedCandidate || indexedProbable || visuallyRankedCandidate
             ? "probable"
             : "unverified";
         const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold);
