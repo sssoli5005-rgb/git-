@@ -168,7 +168,7 @@ async function withScannerTimeout(operation, timeoutMs, label) {
 }
 
 
-const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 500, 502, 503, 504]);
 const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 12_000, gemini: 18_000, groq: 18_000 };
 const VISION_PROVIDER_RETRIES = 1;
 
@@ -1667,10 +1667,13 @@ async function searchWithGeminiGrounding(query, apiKey, model) {
   }, { provider: "Gemini Google Search grounding", timeoutMs: 12_000 });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || "Gemini search HTTP " + response.status);
-  const blocks = [], citations = [], issuedQueries = [];
+  const blocks = [], citations = [], issuedQueries = [], structuredEntries = [];
   for (const step of Array.isArray(payload?.steps) ? payload.steps : []) {
     if (step?.type === "google_search_call" && Array.isArray(step.arguments?.queries)) {
       issuedQueries.push(...step.arguments.queries.filter((item) => typeof item === "string"));
+    }
+    if (step?.type === "google_search_result") {
+      structuredEntries.push(...scannerStructuredSearchEntries(step.result || step));
     }
     if (step?.type !== "model_output") continue;
     for (const part of Array.isArray(step.content) ? step.content : []) {
@@ -1685,10 +1688,44 @@ async function searchWithGeminiGrounding(query, apiKey, model) {
   }
   const summary = blocks.join("\n") || String(payload?.output_text || "");
   return {
-    entries: [...new Map([...citations, ...scannerUrlsFromText(summary)].map((item) => [item.url, item])).values()],
+    entries: [...new Map([
+      ...structuredEntries,
+      ...citations,
+      ...scannerUrlsFromText(summary),
+    ].map((item) => [item.url, item])).values()],
     summary,
     issuedQueries: [...new Set(issuedQueries)].slice(0, 6),
   };
+}
+
+function scannerStructuredSearchEntries(value) {
+  const entries = [];
+  const visited = new Set();
+  const visit = (node, depth = 0) => {
+    if (!node || typeof node !== "object" || depth > 6 || visited.has(node)) return;
+    visited.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node.slice(0, 40)) visit(item, depth + 1);
+      return;
+    }
+    const url = [node.url, node.uri, node.link].find((item) =>
+      typeof item === "string" && /^https:\/\//i.test(item));
+    if (url) {
+      const title = [node.title, node.page_title, node.name].find((item) =>
+        typeof item === "string" && item.trim()) || "";
+      const snippet = [node.content, node.snippet, node.description, node.text, node.excerpt]
+        .find((item) => typeof item === "string" && item.trim()) || "";
+      entries.push({ title, url, snippet: String(snippet).slice(0, 1200) });
+    }
+    for (const key of [
+      "executed_tools", "browser_results", "search_results", "results",
+      "items", "sources", "citations", "annotations", "output",
+    ]) {
+      if (node[key] !== undefined) visit(node[key], depth + 1);
+    }
+  };
+  visit(value);
+  return [...new Map(entries.map((entry) => [entry.url, entry])).values()].slice(0, 30);
 }
 
 async function searchWithGroqBrowser(query, apiKey, model) {
@@ -1717,9 +1754,17 @@ async function searchWithGroqBrowser(query, apiKey, model) {
   }, { provider: "Groq browser search", timeoutMs: 12_000 });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || "Groq search HTTP " + response.status);
-  const summary = payload?.choices?.[0]?.message?.content?.trim() || "";
-  if (!summary) throw new Error("Groq browser search returned no text.");
-  return { entries: scannerUrlsFromText(summary), summary, model: browserModel };
+  const message = payload?.choices?.[0]?.message || {};
+  const summary = typeof message.content === "string" ? message.content.trim() : "";
+  const structuredEntries = scannerStructuredSearchEntries(message);
+  const payloadEntries = scannerStructuredSearchEntries(payload);
+  const entries = [...new Map([
+    ...structuredEntries,
+    ...payloadEntries,
+    ...scannerUrlsFromText(summary),
+  ].map((entry) => [entry.url, entry])).values()];
+  if (!summary && !entries.length) throw new Error("Groq browser search returned no text or structured results.");
+  return { entries, summary, model: browserModel };
 }
 
 async function searchWithCloudflareWebSearch(env, query) {
@@ -1743,66 +1788,99 @@ function scannerMeta(html, key) {
   return "";
 }
 
+function scannerSpecificCataloguePage(url) {
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase().replace(/\/+$/, "");
+  if (/(?:^|\/)(?:faqs?|terms(?:-and-conditions)?|privacy(?:-policy)?|historical-periods|events|children|about|news)(?:\/|$)/.test(path)) {
+    return false;
+  }
+  if (host === "egymonuments.gov.eg" || host.endsWith(".egymonuments.gov.eg")) {
+    const segments = path.split("/").filter(Boolean);
+    return segments.length >= 3 &&
+      ["ar", "en"].includes(segments[0]) &&
+      ["monuments", "archaeological-sites", "collections", "museums"].includes(segments[1]);
+  }
+  return (
+    (host.endsWith("metmuseum.org") && /\/art\/collection\/search\/\d+/.test(path)) ||
+    (host.endsWith("clevelandart.org") && /\/art\/\d/.test(path)) ||
+    (host === "artic.edu" && /\/artwork\/\d+/.test(path)) ||
+    (host.endsWith("britishmuseum.org") && /\/collection\/object\/\d+/.test(path)) ||
+    (host.endsWith("si.edu") && /\/object\//.test(path)) ||
+    (host.endsWith("penn.museum") && /\/collections\/object\//.test(path)) ||
+    (host.endsWith("brooklynmuseum.org") && /\/opencollection\/objects\//.test(path)) ||
+    (host.endsWith("louvre.fr") && /\/oeuvres\//.test(path)) ||
+    (host.endsWith("europeana.eu") && /\/item\//.test(path))
+  );
+}
+
 async function readGroundedScannerSource(entry, observation) {
   let url;
   try { url = new URL(entry.url); } catch { return null; }
   if (!scannerSourceUrlAllowed(url.href)) return null;
-  const path = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
-  if (url.hostname.endsWith("egymonuments.gov.eg")) {
-    const parts = path.split("/").filter(Boolean);
-    if (parts.length < 3 || !["ar", "en"].includes(parts[0]) ||
-      !["monuments", "archaeological-sites", "collections", "museums"].includes(parts[1]) ||
-      /(?:faqs?|terms|privacy|historical-periods|events|children|about|news)/i.test(parts.slice(2).join("/"))) return null;
-  }
-  const initial = { title: String(entry.title || url.hostname), url: url.href,
-    snippet: String(entry.snippet || "").slice(0, 800), source: url.hostname, trusted: true };
+  const specificCataloguePage = scannerSpecificCataloguePage(url);
+  if (!specificCataloguePage && !scannerSourceSupportsCandidate({
+    title: String(entry.title || ""),
+    url: url.href,
+    snippet: String(entry.snippet || ""),
+    trusted: true,
+  }, observation)) return null;
+  const initial = {
+    title: String(entry.title || url.hostname),
+    url: url.href,
+    snippet: String(entry.snippet || "").slice(0, 1200),
+    source: url.hostname,
+    trusted: true,
+  };
   try {
     const response = await fetch(url.href, {
       headers: { accept: "text/html,application/xhtml+xml", "user-agent": "ATHARA-Heritage-Guide/1.0" },
-      redirect: "follow", signal: AbortSignal.timeout(5_000),
+      redirect: "follow",
+      signal: AbortSignal.timeout(5_000),
     });
     const finalUrl = new URL(response.url || url.href);
-    if (!response.ok || !scannerSourceUrlAllowed(finalUrl.href)) return null;
+    if (!response.ok || !scannerSourceUrlAllowed(finalUrl.href)) {
+      return specificCataloguePage || scannerSourceSupportsCandidate(initial, observation)
+        ? { source: initial, candidate: null }
+        : null;
+    }
     const html = await readLimitedHtml(response, 600_000);
     const title = stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "") || initial.title;
     const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
       html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] || html;
     const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
       .replace(/<[^>]*>/g, " ")).slice(0, 6000);
-    const source = { ...initial, title, url: finalUrl.href, snippet: snippet.length > 50 ? snippet : initial.snippet };
-    const officialCatalogueDetail = /(^|\.)egymonuments\.gov\.eg$/i.test(finalUrl.hostname) &&
-      /^\/(?:ar|en)\/(?:monuments|archaeological-sites|collections|museums)\/[^/]+/i.test(finalUrl.pathname) &&
-      !/(?:faqs?|terms|privacy|historical-periods|events|children|about|news)/i.test(finalUrl.pathname);
-    // Ministry catalogue detail pages are eligible visual candidates even when the
-    // vision model supplied only generic visual traits; the image comparison below
-    // must still confirm the uploaded photo before identifying the artifact.
-    if (!scannerSourceSupportsCandidate(source, observation) && !officialCatalogueDetail) return null;
+    const source = {
+      ...initial,
+      title,
+      url: finalUrl.href,
+      snippet: snippet.length > 50 ? snippet : initial.snippet,
+    };
+    const stillSpecificCataloguePage = scannerSpecificCataloguePage(finalUrl);
+    if (!scannerSourceSupportsCandidate(source, observation) && !stillSpecificCataloguePage) return null;
     const imageRef = scannerMeta(html, "og:image") || scannerMeta(html, "twitter:image");
     let candidate = null;
     if (imageRef) {
       const imageUrl = new URL(imageRef, finalUrl.href);
-      if (imageUrl.protocol === "https:" && SCANNER_IMAGE_HOSTS.has(imageUrl.hostname)) {
-        candidate = makeScannerCandidate({ name: title, url: finalUrl.href, imageUrl: imageUrl.href,
-          source: url.hostname, sourceText: source.snippet });
+      const permittedImageHost =
+        SCANNER_IMAGE_HOSTS.has(imageUrl.hostname) || imageUrl.hostname === finalUrl.hostname;
+      if (imageUrl.protocol === "https:" && permittedImageHost) {
+        candidate = makeScannerCandidate({
+          name: title,
+          url: finalUrl.href,
+          imageUrl: imageUrl.href,
+          source: url.hostname,
+          sourceText: source.snippet,
+        });
       }
     }
     return { source, candidate };
   } catch (error) {
-    console.warn("[Image scanner] Could not read grounded page:", url.hostname, String(error?.message || error).slice(0, 120));
-    return scannerSourceSupportsCandidate(initial, observation) ? { source: initial, candidate: null } : null;
+    console.warn("[Image scanner] Could not read grounded page:", url.hostname,
+      String(error?.message || error).slice(0, 120));
+    return specificCataloguePage || scannerSourceSupportsCandidate(initial, observation)
+      ? { source: initial, candidate: null }
+      : null;
   }
-}
-
-function scannerHasDistinctiveArtifactIdentity(observation) {
-  const generic = new Set([
-    "statue","artifact","egyptian","ancient","temple","wooden","bust","plaster","stone","painted","royal","figurine",
-    "تمثال","اثري","اثر","مصرية","مصري","القديمة","قديم","ملون","حجر","جص","ملكي","خشبي","ملك","ملكه","اله","الهه","فرعون",
-  ]);
-  const identity = [
-    observation?.visualCandidateIdentity,
-  ].filter((value) => typeof value === "string").join(" ");
-  const terms = normalizeSearchTerms(identity).filter((term) => !generic.has(term));
-  return terms.some((term) => term.length >= 5);
 }
 
 async function searchArtifactGroundedSources(env, observation, language = "en") {
@@ -1820,7 +1898,9 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
   // engine must not delay or cancel results returned by the others.
   const results = await Promise.allSettled(providers.map((provider) => provider.run()));
   let failedSources = 0;
+  let successfulProviders = 0;
   const pageTasks = [];
+  const sourceLeads = [];
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
     if (result.status === "rejected") {
@@ -1829,10 +1909,30 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
         String(result.reason?.message || result.reason).slice(0, 160));
       continue;
     }
+    successfulProviders++;
     const entries = (result.value.entries || [])
       .filter((entry) => scannerSourceUrlAllowed(entry.url))
       .slice(0, 10);
     for (const entry of entries) {
+      let entryUrl;
+      try { entryUrl = new URL(entry.url); } catch { continue; }
+      // Keep search-engine catalogue evidence even if the institution blocks a
+      // Worker fetch, serves a timeout, or changes its HTML template.
+      if (scannerSpecificCataloguePage(entryUrl) || scannerSourceSupportsCandidate({
+        title: entry.title || "",
+        url: entryUrl.href,
+        snippet: entry.snippet || "",
+        trusted: true,
+      }, observation)) {
+        sourceLeads.push({
+          title: String(entry.title || entryUrl.hostname),
+          url: entryUrl.href,
+          snippet: String(entry.snippet || "").slice(0, 1200),
+          source: entryUrl.hostname,
+          trusted: true,
+          searchProvider: provider.name,
+        });
+      }
       pageTasks.push(readGroundedScannerSource(entry, observation).then((page) => {
         if (!page) return null;
         return { ...page, source: { ...page.source, searchProvider: provider.name } };
@@ -1844,6 +1944,10 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
     }
   }
   const collected = (await Promise.all(pageTasks)).filter(Boolean);
+  const pageSources = collected.map((entry) => entry.source);
+  const preservedSources = [...new Map(
+    [...pageSources, ...sourceLeads].map((source) => [source.url, source]),
+  ).values()];
   const unique = [...new Map(collected.map((entry) => [entry.source.url, entry])).values()];
   unique.sort((left, right) => {
     const leftPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(left.source.url).hostname.endsWith(domain));
@@ -1851,14 +1955,18 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
     return (leftPriority < 0 ? 999 : leftPriority) - (rightPriority < 0 ? 999 : rightPriority) ||
       Number(Boolean(right.candidate)) - Number(Boolean(left.candidate));
   });
-  const sources = unique.slice(0, 8).map((entry) => entry.source);
+  const sources = [...new Map([
+    ...unique.map((entry) => entry.source),
+    ...preservedSources,
+  ].map((source) => [source.url, source])).values()].slice(0, 8);
   const candidates = unique.flatMap((entry) => entry.candidate ? [entry.candidate] : []);
   return {
     sources,
     candidates: candidates.slice(0, 12),
-    availableSources: new Set(sources.map((source) => source.searchProvider)).size,
+    availableSources: successfulProviders,
     failedSources,
-    provider: [...new Set(sources.map((source) => source.searchProvider))].join(", "),
+    provider: providers.filter((provider, index) => results[index]?.status === "fulfilled")
+      .map((provider) => provider.name).join(", "),
   };
 }
 
