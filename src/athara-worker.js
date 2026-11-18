@@ -2074,9 +2074,15 @@ function scannerSourceSupportsCandidate(source, observation) {
   if (source?.trusted !== true) return false;
   const identityTerms = scannerCandidateTerms(observation);
   if (identityTerms.length < 2) return false;
-  const sourceTerms = new Set(normalizeSearchTerms(`${source.title || ""} ${source.snippet || ""}`));
-  const matchedTerms = identityTerms.filter((term) => sourceTerms.has(term));
-  return matchedTerms.length >= Math.max(1, Math.ceil(identityTerms.length * 0.6));
+  const titleTerms = new Set(normalizeSearchTerms(source.title || ""));
+  const snippetTerms = new Set(normalizeSearchTerms(source.snippet || ""));
+  const genericIdentityTerms = new Set([
+    "king", "queen", "goddess", "god", "pharaoh", "royal", "ancient",
+    "egyptian", "statue", "bust", "wooden", "painted", "plaster", "stone",
+    "ملك", "ملكه", "اله", "الهه", "فرعون", "ملكي", "قديم", "مصري", "مصرية",
+  ]);
+  const namedTerms = identityTerms.filter((term) => !genericIdentityTerms.has(term));
+  return namedTerms.some((term) => titleTerms.has(term) || snippetTerms.has(term));
 }
 
 async function searchOfficialMonumentsArchive(query) {
