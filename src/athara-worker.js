@@ -3695,7 +3695,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : true;
 
         let freeFallbackCandidate = null;
-        if (identificationStatus === "unverified" && freeFallbackEnabled) {
+        if (identificationStatus === "unverified" && freeFallbackEnabled && responseSources.length < 2) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback?.sources?.length) {
             // Keep free catalog hits as explicit research leads, never as confirmed visual matches.
