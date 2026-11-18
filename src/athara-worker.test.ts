@@ -38,6 +38,89 @@ function expectUnverifiedScan(body: {
 }
 
 describe("ATHARA Cloudflare Worker", () => {
+  it("uses Groq catalogue search when Gemini is unavailable and compares official ministry-hosted reference photos", async () => {
+    const catalogueUrl = "https://egymonuments.gov.eg/ar/collections/wooden-statue-of-nephthys";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        const body = JSON.parse(String(init?.body));
+        if (body.tools?.some((tool: { type?: string }) => tool.type === "browser_search")) {
+          expect(body.messages[0].content).toContain("Nephthys");
+          expect(body.messages[0].content).toContain("wooden statue");
+          return Response.json({
+            choices: [{ message: { content:
+              "[Wooden Statue of Nephthys](https://egymonuments.gov.eg/ar/collections/wooden-statue-of-nephthys)" } }],
+          });
+        }
+        return Response.json({
+          choices: [{ message: { content: JSON.stringify({
+            rankedMatches: [{
+              candidateId: "C1",
+              similarity: 0.94,
+              visualEvidence: ["same distinctive crown silhouette", "same profile and shoulder shape"],
+            }],
+          }) } }],
+        });
+      }
+      if (url === catalogueUrl) {
+        return new Response(
+          '<html><head><title>Wooden Statue of Nephthys</title>' +
+          '<meta property="og:image" content="https://egymonuments.gov.eg/media/nephthys-reference.jpg"></head>' +
+          '<body><main><p>A wooden statue of Nephthys displayed at the Luxor Mummification Museum.</p></main></body></html>',
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url === "https://egymonuments.gov.eg/media/nephthys-reference.jpg") {
+        return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
+          status: 200, headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "تمثال خشبي ملون لامرأة بغطاء رأس",
+          identity: "تمثال خشبي للمعبودة نفتيس",
+          objectType: "wooden statue",
+          material: "wood",
+          searchTerms: ["wooden statue", "Nephthys"],
+          keywords: ["painted wood", "female deity"],
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          GROQ_API_KEY: "groq-test-key",
+          SCANNER_MATCH_THRESHOLD: "0.80",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        ok: true,
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        reverseImageSearchStatus: "match",
+        matchedArtifact: { name: "Wooden Statue of Nephthys", similarity: 0.94 },
+      });
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input) === "https://egymonuments.gov.eg/media/nephthys-reference.jpg",
+      )).toBe(true);
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com/v1beta/interactions"),
+      )).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // Keep the regression suite aligned with trusted visual evidence and isolated free-fallback behavior.
   it("reports the two Cloudflare vision models", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
