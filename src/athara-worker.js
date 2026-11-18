@@ -2028,8 +2028,11 @@ async function searchHeritageSources(query, language = "ar") {
   };
 }
 
-function relatedSourceSummary(sources, language) {
-  const trustedSources = sources.filter((source) => source?.trusted).slice(0, 2);
+function relatedSourceSummary(sources, language, observation = null) {
+  const trustedSources = sources
+    .filter((source) => source?.trusted)
+    .filter((source) => !observation || scannerSourceSupportsCandidate(source, observation))
+    .slice(0, 2);
   if (!trustedSources.length) return "";
   return [
     SOURCE_EVIDENCE_LABELS[language] || SOURCE_EVIDENCE_LABELS.en,
@@ -3145,7 +3148,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           sourcesChecked: sources.map((source) => source.source || source.title),
         });
         const relatedContext = mode === "objects" && !officialVisualMatch && !sourceBackedCandidate
-          ? relatedSourceSummary(responseSources, language)
+          ? relatedSourceSummary(responseSources, language, observation)
           : "";
         const freeCandidateContext = freeFallbackCandidate && officialVisualMatch
           ? [
