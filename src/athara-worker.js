@@ -1480,6 +1480,94 @@ async function downloadScannerCandidateImages(candidates) {
     .map((candidate, index) => ({ id: `C${index + 1}`, ...candidate }));
 }
 
+async function compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
+  const selected = candidates.slice(0, 2);
+  if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
+
+  const content = [
+    {
+      type: "text",
+      text: `قارن الصورة الأولى (صورة الزائر) بكل صورة مرجعية تليها. استخدم التشابه البصري الفعلي فقط، ولا تعتمد على أسماء المرشحين أو معرفتك التاريخية. أعد JSON فقط بالشكل {"rankedMatches":[{"candidateId":"C1","similarity":0.0,"visualEvidence":["علامة مرئية مميزة أولى","علامة مرئية مميزة ثانية"]}]}. similarity تقدير بصري من 0 إلى 1؛ لا تمنح ${threshold} أو أعلى إلا عند تطابق علامتين واضحتين على الأقل. لا تعتبر كون الصورتين لآثار مصرية تطابقًا.`,
+    },
+    { type: "image_url", image_url: { url: `data:${detectImageMimeType(imageBytes)};base64,${bytesToBase64(imageBytes)}` } },
+  ];
+  for (const [index, candidate] of selected.entries()) {
+    const candidateId = candidate.id || candidate.label || `C${index + 1}`;
+    const candidateName = candidate.name || candidate.item?.title || "مرشح";
+    content.push({ type: "text", text: `الصورة المرجعية ${candidateId}: ${candidateName}` });
+    content.push({
+      type: "image_url",
+      image_url: { url: `data:${detectImageMimeType(candidate.imageBytes)};base64,${bytesToBase64(candidate.imageBytes)}` },
+    });
+  }
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0.1,
+      max_tokens: 700,
+      response_format: { type: "json_object" },
+      messages: [{ role: "user", content }],
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Groq image comparison returned HTTP ${response.status}`);
+  const raw = payload?.choices?.[0]?.message?.content || "";
+  const jsonText = String(raw).match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) throw new Error("Groq image comparison returned invalid JSON.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch { throw new Error("Groq image comparison returned invalid JSON."); }
+
+  const ranked = (Array.isArray(parsed.rankedMatches) ? parsed.rankedMatches : [])
+    .map((entry) => {
+      const candidate = selected.find((item, index) =>
+        (item.id || item.label || `C${index + 1}`) === entry?.candidateId,
+      );
+      return {
+        candidate,
+        similarity: Number(entry?.similarity),
+        visualEvidence: Array.isArray(entry?.visualEvidence)
+          ? entry.visualEvidence.filter((item) => typeof item === "string" && item.trim()).slice(0, 3)
+          : [],
+      };
+    })
+    .filter((entry) => entry.candidate && Number.isFinite(entry.similarity) && entry.similarity >= 0 && entry.similarity <= 1)
+    .sort((left, right) => right.similarity - left.similarity);
+  const best = ranked[0];
+  return {
+    ranked: ranked.map(({ candidate, similarity }) => ({
+      name: candidate.name || candidate.item?.title || "",
+      museum: candidate.museum || candidate.item?.museum || candidate.item?.sourceTitle || "",
+      objectNumber: candidate.objectNumber || candidate.item?.objectNumber || candidate.item?.id || "",
+      url: candidate.url || candidate.item?.sourceUrl || "",
+      similarity: Math.round(similarity * 1000) / 1000,
+    })),
+    match: best && best.similarity >= threshold && best.visualEvidence.length >= 2
+      ? { candidate: best.candidate, similarity: best.similarity }
+      : null,
+  };
+}
+
+async function compareOpenScannerCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
+  return compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold);
+}
+
+async function compareOfficialCatalogPhotosWithGroq(imageBytes, candidates, apiKey, model, threshold) {
+  const result = await compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold);
+  return result.match
+    ? {
+        item: result.match.candidate.item,
+        url: result.match.candidate.item.sourceUrl,
+        engine: "Groq Qwen Vision official catalog comparison",
+        similarity: result.match.similarity,
+      }
+    : null;
+}
+
 async function compareOpenScannerCandidates(imageBytes, candidates, apiKey, model, threshold) {
   if (!apiKey || !candidates.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
   const parts = [{
@@ -2230,6 +2318,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
 
     if (url.pathname === "/api/scan" && request.method === "POST") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
+      const groqVisionConfigured = typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
       const visionProviderOrder = resolveVisionProviderOrder(env);
       let body;
@@ -2243,7 +2332,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = geminiConfigured || Boolean(env.SCANNER_INDEX_URL);
+      const reverseImageSearchConfigured = mode === "objects" || geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL);
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
@@ -2611,7 +2700,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ? rankOfficialTextCandidates(catalog, observation)
           : [];
         let matchThreshold = DEFAULT_SCANNER_MATCH_THRESHOLD;
-        if (mode === "objects" && geminiConfigured) {
+        if (mode === "objects" && (geminiConfigured || groqVisionConfigured)) {
           try {
             matchThreshold = scannerMatchThreshold(env);
           } catch (error) {
@@ -2620,28 +2709,55 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
         let geminiCatalogComparisonFailed = false;
-        let openScannerSearchStatus = reverseImageSearchConfigured ? "no_match" : "unavailable";
+        let openScannerComparisonSucceeded = false;
+        let groqCatalogComparisonSucceeded = false;
+        let openScannerSearchStatus = "no_match";
         let openScannerRankedCandidates = [];
         let openScannerSourceCandidates = [];
-        if (mode === "objects" && !officialVisualMatch && geminiConfigured) {
+        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured)) {
           const candidates = rankOfficialCatalogCandidates(catalog, observation);
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
-            try {
-              const referenceImage = comparisonImageBytes || imageBytes;
-              officialVisualMatch = await compareWithOfficialCatalogPhotos(
-                referenceImage,
-                candidateImages,
-                typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "",
-                geminiVisionModels[0],
-                matchThreshold,
-              );
-            } catch (error) {
-              geminiCatalogComparisonFailed = true;
-              visionAttempts.push({
-                model: "Gemini official catalog comparison",
-                reason: String(error?.message || error).slice(0, 180),
-              });
+            const referenceImage = comparisonImageBytes || imageBytes;
+            if (geminiConfigured) {
+              try {
+                officialVisualMatch = await compareWithOfficialCatalogPhotos(
+                  referenceImage,
+                  candidateImages,
+                  env.GEMINI_API_KEY.trim(),
+                  geminiVisionModels[0],
+                  matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                geminiCatalogComparisonFailed = true;
+                visionAttempts.push({
+                  model: "Gemini official catalog comparison",
+                  reason: String(error?.message || error).slice(0, 180),
+                });
+              }
+            }
+            if (!officialVisualMatch && groqVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithGroq(
+                  referenceImage,
+                  candidateImages,
+                  env.GROQ_API_KEY.trim(),
+                  typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
+                    ? env.GROQ_VISION_MODEL.trim()
+                    : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
+                      ? env.GROQ_MODEL.trim()
+                      : "qwen/qwen3.8-27b",
+                  matchThreshold,
+                );
+                groqCatalogComparisonSucceeded = true;
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({
+                  model: "Groq official catalog comparison",
+                  reason: String(error?.message || error).slice(0, 180),
+                });
+              }
             }
           }
         }
@@ -2687,7 +2803,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           });
         }
 
-        if (mode === "objects" && !officialVisualMatch && reverseImageSearchConfigured) {
+        if (mode === "objects" && !officialVisualMatch) {
           try {
             const probableThreshold = scannerProbableThreshold(env);
             const indexNames = scannerIndexCandidates(scannerIndexResult)
@@ -2709,29 +2825,65 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
             } else if (!candidateImages.length) {
               openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
-            } else if (!geminiConfigured) {
+            } else if (!geminiConfigured && !groqVisionConfigured) {
               openScannerRankedCandidates = openScannerSourceCandidates.map((candidate) => ({
                 ...candidate,
                 similarity: null,
               }));
-                      console.info("[Image scanner] Extracted visual search terms:", {
-                        objectType: visualObservation.objectType || "",
-                        material: visualObservation.material || "",
-                        symbols: Array.isArray(visualObservation.symbols) ? visualObservation.symbols : [],
-                        searchTerms: Array.isArray(visualObservation.searchTerms) ? visualObservation.searchTerms : [],
-                      });
-              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
+              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "unavailable";
             } else {
-              const comparison = await compareOpenScannerCandidates(
-                comparisonImageBytes || imageBytes,
-                candidateImages.slice(0, 3),
-                env.GEMINI_API_KEY.trim(),
-                geminiVisionModels[0],
-                matchThreshold,
-              );
-              openScannerRankedCandidates = comparison.ranked;
-              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
-              if (comparison.match) {
+              let comparison = null;
+              if (geminiConfigured) {
+                try {
+                  comparison = await compareOpenScannerCandidates(
+                    comparisonImageBytes || imageBytes,
+                    candidateImages.slice(0, 2),
+                    env.GEMINI_API_KEY.trim(),
+                    geminiVisionModels[0],
+                    matchThreshold,
+                  );
+                  openScannerComparisonSucceeded = true;
+                } catch (error) {
+                  geminiCatalogComparisonFailed = true;
+                  visionAttempts.push({
+                    model: "Gemini open-catalog comparison",
+                    reason: String(error?.message || error).slice(0, 180),
+                  });
+                }
+              }
+              if ((!comparison || !comparison.match) && groqVisionConfigured) {
+                try {
+                  comparison = await compareOpenScannerCandidatesWithGroq(
+                    comparisonImageBytes || imageBytes,
+                    candidateImages.slice(0, 2),
+                    env.GROQ_API_KEY.trim(),
+                    typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
+                      ? env.GROQ_VISION_MODEL.trim()
+                      : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
+                        ? env.GROQ_MODEL.trim()
+                        : "qwen/qwen3.8-27b",
+                    matchThreshold,
+                  );
+                  groqCatalogComparisonSucceeded = true;
+                  openScannerComparisonSucceeded = true;
+                } catch (error) {
+                  visionAttempts.push({
+                    model: "Groq open-catalog comparison",
+                    reason: String(error?.message || error).slice(0, 180),
+                  });
+                }
+              }
+
+              openScannerRankedCandidates = comparison?.ranked?.length
+                ? comparison.ranked
+                : openScannerSourceCandidates.map((candidate) => ({ ...candidate, similarity: null }));
+              openScannerSearchStatus = search.availableSources === 0
+                ? "failed"
+                : openScannerComparisonSucceeded
+                  ? "no_match"
+                  : "unavailable";
+
+              if (comparison?.match) {
                 const candidate = comparison.match.candidate;
                 const sourceStory = await summarizeTrustedSourceText(env, candidate.sourceText || "", language);
                 const matchedArtifact = {
@@ -2767,13 +2919,15 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   visualDescription: scannerVisualDescription(observation),
                   matchedArtifact,
                   candidates: [],
-                  visualMatchMethod: "Gemini multimodal comparison; not CLIP",
+                  visualMatchMethod: groqCatalogComparisonSucceeded
+                    ? "Groq Qwen Vision multimodal comparison"
+                    : "Gemini multimodal comparison",
                 });
               }
             }
           } catch (error) {
-            geminiCatalogComparisonFailed = true;
-            openScannerSearchStatus = openScannerSourceCandidates.length ? "no_match" : "failed";
+            if (!openScannerComparisonSucceeded && !groqCatalogComparisonSucceeded) geminiCatalogComparisonFailed = true;
+            openScannerSearchStatus = openScannerSourceCandidates.length ? "unavailable" : "failed";
             visionAttempts.push({
               model: "Gemini open-catalog comparison",
               reason: String(error?.message || error).slice(0, 180),
@@ -3005,11 +3159,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const sourceStory = freeFallbackCandidate?.description || await summarizeTrustedSourceText(env, responseSourceText, language);
         const reverseImageSearchStatus = identificationStatus === "probable" && probableArtifact
           ? "no_match"
-          : !reverseImageSearchConfigured
-            ? "unavailable"
-            : openScannerSearchStatus === "failed" || geminiCatalogComparisonFailed
-              ? "failed"
-              : openScannerSearchStatus;
+          : openScannerSearchStatus === "failed" ||
+              (geminiCatalogComparisonFailed && !openScannerComparisonSucceeded && !groqCatalogComparisonSucceeded)
+            ? "failed"
+            : openScannerSearchStatus;
         return json({
           ok: true,
           analysis,
