@@ -428,6 +428,15 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               ].filter(Boolean).join("\n");
             }
           }
+          const reverseSearchNotice = scanMode !== "objects" || data.identificationStatus === "probable"
+            ? ""
+            : data.reverseImageSearchStatus === "unavailable"
+              ? scanCopy.reverseImageSearchUnavailable
+              : data.reverseImageSearchStatus === "no_match"
+                ? scanCopy.reverseImageSearchNoMatch
+                : data.reverseImageSearchStatus === "failed"
+                  ? scanCopy.reverseImageSearchFailed
+                  : "";
           if (!cancelled) {
             setScanResult([reverseSearchNotice, analysis].filter(Boolean).join("\n\n"));
             setScanSources(Array.isArray(data.sources) ? data.sources : []);
