@@ -121,7 +121,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
       reverseImageSearchStatus: "unavailable",
       confidenceByField: expect.objectContaining({ identity: "low" }),
     });
-    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledTimes(2);
   });
 
   it("leaves unrelated routes to TanStack Start", () => {
