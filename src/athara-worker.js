@@ -2088,6 +2088,129 @@ function formatArtifactCatalogStory(candidate, language = "ar") {
   return lines.join("\n\n");
 }
 
+async function searchMuseumImagesWithoutVision(env, imageBytes, language, visionAttempts) {
+  const imageSearch = await searchClevelandByImage(imageBytes);
+  if (!imageSearch.available || !imageSearch.candidates.length) return null;
+
+  // The endpoint searches the whole Cleveland collection. Keep only records whose
+  // own catalogue metadata identifies an Egyptian/Nubian/ancient Egyptian context.
+  const egyptianCandidates = imageSearch.candidates.filter((candidate) => {
+    const recordText = [
+      candidate.name,
+      candidate.sourceText,
+      candidate.period,
+      candidate.material,
+    ].filter(Boolean).join(" ");
+    return /ancient egypt|egyptian|egypt|pharaoh|pharaonic|thebes|nubia|ancient near east|مصر|مصري|فرعوني|طيبة|النوبة|بطلمي|بطلمية/i.test(recordText);
+  }).slice(0, 5);
+  if (!egyptianCandidates.length) return null;
+
+  const quotaExhausted = visionAttempts.some((attempt) =>
+    safeVisionFailureCategory(attempt.reason) === "daily_quota_exhausted",
+  );
+  let embeddingResult = { ranked: [], model: "", available: false };
+  let embeddingFailureCategory = "";
+  const candidateImages = await downloadScannerCandidateImages(egyptianCandidates);
+  // EmbeddingGemma 2 is a separate image-embedding stage, not a caption model.
+  // Do not call it after Workers AI has reported an account-wide daily quota stop.
+  if (!quotaExhausted && candidateImages.length && typeof env.AI?.run === "function") {
+    try {
+      embeddingResult = await rankScannerCandidateImagesWithEmbeddings(
+        env.AI,
+        imageBytes,
+        candidateImages,
+      );
+    } catch (error) {
+      embeddingFailureCategory = safeVisionFailureCategory(error?.message || error);
+      console.warn("[Image scanner] Quota-safe EmbeddingGemma ranking unavailable:", String(error?.message || error).slice(0, 180));
+    }
+  }
+
+  const rankedCandidates = embeddingResult.ranked.length
+    ? embeddingResult.ranked
+    : egyptianCandidates;
+  const selected = rankedCandidates.slice(0, 5).map((candidate) => ({
+    name: candidate.name,
+    museum: candidate.museum,
+    objectNumber: candidate.objectNumber,
+    url: candidate.url,
+    source: candidate.source,
+    description: candidate.sourceText || "",
+    currentLocation: candidate.currentLocation || "",
+    findSpot: candidate.findSpot || "",
+    period: candidate.period || "",
+    material: candidate.material || "",
+    provenance: candidate.provenance || "",
+    similarity: Number.isFinite(candidate.similarity)
+      ? Math.round(candidate.similarity * 1000) / 1000
+      : null,
+  }));
+  const sources = selected.map((candidate) => ({
+    title: candidate.name,
+    url: candidate.url,
+    snippet: candidate.description,
+    source: candidate.source || candidate.museum,
+    trusted: true,
+  }));
+  const candidateDetails = rankedCandidates.slice(0, 3).map((candidate, index) => {
+    const record = formatArtifactCatalogStory(candidate, language);
+    const similarity = Number.isFinite(candidate.similarity)
+      ? (language === "ar" ? `درجة تشابه الصور: ${Math.round(candidate.similarity * 1000) / 1000}` : `Image similarity: ${Math.round(candidate.similarity * 1000) / 1000}`)
+      : "";
+    return [`${index + 1}. ${candidate.name}`, record, similarity].filter(Boolean).join("\n");
+  });
+  const analysis = language === "ar"
+    ? [
+        "محركات وصف الصور لم تُكمل التحليل، لكن الماسح شغّل البحث العكسي المجاني في صور وسجلات متحف كليفلاند للفنون.",
+        "دي أقرب سجلات مصرية ظهرت في مجموعة المتحف، وليست تأكيدًا أن القطعة المرفوعة هي نفسها. لم يتم اعتماد هوية أو موقع نهائي من غير مطابقة موثوقة.",
+        ...candidateDetails,
+      ].join("\n\n")
+    : [
+        "The image-description providers did not complete, but the scanner ran the free Cleveland Museum of Art image-similarity search.",
+        "These are the nearest Egyptian-related catalogue records in that collection, not confirmation that the uploaded object is the same object. No final identity or location is claimed without a verified match.",
+        ...candidateDetails,
+      ].join("\n\n");
+
+  return json({
+    ok: true,
+    analysis,
+    sources,
+    trustedSourcesAvailable: true,
+    wikipediaAvailable: null,
+    resultType: "unverified",
+    identificationStatus: "unverified",
+    reverseImageSearchStatus: "no_match",
+    confidence: "low",
+    confidenceByField: { identity: "low", place: "low", period: "low" },
+    candidates: selected,
+    visualMatchMethod: embeddingResult.available
+      ? "Cleveland Open Access image similarity + Cloudflare EmbeddingGemma 2 ranking; unverified candidates"
+      : "Cleveland Open Access image similarity; unverified candidates",
+    model: embeddingResult.available
+      ? "Cleveland Museum of Art + Cloudflare EmbeddingGemma 2"
+      : "Cleveland Museum of Art Open Access image similarity",
+    imageRetrievalDiagnostics: {
+      provider: "Cleveland Museum of Art Open Access API",
+      imageSimilarityAvailable: true,
+      candidatesReturned: selected.length,
+      embeddingModel: embeddingResult.model || null,
+      embeddingAvailable: embeddingResult.available,
+      embeddingSkippedReason: quotaExhausted ? "cloudflare_daily_quota_exhausted" : "",
+      embeddingFailureCategory,
+    },
+    visionDiagnostics: {
+      provider: "No vision description model completed",
+      providerOrder: resolveVisionProviderOrder(env),
+      fallbackOrder: resolveVisionProviderOrder(env).slice(1),
+      enginesCompleted: 0,
+      failedAttempts: visionAttempts.map((attempt) => ({
+        engine: attempt.model,
+        category: safeVisionFailureCategory(attempt.reason),
+      })),
+    },
+  });
+}
+
 async function compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
   const selected = candidates.slice(0, 2);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
@@ -3410,6 +3533,21 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
 
 
         if (!independentObservations.length) {
+          // Do not stop before independent museum image retrieval. This route can
+          // still return source-backed candidate leads when caption-model quotas end.
+          if (mode === "objects") {
+            try {
+              const quotaSafeImageSearch = await searchMuseumImagesWithoutVision(
+                env,
+                comparisonImageBytes || imageBytes,
+                language,
+                visionAttempts,
+              );
+              if (quotaSafeImageSearch) return quotaSafeImageSearch;
+            } catch (error) {
+              console.warn("[Image scanner] Quota-safe museum image search failed:", String(error?.message || error).slice(0, 180));
+            }
+          }
           const detail = visionAttempts
             .map((attempt) => attempt.model + ": " + attempt.reason)
             .join("; ");
