@@ -1644,7 +1644,7 @@ function formatArtifactCatalogStory(candidate, language = "ar") {
     candidate.provenance ? (isArabic ? `سجل الملكية: ${candidate.provenance}` : `Provenance: ${candidate.provenance}`) : "",
     candidate.sourceText ? (isArabic ? `تفاصيل بطاقة المتحف: ${candidate.sourceText}` : `Museum catalogue record: ${candidate.sourceText}`) : "",
   ].filter(Boolean);
-  return lines.join("\\n\\n");
+  return lines.join("\n\n");
 }
 
 async function compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
