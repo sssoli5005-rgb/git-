@@ -149,6 +149,7 @@ jobs:
               image: "data:" + imageType + ";base64," + imageBytes.toString("base64"),
               language: "ar",
               mode: "objects",
+              diagnostics: true,
             }),
             signal: AbortSignal.timeout(120000),
           });
