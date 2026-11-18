@@ -184,13 +184,13 @@ function safeVisionFailureCategory(reason) {
 }
 
 function safeVisionDiagnosticReason(reason, env) {
-  let message = String(reason || "").replace(/\\s+/g, " ").trim();
+  let message = String(reason || "").replace(/\s+/g, " ").trim();
   for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY]) {
     if (typeof secret === "string" && secret.length > 6) {
       message = message.split(secret).join("[redacted]");
     }
   }
-  return message.replace(/Bearer\\s+[^\\s]+/gi, "Bearer [redacted]").slice(0, 180);
+  return message.replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]").slice(0, 180);
 }
 
 function isRetryableVisionNetworkError(error) {
@@ -2886,7 +2886,7 @@ export default {
           : localOllama
             ? env.OLLAMA_VISION_MODEL
             : VISION_MODEL,
-        visionFallbackModel: geminiConfigured ? VISION_MODEL : localOllama ? null : FALLBACK_VISION_MODEL,
+        visionFallbackModel: localOllama ? null : FALLBACK_VISION_MODEL,
         visionProvider: geminiConfigured ? "Gemini Vision" : localOllama ? "Ollama (local)" : "Cloudflare Workers AI",
       });
     }
