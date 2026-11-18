@@ -2997,10 +2997,44 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ])].slice(0, 8),
                 }
               : observation;
-            const search = await searchOpenScannerCandidates(searchObservation, language);
+            const [imageSearch, textSearch] = await Promise.all([
+              searchClevelandByImage(comparisonImageBytes || imageBytes),
+              searchOpenScannerCandidates(searchObservation, language),
+            ]);
+            const mergedCandidates = [
+              ...imageSearch.candidates,
+              ...textSearch.candidates,
+            ];
+            const uniqueCandidates = [...new Map(mergedCandidates.map((candidate) => [candidate.url, candidate])).values()];
+            const search = {
+              candidates: uniqueCandidates.slice(0, 12),
+              availableSources: textSearch.availableSources + (imageSearch.available ? 1 : 0),
+              failedSources: textSearch.failedSources + (imageSearch.available ? 0 : 1),
+            };
             openScannerDiscoveredCandidates = search.candidates;
             openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
-            const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 5));
+            const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 8));
+            let embeddingRankedCandidates = [];
+            if (candidateImages.length && typeof env.AI?.run === "function") {
+              try {
+                const embeddingResult = await rankScannerCandidateImagesWithEmbeddings(
+                  env.AI,
+                  comparisonImageBytes || imageBytes,
+                  candidateImages,
+                );
+                embeddingRankedCandidates = embeddingResult.ranked;
+                const embeddingOrder = new Map(embeddingRankedCandidates.map((candidate, index) => [candidate.url, index]));
+                candidateImages.sort((left, right) =>
+                  (embeddingOrder.get(left.url) ?? 999) - (embeddingOrder.get(right.url) ?? 999),
+                );
+                console.info("[Image scanner] Multimodal image embeddings ranked museum candidates:", {
+                  model: embeddingResult.model,
+                  count: embeddingRankedCandidates.length,
+                });
+              } catch (error) {
+                console.warn("[Image scanner] Multimodal embedding ranking unavailable:", String(error?.message || error).slice(0, 180));
+              }
+            }
             if (!search.candidates.length) {
               openScannerSearchStatus = search.availableSources === 0
                 ? "failed"
@@ -3073,10 +3107,17 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
 
               if (comparison?.match) {
                 const candidate = comparison.match.candidate;
+                const catalogueStory = formatArtifactCatalogStory(candidate, language);
                 const sourceStory = await summarizeTrustedSourceText(env, candidate.sourceText || "", language);
+                const artifactStory = sourceStory || catalogueStory || candidate.sourceText;
                 const matchedArtifact = {
                   name: candidate.name,
                   museum: candidate.museum,
+                  currentLocation: candidate.currentLocation || "",
+                  findSpot: candidate.findSpot || "",
+                  period: candidate.period || "",
+                  material: candidate.material || "",
+                  provenance: candidate.provenance || "",
                   objectNumber: candidate.objectNumber,
                   url: candidate.url,
                   similarity: Math.round(comparison.match.similarity * 1000) / 1000,
@@ -3090,8 +3131,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 };
                 return json({
                   ok: true,
-                  analysis: sourceStory || candidate.sourceText,
-                  sourceStory,
+                  analysis: artifactStory,
+                  sourceStory: artifactStory,
                   sources: [source],
                   trustedSourcesAvailable: true,
                   wikipediaAvailable: null,
@@ -3101,15 +3142,15 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   confidence: "medium",
                   confidenceByField: {
                     identity: "medium",
-                    place: "low",
-                    period: "low",
+                    place: candidate.currentLocation || candidate.museum ? "medium" : "low",
+                    period: candidate.period ? "medium" : "low",
                   },
                   visualDescription: scannerVisualDescription(observation),
                   matchedArtifact,
                   candidates: [],
                   visualMatchMethod: groqCatalogComparisonSucceeded
-                    ? "Groq Qwen Vision multimodal comparison"
-                    : "Gemini multimodal comparison",
+                    ? "Cleveland visual retrieval + Cloudflare multimodal embeddings + Groq reference-image verification"
+                    : "Cleveland visual retrieval + Cloudflare multimodal embeddings + Gemini reference-image verification",
                 });
               }
             }
