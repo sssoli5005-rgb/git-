@@ -3316,7 +3316,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             (candidate) => candidate.similarity >= scannerProbableThreshold(env),
           )
         ) {
-          sources = [];
+          // Keep only catalogue pages that directly support a distinctive identity
+          // or visual feature; discard generic keyword-search results.
+          sources = sources.filter((source) => scannerSourceSupportsCandidate(source, observation));
         }
         const wikipediaAvailable = searchResults.some(
           (result) => result.wikipediaAvailable === true,
