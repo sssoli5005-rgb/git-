@@ -1729,9 +1729,6 @@ function scannerHasDistinctiveArtifactIdentity(observation) {
   ]);
   const identity = [
     observation?.visualCandidateIdentity,
-    observation?.identity,
-    ...(Array.isArray(observation?.searchTerms) ? observation.searchTerms : []),
-    ...(Array.isArray(observation?.keywords) ? observation.keywords : []),
   ].filter((value) => typeof value === "string").join(" ");
   const terms = normalizeSearchTerms(identity).filter((term) => !generic.has(term));
   return terms.some((term) => term.length >= 5);
