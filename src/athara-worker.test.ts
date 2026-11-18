@@ -649,7 +649,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.analysis).toContain("صيغة قرابين شائعة في مناظر المعابد");
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
-    expect(run.mock.calls[0][1].image).toMatch(/^data:image\\/png;base64,/);
+    expect(String(run.mock.calls[0][1].image)).toContain("data:image/png;base64,");
     expect(run.mock.calls[0][1].question).toContain("استفد من معرفتك الداخلية");
     expect(run.mock.calls[0][1].question).toContain("العنخ");
     expect(run.mock.calls[0][1].question).toContain("افحص كل شخصية على حدة");
