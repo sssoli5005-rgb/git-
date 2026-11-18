@@ -42,7 +42,11 @@ type ScanArtifactCandidate = {
   museum?: string;
   objectNumber?: string;
   location?: string;
+  currentLocation?: string;
+  findSpot?: string;
   period?: string;
+  material?: string;
+  provenance?: string;
   objectType?: string;
   description?: string;
   source?: string;
@@ -392,11 +396,15 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const story = data.sourceStory || artifact.description ||
                 data.sources?.find((source) => source.trusted)?.snippet || "";
               analysis = [
-                identificationLabel,
+                identificationLabel || resultCopy.confirmedStatus,
                 `${resultCopy.nameLabel}: ${artifact.name}`,
-                artifact.location || artifact.museum
-                  ? `${resultCopy.locationLabel}: ${artifact.location || artifact.museum}`
-                  : "",
+                artifact.museum ? `${resultCopy.locationLabel}: ${artifact.museum}` : "",
+                artifact.currentLocation ? `مكان العرض: ${artifact.currentLocation}` : "",
+                artifact.findSpot ? `مكان العثور: ${artifact.findSpot}` : "",
+                artifact.objectNumber ? `رقم التسجيل: ${artifact.objectNumber}` : "",
+                artifact.period ? `الفترة التاريخية: ${artifact.period}` : "",
+                artifact.material ? `الخامة: ${artifact.material}` : "",
+                artifact.provenance ? `سجل الملكية: ${artifact.provenance}` : "",
                 story ? `${resultCopy.storyLabel}: ${story}` : "",
               ].filter(Boolean).join("\n");
             } else {
@@ -404,46 +412,21 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const candidateLines = candidates.slice(0, 5).map((candidate, index) => {
                 const place = candidate.museum || candidate.location || "";
                 const period = candidate.period || "";
-                const description = candidate.description || "";
                 return [
                   `${index + 1}. ${candidate.name || scanCopy.visualUnknown}`,
                   place,
                   period,
-                  description,
                   candidate.url || "",
                 ].filter(Boolean).join(" — ");
               });
-              const visual = data.visualDescription
-                ? [
-                    `${scanCopy.visualObjectType}: ${data.visualDescription.object_type || scanCopy.visualUnknown}`,
-                    `${scanCopy.visualMaterial}: ${data.visualDescription.material || scanCopy.visualUnknown}`,
-                    `${scanCopy.visualSymbols}: ${data.visualDescription.symbols?.join(", ") || scanCopy.visualUnknown}`,
-                    `${scanCopy.visualStyle}: ${data.visualDescription.style || scanCopy.visualUnknown}`,
-                    `${scanCopy.visualPossibleLocation}: ${data.visualDescription.possible_location || scanCopy.visualUnknown}`,
-                  ]
-                : [];
               analysis = [
                 identificationLabel || resultCopy.unverifiedStatus,
-                candidates.length ? scanCopy.visualCandidates : "",
+                candidates.length
+                  ? "لم تتأكد هوية القطعة؛ هذه سجلات قريبة تحتاج إلى مطابقة إضافية:"
+                  : resultCopy.notIdentified,
                 ...candidateLines,
-                data.sourceStory ? `${resultCopy.storyLabel}: ${data.sourceStory}` : "",
-                data.analysis || "",
-                ...visual,
-                candidates.length || data.analysis || data.visualDescription ? "" : resultCopy.notIdentified,
               ].filter(Boolean).join("\n");
             }
-          }
-          const reverseSearchNotice = scanMode !== "objects" || data.identificationStatus === "probable"
-            ? ""
-            : data.reverseImageSearchStatus === "unavailable"
-              ? scanCopy.reverseImageSearchUnavailable
-              : data.reverseImageSearchStatus === "no_match"
-                ? scanCopy.reverseImageSearchNoMatch
-                : data.reverseImageSearchStatus === "failed"
-                  ? scanCopy.reverseImageSearchFailed
-                  : "";
-          if (!response.ok || !data.ok || (!analysis && !reverseSearchNotice)) {
-            throw new Error(data.error || "تحليل الصورة ما اكتملش.");
           }
           if (!cancelled) {
             setScanResult([reverseSearchNotice, analysis].filter(Boolean).join("\n\n"));
