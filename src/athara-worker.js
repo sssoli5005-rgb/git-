@@ -165,7 +165,7 @@ async function withScannerTimeout(operation, timeoutMs, label) {
 
 
 const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
-const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 15_000, gemini: 30_000, groq: 25_000 };
+const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 12_000, gemini: 18_000, groq: 18_000 };
 const VISION_PROVIDER_RETRIES = 1;
 
 function safeVisionFailureCategory(reason) {
