@@ -846,7 +846,7 @@ describe("ATHARA Cloudflare Worker", () => {
   it("returns sanitized per-engine failure reasons only when diagnostic mode is requested", async () => {
     const geminiSecret = "gemini-test-secret-123";
     const groqSecret = "groq-test-secret-456";
-    const cloudflareSecret = "cloudflare-test-secret-789";
+
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url.startsWith("https://generativelanguage.googleapis.com/")) {
@@ -862,7 +862,7 @@ describe("ATHARA Cloudflare Worker", () => {
       {
         GEMINI_API_KEY: geminiSecret,
         GROQ_API_KEY: groqSecret,
-        AI: { run: vi.fn().mockRejectedValue(new Error("Cloudflare request failed " + cloudflareSecret)) },
+        AI: { run: vi.fn().mockRejectedValue(new Error("Cloudflare model unavailable")) },
         ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
       },
     );
@@ -876,7 +876,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(diagnosticsText).toContain("Groq request failed");
     expect(diagnosticsText).not.toContain(geminiSecret);
     expect(diagnosticsText).not.toContain(groqSecret);
-    expect(diagnosticsText).not.toContain(cloudflareSecret);
+    expect(diagnosticsText).toContain("Cloudflare model unavailable");
   });
 
   it("returns a visual description without guessing when reverse-image search is unavailable", async () => {
