@@ -871,7 +871,7 @@ describe("ATHARA Cloudflare Worker", () => {
 
     expect(response.status).toBe(200);
     expect(body.visionDiagnostics.failedAttempts.length).toBeGreaterThanOrEqual(3);
-    expect(diagnosticsText).toContain("Cloudflare request failed");
+    expect(diagnosticsText).toContain("Cloudflare model unavailable");
     expect(diagnosticsText).toContain("Gemini quota exhausted");
     expect(diagnosticsText).toContain("Groq request failed");
     expect(diagnosticsText).not.toContain(geminiSecret);
