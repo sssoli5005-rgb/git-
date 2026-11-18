@@ -68,7 +68,7 @@ describe("ATHARA Cloudflare Worker", () => {
 
     expect(response.status).toBe(200);
     expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
-    expect(body.visionFallbackOrder).toEqual(["Cloudflare", "Groq"]);
+    expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
   });
 
   it("falls through Gemini and Groq failures to Cloudflare, and stops at the first usable result", async () => {
@@ -1732,4 +1732,46 @@ describe("ATHARA Cloudflare Worker", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("retries a transient Gemini Vision 503 before using the successful response", async () => {
+    let geminiCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        geminiCalls += 1;
+        if (geminiCalls === 1) return new Response(JSON.stringify({ error: { message: "temporary overload" } }), { status: 503 });
+        return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+          visualDescription: "تمثال مصري قديم بملامح ملكية",
+          objectType: "تمثال",
+          identity: "تمثال ملكي مصري",
+          searchTerms: ["تمثال ملكي مصري"],
+        }) }] } }] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ query: { pages: {} } }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const run = vi.fn().mockRejectedValue(new Error("Cloudflare Moondream busy"));
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key", AI: { run }, ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(true);
+      expect(geminiCalls).toBe(2);
+      expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال ملكي مصري");
+      expect(body.visionDiagnostics).toMatchObject({ provider: "Gemini", usedFallback: true, fallbackOrder: ["Gemini", "Groq"] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reports Gemini then Groq as the actual hosted fallback order", async () => {
+    const response = await worker.fetch(new Request("https://athara.test/api/health"), { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key" });
+    const body = await response.json();
+    expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
+    expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
+  });
+
 });

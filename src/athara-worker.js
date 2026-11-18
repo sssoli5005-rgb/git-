@@ -163,6 +163,45 @@ async function withScannerTimeout(operation, timeoutMs, label) {
   }
 }
 
+
+const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 15_000, gemini: 30_000, groq: 25_000 };
+const VISION_PROVIDER_RETRIES = 1;
+
+function safeVisionFailureCategory(reason) {
+  const value = String(reason || "").toLowerCase();
+  if (/429|quota|rate.?limit/.test(value)) return "rate_limited";
+  if (/timeout|timed out|abort/.test(value)) return "timeout";
+  if (/license|agree|acceptable use|policy/.test(value)) return "provider_consent_required";
+  if (/401|403|unauthorized|forbidden|api.?key/.test(value)) return "authentication_or_permission";
+  if (/503|502|500|overload|busy|capacity/.test(value)) return "provider_unavailable";
+  if (/empty|non-informative|invalid/.test(value)) return "invalid_provider_response";
+  return "request_failed";
+}
+
+function isRetryableVisionNetworkError(error) {
+  return ["AbortError", "TimeoutError", "TypeError"].includes(error?.name) ||
+    /timeout|timed out|network|connection reset|socket/i.test(String(error?.message || error));
+}
+
+async function fetchVisionWithRetry(url, init, { provider, timeoutMs, retries = VISION_PROVIDER_RETRIES } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      if (!TRANSIENT_VISION_HTTP_STATUSES.has(response.status) || attempt === retries) return response;
+      try { await response.body?.cancel(); } catch { /* Continue with the retry. */ }
+      console.warn("[Image scanner] " + provider + " returned HTTP " + response.status + "; retrying attempt " + (attempt + 2) + "/" + (retries + 1) + ".");
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableVisionNetworkError(error) || attempt === retries) throw error;
+      console.warn("[Image scanner] " + provider + " failed transiently; retrying attempt " + (attempt + 2) + "/" + (retries + 1) + ": " + String(error?.message || error).slice(0, 160));
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, 350 * (2 ** attempt))));
+  }
+  throw lastError || new Error(provider + " failed after retries.");
+}
+
 function extractText(result) {
   if (typeof result?.answer === "string") return result.answer;
   if (typeof result?.response === "string") return result.response;
@@ -2418,7 +2457,7 @@ export default {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
       const visionProviderOrder = resolveVisionProviderOrder(env);
-      const visionFallbackOrder = visionProviderOrder.filter((provider) => provider !== "Gemini");
+      const visionFallbackOrder = visionProviderOrder.slice(1);
       return json({
         ok: true,
         service: "ATHARA",
@@ -2705,6 +2744,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           : `حلل الصورة باعتبارها أثرًا مصريًا قديمًا أو صورة له من كتاب أو شاشة. ابدأ بأقرب اسم معروف يمكن أن يفسر السمات المميزة، لا بمجرد وصف عام؛ اذكره كاحتمال إذا لم توجد علامة فريدة، واتركه فارغًا فقط إذا تعذر اقتراح احتمال مفيد. حدّد نوع الأثر وخامته والرموز أو النقوش والحقبة والموقع المحتمل، واذكر القرينة التي جعلتك تقترح الاسم. افصل التعليقات المطبوعة عن الأثر نفسه. لا تخترع اسمًا أو قصة أو تاريخًا أو مكانًا. يمكن اقتراح اسم ومكان محتملين بصريًا للبحث، لكن لا تصفهما بالمؤكدين إلا بعد دعم صفحة متحف/آثار موثوقة أو مطابقة صورة مرجعية. عند توفر مصدر موثوق في السياق، لخّص منه قصة الأثر ومكان عرضه، ولا تنسب للمصدر معلومات لا يقولها. اترك حقائق القصة والمكان فارغة إذا لم يوجد سند. أخرج JSON فقط بالشكل: {"identity":"أقرب اسم محتمل، أو فارغ إذا تعذر","identityEvidence":"السمات الفارقة التي تدعم الاحتمال أو سبب تعذر التحديد","visualDescription":"وصف مختصر للسمات المرئية","objectType":"نوع الأثر","material":"الخامة المحتملة أو غير متأكد","symbols":["رموز أو نقوش ظاهرة"],"style":"الأسلوب أو غير متأكد","possibleLocation":"المتحف أو الموقع المحتمل أو غير متأكد","country":"الدولة المحتملة أو غير متأكد","city":"المدينة المحتملة أو غير متأكد","place":"المتحف أو الموقع المحتمل أو غير متأكد","period":"العصر المحتمل أو غير متأكد","contextualStory":"القصة/الوظيفة المحتملة فقط إن كنت تعرفها، وإلا فارغ","significance":"الأهمية المحتملة أو فارغ","keyFeatures":"تفاصيل فارقة تساعد في التحقق","searchTerms":["اسم أو كلمات بحث قصيرة بالعربية والإنجليزية"],"keywords":["كلمات دقيقة للبحث"],"possibilities":["حتى 3 أسماء محتملة مع قرينة قصيرة لكل منها"],"confidence":"high أو medium أو low","confidenceByField":{"identity":"high أو medium أو low","place":"high أو medium أو low","period":"high أو medium أو low"}}. لا تدّع أن الاحتمال حقيقة، ولا تدّع إجراء بحث لم يُجرَ.`;
       const visualOnlyPrompt = visionPrompt;
       const visionAttempts = [];
+      const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
+      const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
       try {
         let rawVisual = "";
         let visionUsed = "";
@@ -2721,7 +2762,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const ollamaModel =
           typeof env.OLLAMA_VISION_MODEL === "string" ? env.OLLAMA_VISION_MODEL : "gemma3:4b";
         const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL];
-        const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
         const geminiVisionModels = [configuredGeminiVisionModel(env)];
         const independentObservations = [];
         let visionProviderUsed = "";
@@ -2739,7 +2779,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               temperature: 0.1,
               max_tokens: 950,
               stream: false,
-            }, { rejectIfBusy: true }), 8_000, "Cloudflare Moondream");
+            }, { rejectIfBusy: true }), VISION_PROVIDER_TIMEOUT_MS.cloudflare, "Cloudflare Moondream");
             rawVisual = extractText(cloudflareVision).trim();
             if (!rawVisual) throw new Error("Cloudflare Moondream returned an empty response.");
             const observation = parseVisionObservation(rawVisual);
@@ -2761,7 +2801,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         if (!independentObservations.length && geminiVisionKey) {
           const geminiModel = geminiVisionModels[0];
           try {
-            const geminiResponse = await fetch(
+            const geminiResponse = await fetchVisionWithRetry(
               `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`,
               {
                 method: "POST",
@@ -2774,8 +2814,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ] }],
                   generationConfig: { temperature: 0.1, maxOutputTokens: 1100 },
                 }),
-                signal: AbortSignal.timeout(8_000),
               },
+              { provider: "Gemini Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.gemini },
             );
             const geminiPayload = await geminiResponse.json().catch(() => null);
             if (!geminiResponse.ok) throw new Error(geminiPayload?.error?.message || `Gemini Vision returned HTTP ${geminiResponse.status}`);
@@ -2792,7 +2832,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
         const groqVisionModel =
           typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
             ? env.GROQ_VISION_MODEL.trim()
@@ -2801,31 +2840,34 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               : "qwen/qwen3.8-27b";
         if (groqVisionKey && !independentObservations.length) {
           try {
-            const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${groqVisionKey}`,
-              },
-              body: JSON.stringify({
-                model: groqVisionModel,
-                temperature: 0.1,
-                max_tokens: 950,
-                messages: [{
-                  role: "user",
-                  content: [
-                    { type: "text", text: `${prompt}\n\nحلّل هذه الصورة وأخرج JSON فقط.` },
-                    {
-                      type: "image_url",
-                      image_url: {
-                        url: `data:${detectImageMimeType(imageForAnalysis)};base64,${bytesToBase64(imageForAnalysis)}`,
+            const groqResponse = await fetchVisionWithRetry(
+              "https://api.groq.com/openai/v1/chat/completions",
+              {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${groqVisionKey}`,
+                },
+                body: JSON.stringify({
+                  model: groqVisionModel,
+                  temperature: 0.1,
+                  max_tokens: 950,
+                  messages: [{
+                    role: "user",
+                    content: [
+                      { type: "text", text: `${prompt}\n\nحلّل هذه الصورة وأخرج JSON فقط.` },
+                      {
+                        type: "image_url",
+                        image_url: {
+                          url: `data:${detectImageMimeType(imageForAnalysis)};base64,${bytesToBase64(imageForAnalysis)}`,
+                        },
                       },
-                    },
-                  ],
-                }],
-              }),
-              signal: AbortSignal.timeout(8_000),
-            });
+                    ],
+                  }],
+                }),
+              },
+              { provider: "Groq Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq },
+            );
             const groqPayload = await groqResponse.json().catch(() => null);
             if (!groqResponse.ok) throw new Error(groqPayload?.error?.message || `Groq Vision returned HTTP ${groqResponse.status}`);
             rawVisual = groqPayload?.choices?.[0]?.message?.content?.trim() || "";
@@ -3471,7 +3513,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           visionDiagnostics: {
             provider: visionProviderUsed || (independentObservations.length > 1 ? "Independent visual consensus" : localOllama ? "Ollama (local)" : "Unknown"),
             providerOrder: visionProviderOrder,
-            fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
+            fallbackOrder: visionProviderOrder.slice(1),
             enginesCompleted: independentObservations.length,
             usedFallback: Boolean(visionProviderUsed && visionProviderUsed !== "Cloudflare"),
           },
@@ -3497,9 +3539,18 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               ? { inscription: "low", translation: "low", place: "low" }
               : { identity: "low", place: "low", period: "low" },
             visionDiagnostics: {
-              provider: localOllama ? "Ollama (local)" : "Cloudflare Workers AI",
+              provider: localOllama ? "Ollama (local)" : "No vision engine completed",
               providerOrder: visionProviderOrder,
-              fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
+              fallbackOrder: visionProviderOrder.slice(1),
+              configuredProviders: {
+                Cloudflare: typeof env.AI?.run === "function",
+                Gemini: Boolean(geminiVisionKey),
+                Groq: Boolean(groqVisionKey),
+              },
+              failedAttempts: visionAttempts.map((attempt) => ({
+                engine: attempt.model,
+                category: safeVisionFailureCategory(attempt.reason),
+              })),
             },
           },
         );
