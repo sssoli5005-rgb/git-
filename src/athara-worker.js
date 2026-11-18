@@ -2824,9 +2824,17 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
             const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 5));
             if (!search.candidates.length) {
-              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
+              openScannerSearchStatus = search.availableSources === 0
+                ? "failed"
+                : geminiConfigured || groqVisionConfigured
+                  ? "no_match"
+                  : "unavailable";
             } else if (!candidateImages.length) {
-              openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
+              openScannerSearchStatus = search.availableSources === 0
+                ? "failed"
+                : geminiConfigured || groqVisionConfigured
+                  ? "no_match"
+                  : "unavailable";
             } else if (!geminiConfigured && !groqVisionConfigured) {
               openScannerRankedCandidates = openScannerSourceCandidates.map((candidate) => ({
                 ...candidate,
