@@ -47,3 +47,5 @@ jobs:
           }
           console.log("PASS: published scanner identified the test artifact and returned a Met source.");
           NODE
+
+# Triggered as a one-off live scanner test.
