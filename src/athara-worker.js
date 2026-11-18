@@ -210,6 +210,215 @@ function resolveVisionProviderOrder(env) {
   return [...configured, ...DEFAULT_VISION_PROVIDER_ORDER.filter((provider) => !configured.includes(provider))];
 }
 
+function stripHtml(html) {
+  if (!html) return "";
+  return String(html)
+    .replace(/<[^>]*>+/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function freeArtifactIdentificationFallback(observation, language) {
+  const wikiLang = language === "ar" ? "ar" : "en";
+  const terms = [
+    observation?.objectType,
+    observation?.material,
+    ...(Array.isArray(observation?.symbols) ? observation.symbols : []),
+    ...(Array.isArray(observation?.searchTerms) ? observation.searchTerms : []),
+    observation?.possibleLocation,
+    "Egyptian antiquity",
+  ]
+    .filter(Boolean)
+    .map((t) => String(t).trim())
+    .filter((t, i, arr) => arr.indexOf(t) === i)
+    .slice(0, 6);
+
+  if (!terms.length) return null;
+
+  const query = terms.join(" ");
+  const result = { sources: [], confidence: "low" };
+
+  try {
+    const commonsUrl = new URL("https://commons.wikimedia.org/w/api.php");
+    commonsUrl.searchParams.set("action", "query");
+    commonsUrl.searchParams.set("generator", "search");
+    commonsUrl.searchParams.set("gsrsearch", query);
+    commonsUrl.searchParams.set("gsrnamespace", "6");
+    commonsUrl.searchParams.set("gsrlimit", "5");
+    commonsUrl.searchParams.set("prop", "imageinfo");
+    commonsUrl.searchParams.set("iiprop", "url|extmetadata");
+    commonsUrl.searchParams.set("format", "json");
+    commonsUrl.searchParams.set("origin", "*");
+    const response = await fetch(commonsUrl.toString(), {
+      signal: AbortSignal.timeout(15000),
+      headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const pages = data?.query?.pages;
+      if (pages) {
+        for (const page of Object.values(pages)) {
+          const title = page?.title || "";
+          const info = page?.imageinfo?.[0];
+          const ext = info?.extmetadata || {};
+          const description = ext?.ImageDescription?.value || ext?.ObjectName?.value || "";
+          if (title || description) {
+            const cleanTitle = title.replace(/^File:/, "");
+            result.name = result.name || cleanTitle;
+            result.story = result.story || stripHtml(description);
+            result.sources.push({
+              title: cleanTitle,
+              url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(title)}`,
+              snippet: stripHtml(description),
+              source: "Wikimedia Commons",
+              trusted: true,
+            });
+            if (result.name && result.story) break;
+          }
+        }
+      }
+    }
+  } catch { /* fall through */ }
+
+  // 2) ويكيبيديا — بحث مقال
+  try {
+    const wikiUrl = new URL(`https://${wikiLang}.wikipedia.org/w/api.php`);
+    wikiUrl.searchParams.set("action", "query");
+    wikiUrl.searchParams.set("list", "search");
+    wikiUrl.searchParams.set("srsearch", query);
+    wikiUrl.searchParams.set("srlimit", "3");
+    wikiUrl.searchParams.set("format", "json");
+    wikiUrl.searchParams.set("origin", "*");
+    const response = await fetch(wikiUrl.toString(), {
+      signal: AbortSignal.timeout(15000),
+      headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const hits = data?.query?.search || [];
+      if (hits.length) {
+        const hit = hits[0];
+        result.name = result.name || hit.title;
+        result.sources.push({
+          title: hit.title,
+          url: `https://${wikiLang}.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`,
+          snippet: stripHtml(hit.snippet),
+          source: `${wikiLang}.wikipedia.org`,
+          trusted: true,
+        });
+      }
+    }
+  } catch { /* fall through */ }
+
+  // 3) استخراج قصة ويكيبيديا
+  if (result.name && !result.story) {
+    try {
+      const extractUrl = new URL(`https://${wikiLang}.wikipedia.org/w/api.php`);
+      extractUrl.searchParams.set("action", "query");
+      extractUrl.searchParams.set("prop", "extracts");
+      extractUrl.searchParams.set("exintro", "1");
+      extractUrl.searchParams.set("explaintext", "1");
+      extractUrl.searchParams.set("titles", result.name);
+      extractUrl.searchParams.set("format", "json");
+      extractUrl.searchParams.set("origin", "*");
+      const response = await fetch(extractUrl.toString(), {
+        signal: AbortSignal.timeout(15000),
+        headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const pages = data?.query?.pages;
+        if (pages) {
+          const page = Object.values(pages)[0];
+          if (page?.extract) result.story = stripHtml(page.extract).slice(0, 1500);
+        }
+      }
+    } catch { /* fall through */ }
+  }
+
+  // 4) ويكي بيانات — موقع وعصر
+  try {
+    const wbUrl = new URL("https://www.wikidata.org/w/api.php");
+    wbUrl.searchParams.set("action", "wbsearchentities");
+    wbUrl.searchParams.set("search", query);
+    wbUrl.searchParams.set("language", wikiLang);
+    wbUrl.searchParams.set("format", "json");
+    wbUrl.searchParams.set("origin", "*");
+    const response = await fetch(wbUrl.toString(), {
+      signal: AbortSignal.timeout(15000),
+      headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const entities = data?.search || [];
+      if (entities.length) {
+        const entity = entities[0];
+        result.name = result.name || entity.label;
+        result.story = result.story || entity.description;
+        result.sources.push({
+          title: entity.label,
+          url: `https://www.wikidata.org/wiki/${entity.id}`,
+          snippet: entity.description || "",
+          source: "Wikidata",
+          trusted: true,
+        });
+      }
+    }
+  } catch { /* fall through */ }
+
+  // 5) متحف متروبوليتان — مجموعة متحفية
+  try {
+    const metUrl = new URL("https://collectionapi.metmuseum.org/public/collection/v1/search");
+    metUrl.searchParams.set("q", `Egyptian ${query}`);
+    metUrl.searchParams.set("hasImages", "true");
+    const response = await fetch(metUrl.toString(), {
+      signal: AbortSignal.timeout(15000),
+      headers: { Accept: "application/json" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const ids = data?.objectIDs || [];
+      for (const id of ids.slice(0, 3)) {
+        try {
+          const objResponse = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, {
+            signal: AbortSignal.timeout(10000),
+          });
+          if (objResponse.ok) {
+            const obj = await objResponse.json();
+            if (obj.title) {
+              result.name = result.name || obj.title;
+              result.story = result.story || [obj.culture, obj.period, obj.objectName].filter(Boolean).join(" — ");
+              result.location = result.location || obj.repository || obj.city || obj.country;
+              result.sources.push({
+                title: obj.title,
+                url: obj.objectURL,
+                snippet: [obj.objectName, obj.culture, obj.period].filter(Boolean).join(" — "),
+                source: "Met Museum",
+                trusted: true,
+              });
+              if (result.name && result.location) break;
+            }
+          }
+        } catch { /* continue */ }
+      }
+    }
+  } catch { /* fall through */ }
+
+  if (!result.name && result.sources.length === 0) return null;
+
+  if (result.name && result.story && result.sources.length >= 2) result.confidence = "medium";
+  else if (result.name || result.sources.length >= 1) result.confidence = "low-medium";
+
+  result.usedFreeFallback = true;
+  return result;
+}
+
 function parseVisionObservation(rawVisual) {
   const jsonText = rawVisual.match(/\{[\s\S]*\}/)?.[0];
   if (jsonText) {
@@ -2817,6 +3026,40 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           .map((source) => source.snippet)
           .filter(Boolean)
           .join("\n");
+        // Free public fallback when no confident identification yet — no API keys needed.
+        // لو انتهت حصة الأدوات المدفوعة أو تعذرت، تعمل المصادر المجانية تلقائيًا وتجيب اسم القطعة وقصتها ومكانها ومصدرها.
+        if (identificationStatus === "unverified") {
+          const freeFallback = await freeArtifactIdentificationFallback(observation, language);
+          if (freeFallback && (freeFallback.confidence === "medium" || freeFallback.confidence === "low-medium")) {
+            return json({
+              ok: true,
+              analysis: freeFallback.story || freeFallback.name || "",
+              sourceStory: freeFallback.story,
+              sources: freeFallback.sources,
+              trustedSourcesAvailable: freeFallback.sources.length > 0,
+              wikipediaAvailable: null,
+              resultType: "probable",
+              identificationStatus: "probable",
+              reverseImageSearchStatus: "no_match",
+              confidence: freeFallback.confidence === "medium" ? "medium" : "low",
+              confidenceByField: { identity: freeFallback.confidence, place: "low", period: "low" },
+              matchedArtifact: freeFallback.name
+                ? {
+                    name: freeFallback.name,
+                    museum: freeFallback.location,
+                    objectNumber: "",
+                    url: freeFallback.sources[0]?.url,
+                    similarity: null,
+                  }
+                : undefined,
+              candidates: [],
+              visualMatchMethod: "Free public sources (Wikimedia/Wikidata/Met Museum)",
+              model: "Free public sources",
+              usedFreeFallback: true,
+            });
+          }
+        }
+
         console.info("[Image scanner] Final decision:", {
           decision: identificationStatus,
           reason: sourceBackedCandidate

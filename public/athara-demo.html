@@ -792,9 +792,59 @@
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok) throw new Error(payload.error || "مش قادرين نحلل الصورة دلوقتي.");
+                // عرض اسم القطعة المتعارف عليها إن وجد
+                if (payload.matchedArtifact?.name) {
+                    const heading = document.createElement("div");
+                    heading.className = "result-heading";
+                    heading.innerText = payload.matchedArtifact.name;
+                    output.prepend(heading);
+                }
                 renderReadableResult(output, payload.analysis || payload.result || "النموذج مرجّعش نتيجة نقدر نعرضها.");
                 status.textContent = payload.model || "Cloudflare AI";
-                imageStatus.textContent = "التحليل الأولي خلص. راجع درجة التأكد، وطابق النتيجة مع مصدر متحفي أو أكاديمي قبل ما تعتمدها.";
+                // مؤشر المصدر المجاني لو تم استخدامه
+                if (payload.usedFreeFallback) {
+                    const badge = document.createElement("div");
+                    badge.className = "mt-2 text-xs text-[#d4af37] font-bold border border-[#d4af37]/30 px-3 py-1 rounded";
+                    badge.innerText = currentLang === "ar" ? "مصدر مجاني مفتوح (ويكيميديا / ويكيبيديا / ويكي بيانات / متروبوليتان) — تقدير أولي" : "Free public source (Wikimedia / Wikipedia / Wikidata / Met Museum) — preliminary estimate";
+                    output.appendChild(badge);
+                    const note = document.createElement("div");
+                    note.className = "mt-1 text-xs opacity-80";
+                    note.innerText = currentLang === "ar" ? "النتيجة مستمدة من مصادر عامة مجانية وهي تقدير أولي وليس تعريفًا قطعيًا." : "Result comes from free public sources and is a preliminary estimate, not a definitive identification.";
+                    output.appendChild(note);
+                }
+                // عرض المصادر إن وجدت
+                if (Array.isArray(payload.sources) && payload.sources.length) {
+                    const srcList = document.createElement("div");
+                    srcList.className = "mt-3";
+                    const srcTitle = document.createElement("div");
+                    srcTitle.className = "text-xs text-[#d4af37] font-bold mb-1";
+                    srcTitle.innerText = currentLang === "ar" ? "المصادر:" : "Sources:";
+                    srcList.appendChild(srcTitle);
+                    const ul = document.createElement("ul");
+                    ul.className = "text-xs space-y-1 ml-4";
+                    payload.sources.slice(0, 6).forEach((s) => {
+                        const li = document.createElement("li");
+                        const a = document.createElement("a");
+                        a.href = s.url;
+                        a.target = "_blank";
+                        a.rel = "noopener noreferrer";
+                        a.innerText = s.title || s.source || "المصدر";
+                        a.className = "text-[#d4af37] underline underline-offset-2 hover:text-[#f3d77b]";
+                        li.appendChild(a);
+                        if (s.snippet) {
+                            const sn = document.createElement("div");
+                            sn.className = "text-[12px] opacity-70 mt-0.5";
+                            sn.innerText = s.snippet.slice(0, 200);
+                            li.appendChild(sn);
+                        }
+                        ul.appendChild(li);
+                    });
+                    srcList.appendChild(ul);
+                    output.appendChild(srcList);
+                }
+                imageStatus.textContent = payload.matchedArtifact?.name
+                    ? (currentLang === "ar" ? `تم التعرف على: ${payload.matchedArtifact.name}` : `Identified: ${payload.matchedArtifact.name}`)
+                    : "التحليل الأولي خلص. راجع درجة التأكد، وطابق النتيجة مع مصدر متحفي أو أكاديمي قبل ما تعتمدها.";
             } catch (error) {
                 renderReadableResult(output, "ما عرفناش نحلل الصورة دلوقتي. " + (error.message || "حاول مرة تانية."));
                 status.textContent = "تعذر التحليل";
