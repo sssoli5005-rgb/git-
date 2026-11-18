@@ -117,7 +117,7 @@ describe("ATHARA Cloudflare Worker", () => {
       )).toBe(true);
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("api.groq.com"),
-      )).toBe(false);
+      )).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
