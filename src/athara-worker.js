@@ -1271,7 +1271,7 @@ function makeScannerCandidate(candidate) {
 async function scannerJson(url, label) {
   const response = await fetch(url, {
     headers: { accept: "application/json", "user-agent": "ATHARA-ImageScanner/1.0" },
-    signal: AbortSignal.timeout(5_000),
+    signal: AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
   return response.json();
@@ -1592,7 +1592,7 @@ async function downloadScannerCandidateImages(candidates) {
   const downloads = await Promise.all(candidates.slice(0, 5).map(async (candidate) => {
     try {
       const response = await fetch(candidate.imageUrl, {
-        signal: AbortSignal.timeout(4_500),
+        signal: AbortSignal.timeout(8_000),
       });
       if (!response.ok) throw new Error(`Image returned HTTP ${response.status}`);
       const resolvedUrl = new URL(response.url || candidate.imageUrl);
@@ -3439,7 +3439,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 : "no-sufficient-source-match",
           sourcesChecked: sources.map((source) => source.source || source.title),
         });
-        const relatedContext = mode === "objects" && !officialVisualMatch && !sourceBackedCandidate
+        const relatedContext = mode === "objects" && !officialVisualMatch && sourceBackedCandidate
           ? relatedSourceSummary(responseSources, language, observation)
           : "";
         const freeCandidateContext = freeFallbackCandidate && officialVisualMatch
