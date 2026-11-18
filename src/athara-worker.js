@@ -11,6 +11,7 @@ const SCANNER_IMAGE_HOSTS = new Set([
   "upload.wikimedia.org",
   "commons.wikimedia.org",
   "www.artic.edu",
+  "egymonuments.gov.eg",
 ]);
 const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
@@ -164,7 +165,7 @@ async function withScannerTimeout(operation, timeoutMs, label) {
 }
 
 
-const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const TRANSIENT_VISION_HTTP_STATUSES = new Set([408, 425, 500, 502, 503, 504]);
 const VISION_PROVIDER_TIMEOUT_MS = { cloudflare: 12_000, gemini: 18_000, groq: 18_000 };
 const VISION_PROVIDER_RETRIES = 1;
 
@@ -1588,6 +1589,293 @@ async function searchOpenScannerCandidates(observation, language = "en") {
   };
 }
 
+
+function scannerGroundedResearchQuery(observation, language = "en") {
+  const namedIdentity = observation?.visualCandidateIdentity || observation?.identity || "";
+  const terms = [
+    namedIdentity,
+    ...(Array.isArray(observation?.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation?.keywords) ? observation.keywords : []),
+    observation?.objectType,
+    observation?.material,
+    ...(Array.isArray(observation?.symbols) ? observation.symbols : []),
+    observation?.style,
+    observation?.visualDescription,
+  ]
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => value.trim().replace(/\s+/g, " "))
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, 8);
+  const languageHint = language === "ar" ? "Egyptian antiquities" : "ancient Egyptian artifact";
+  return [...terms, languageHint, "official museum collection catalogue record"].filter(Boolean).join(" ").slice(0, 420);
+}
+
+function scannerUrlsFromText(value) {
+  const text = String(value || "");
+  const markdownLinks = [...text.matchAll(/\[([^\]]{2,160})\]\((https:\/\/[^\s)]+)\)/g)]
+    .map((match) => ({ title: match[1].trim(), url: match[2].replace(/[.,;]+$/, "") }));
+  const plainLinks = [...text.matchAll(/https:\/\/[^\s<>"')\]]+/g)]
+    .map((match) => ({ title: "", url: match[0].replace(/[.,;]+$/, "") }));
+  return [...new Map([...markdownLinks, ...plainLinks].map((item) => [item.url, item])).values()];
+}
+
+async function searchWithGeminiGrounding(query, apiKey, model) {
+  const response = await fetchVisionWithRetry(
+    "https://generativelanguage.googleapis.com/v1beta/interactions",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        model,
+        input: `ابحث على الويب الآن عن السجل المتحفي أو الأثري المطابق لهذه الصورة المصرية القديمة. كلمات الصورة: ${query}. استخدم Google Search فعليًا. أعطِ الأولوية لصفحة القطعة نفسها في موقع وزارة السياحة والآثار المصرية أو الموقع الرسمي للمتحف، وليس الصفحة الرئيسية أو الأسئلة أو صفحة العصر التاريخي. ابحث عن الاسم العربي والإنجليزي والتهجئات البديلة. لا تختلق اسمًا أو متحفًا أو تاريخًا. أرجع نتيجة موجزة وروابط صفحات السجلات الأصلية.`,
+        tools: [{ type: "google_search" }],
+      }),
+    },
+    { provider: "Gemini Google Search grounding", timeoutMs: 16_000 },
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Gemini grounded search returned HTTP ${response.status}`);
+  const textBlocks = [];
+  const citations = [];
+  for (const step of Array.isArray(payload?.steps) ? payload.steps : []) {
+    if (step?.type !== "model_output") continue;
+    for (const block of Array.isArray(step.content) ? step.content : []) {
+      if (typeof block?.text === "string") textBlocks.push(block.text);
+      for (const annotation of Array.isArray(block?.annotations) ? block.annotations : []) {
+        const url = annotation?.url || annotation?.uri;
+        if (annotation?.type === "url_citation" && typeof url === "string") {
+          citations.push({ title: annotation.title || "", url });
+        }
+      }
+    }
+  }
+  const text = textBlocks.join("\n").trim() || String(payload?.output_text || "").trim();
+  const entries = [...citations, ...scannerUrlsFromText(text)];
+  return { entries: [...new Map(entries.map((entry) => [entry.url, entry])).values()], summary: text.slice(0, 5000) };
+}
+
+async function searchWithGroqBrowser(query, apiKey, model) {
+  const response = await fetchVisionWithRetry(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        temperature: 1,
+        max_completion_tokens: 1800,
+        reasoning_effort: "low",
+        tool_choice: "required",
+        tools: [{ type: "browser_search" }],
+        messages: [{
+          role: "user",
+          content: `Use browser search now to find the exact official museum or antiquities catalogue record for this ancient Egyptian object. Search query: ${query}. Prioritize the Egyptian Ministry of Tourism and Antiquities and official museum collections. Ignore generic home, FAQ, terms, events, and historical-period pages. Return a concise evidence summary and original source URLs. Do not invent catalogue records.`,
+        }],
+      }),
+    },
+    { provider: "Groq browser search", timeoutMs: 18_000 },
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Groq browser search returned HTTP ${response.status}`);
+  const text = payload?.choices?.[0]?.message?.content?.trim() || "";
+  if (!text) throw new Error("Groq browser search returned an empty response.");
+  return { entries: scannerUrlsFromText(text), summary: text.slice(0, 5000) };
+}
+
+async function searchWithCloudflareWebSearch(env, query) {
+  if (typeof env.AI?.websearch !== "function") throw new Error("Cloudflare Workers AI websearch binding is unavailable.");
+  const response = await withScannerTimeout(
+    env.AI.websearch({
+      gatewayId: "default",
+      query: query.slice(0, 1024),
+      provider: "exa",
+      limit: 8,
+    }),
+    14_000,
+    "Cloudflare Web Search",
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Cloudflare Web Search returned HTTP ${response.status}`);
+  return {
+    entries: (Array.isArray(payload?.items) ? payload.items : [])
+      .filter((item) => typeof item?.url === "string")
+      .map((item) => ({ title: item.title || "", url: item.url, snippet: item.description || "" })),
+    summary: "",
+  };
+}
+
+function scannerPageMetaContent(html, key) {
+  const tags = html.match(/<meta\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    const keyMatch = tag.match(/(?:property|name)=["']([^"']+)["']/i);
+    if (!keyMatch || keyMatch[1].toLowerCase() !== key.toLowerCase()) continue;
+    const value = tag.match(/content=["']([^"']+)["']/i)?.[1];
+    if (value) return stripHtml(value);
+  }
+  return "";
+}
+
+function scannerPageImageUrl(html, pageUrl) {
+  const imageRef =
+    scannerPageMetaContent(html, "og:image") ||
+    scannerPageMetaContent(html, "twitter:image") ||
+    (() => {
+      const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] || html;
+      const tags = main.match(/<img\b[^>]*>/gi) || [];
+      for (const tag of tags) {
+        const src = tag.match(/(?:data-src|data-original|src)=["']([^"']+)["']/i)?.[1];
+        if (src) return src;
+      }
+      return "";
+    })();
+  if (!imageRef) return "";
+  try {
+    const url = new URL(imageRef, pageUrl);
+    return url.protocol === "https:" && SCANNER_IMAGE_HOSTS.has(url.hostname) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+async function readGroundedScannerSource(entry, observation) {
+  let url;
+  try { url = new URL(entry.url); } catch { return null; }
+  if (!scannerSourceUrlAllowed(url.href)) return null;
+  const path = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  if (url.hostname === "egymonuments.gov.eg" || url.hostname.endsWith(".egymonuments.gov.eg")) {
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length < 3 || !["ar", "en"].includes(segments[0]) ||
+        !["monuments", "archaeological-sites", "collections", "museums"].includes(segments[1]) ||
+        /(?:faqs?|terms|privacy|historical-periods|events|children|about|news)/i.test(segments.slice(2).join("/"))) return null;
+  }
+  const initialSource = {
+    title: String(entry.title || url.hostname).trim().slice(0, 240),
+    url: url.href,
+    snippet: String(entry.snippet || "").trim().slice(0, 800),
+    source: url.hostname,
+    trusted: true,
+  };
+  try {
+    const response = await fetch(url.href, {
+      headers: { accept: "text/html,application/xhtml+xml", "user-agent": "ATHARA-Heritage-Guide/1.0" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(5_000),
+    });
+    const resolvedUrl = new URL(response.url || url.href);
+    if (!response.ok || !scannerSourceUrlAllowed(resolvedUrl.href) ||
+        !/^(?:text\/html|application\/xhtml\+xml)/i.test(response.headers.get("content-type") || "")) {
+      return scannerSourceSupportsCandidate(initialSource, observation) ? initialSource : null;
+    }
+    const html = await readLimitedHtml(response, 600_000);
+    const titleHtml = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "";
+    const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
+      html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] ||
+      html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] || html;
+    const snippet = stripHtml(main
+      .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<(br|\/p|\/div|\/li|\/h[1-6])\b[^>]*>/gi, " ")
+      .replace(/<[^>]*>/g, " ")).slice(0, 6000);
+    const enriched = {
+      ...initialSource,
+      title: stripHtml(titleHtml) || initialSource.title,
+      url: resolvedUrl.href,
+      snippet: snippet.length >= 60 ? snippet : initialSource.snippet,
+    };
+    if (!scannerSourceSupportsCandidate(enriched, observation)) return null;
+    const imageUrl = scannerPageImageUrl(html, resolvedUrl.href);
+    const museum = /mummification museum|متحف التحنيط/i.test(enriched.snippet) ? "Mummification Museum" : "";
+    return {
+      source: enriched,
+      candidate: imageUrl ? makeScannerCandidate({
+        name: enriched.title,
+        museum,
+        url: enriched.url,
+        imageUrl,
+        source: enriched.source,
+        currentLocation: museum,
+        sourceText: enriched.snippet,
+      }) : null,
+    };
+  } catch (error) {
+    console.warn("[Image scanner] Grounded source page could not be opened:", {
+      host: url.hostname,
+      reason: String(error?.message || error).slice(0, 140),
+    });
+    return scannerSourceSupportsCandidate(initialSource, observation)
+      ? { source: initialSource, candidate: null }
+      : null;
+  }
+}
+
+async function searchArtifactGroundedSources(env, observation, language = "en") {
+  const query = scannerGroundedResearchQuery(observation, language);
+  if (!query.trim()) return { sources: [], candidates: [], availableSources: 0, failedSources: 0, provider: "" };
+  const providers = [];
+  const geminiKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
+  const groqKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+  if (geminiKey) providers.push({
+    name: "Gemini Google Search",
+    search: () => searchWithGeminiGrounding(query, geminiKey, configuredGeminiVisionModel(env)),
+  });
+  if (groqKey) providers.push({
+    name: "Groq browser search",
+    search: () => searchWithGroqBrowser(
+      query,
+      groqKey,
+      typeof env.GROQ_WEB_SEARCH_MODEL === "string" && env.GROQ_WEB_SEARCH_MODEL.trim()
+        ? env.GROQ_WEB_SEARCH_MODEL.trim()
+        : "openai/gpt-oss-20b",
+    ),
+  });
+  if (typeof env.AI?.websearch === "function") providers.push({
+    name: "Cloudflare Web Search",
+    search: () => searchWithCloudflareWebSearch(env, query),
+  });
+  let failedSources = 0;
+  for (const provider of providers) {
+    try {
+      const result = await provider.search();
+      const entries = (Array.isArray(result.entries) ? result.entries : [])
+        .filter((entry) => typeof entry?.url === "string" && scannerSourceUrlAllowed(entry.url))
+        .slice(0, 8);
+      const fetched = await Promise.allSettled(entries.map((entry) => readGroundedScannerSource(entry, observation)));
+      const sources = fetched
+        .filter((item) => item.status === "fulfilled" && item.value)
+        .map((item) => item.value);
+      const uniqueSources = [...new Map(sources.map((item) => [item.source.url, item])).values()];
+      if (uniqueSources.length) {
+        const priority = (source) => {
+          const host = new URL(source.url).hostname;
+          const rank = SOURCE_PRIORITY.findIndex((domain) => host === domain || host.endsWith("." + domain));
+          return rank < 0 ? SOURCE_PRIORITY.length : rank;
+        };
+        uniqueSources.sort((left, right) => priority(left.source) - priority(right.source));
+        const candidates = uniqueSources.flatMap((item) => item.candidate ? [item.candidate] : []);
+        console.info("[Image scanner] Grounded artifact search succeeded:", {
+          provider: provider.name,
+          sourceCount: uniqueSources.length,
+          imageCandidateCount: candidates.length,
+        });
+        return {
+          sources: uniqueSources.slice(0, 6).map((item) => ({ ...item.source, searchProvider: provider.name })),
+          candidates: [...new Map(candidates.map((candidate) => [candidate.url, candidate])).values()],
+          availableSources: 1,
+          failedSources,
+          provider: provider.name,
+        };
+      }
+      console.info("[Image scanner] Grounded search provider returned no matching catalogue record:", provider.name);
+    } catch (error) {
+      failedSources += 1;
+      console.warn("[Image scanner] Grounded search provider failed; trying the next engine:", {
+        provider: provider.name,
+        reason: String(error?.message || error).slice(0, 180),
+      });
+    }
+  }
+  return { sources: [], candidates: [], availableSources: 0, failedSources, provider: "" };
+}
+
 async function downloadScannerCandidateImages(candidates) {
   const downloads = await Promise.all(candidates.slice(0, 5).map(async (candidate) => {
     try {
@@ -2274,7 +2562,11 @@ function scannerCandidateTerms(observation) {
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
   ].filter(Boolean).join(" "));
   const aliases = {
-    "نفتيس": ["nephthys"],
+    "نفتيس": ["nephthys", "nebthet"],
+    "nephthys": ["نفتيس", "nebthet"],
+    "ايزيس": ["isis"],
+    "إيزيس": ["isis"],
+    "isis": ["ايزيس", "إيزيس"],
     "خوفو": ["khufu"],
     "زوسر": ["djoser"],
     "توت": ["tut"],
