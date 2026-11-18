@@ -52,7 +52,7 @@ describe("ATHARA Cloudflare Worker", () => {
       aiBound: true,
       visionProvider: "Cloudflare Workers AI",
       visionModel: "@cf/moondream/moondream3.1-9B-A2B",
-      visionFallbackModel: "@cf/llava-hf/llava-1.5-7b-hf",
+      visionFallbackModel: "@cf/moondream/moondream3.1-9B-A2B",
     });
   });
 
@@ -67,8 +67,8 @@ describe("ATHARA Cloudflare Worker", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.visionProviderOrder).toEqual(["Gemini", "Groq", "Cloudflare"]);
-    expect(body.visionFallbackOrder).toEqual(["Groq", "Cloudflare"]);
+    expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
+    expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
   });
 
   it("falls through Gemini and Groq failures to Cloudflare, and stops at the first usable result", async () => {
@@ -431,7 +431,7 @@ describe("ATHARA Cloudflare Worker", () => {
 
     expect(unsupported.status).toBe(400);
     expect(malformed.status).toBe(400);
-    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed enhanced image before calling the model", async () => {
@@ -649,7 +649,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.analysis).toContain("صيغة قرابين شائعة في مناظر المعابد");
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
-    expect(String(run.mock.calls[0][1].image)).toContain("data:image/png;base64,");
+    expect(String(run.mock.calls[0][1].image)).toContain("data:image/jpeg;base64,");
     expect(run.mock.calls[0][1].question).toContain("استفد من معرفتك الداخلية");
     expect(run.mock.calls[0][1].question).toContain("العنخ");
     expect(run.mock.calls[0][1].question).toContain("افحص كل شخصية على حدة");
@@ -882,7 +882,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.sources).toEqual([]);
   });
 
-  it("uses Cloudflare Llama vision as the primary scanner even when chat provider keys exist", async () => {
+  it("uses Cloudflare Moondream vision as the primary scanner even when chat provider keys exist", async () => {
     const fetchMock = stubEmptyHeritageSearch();
     const run = vi.fn().mockResolvedValue({
       response: JSON.stringify({
@@ -905,7 +905,7 @@ describe("ATHARA Cloudflare Worker", () => {
     });
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(6);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
   });
 
   it("does not use a vision fallback to identify artifacts without reverse-image search", async () => {
@@ -1399,7 +1399,7 @@ describe("ATHARA Cloudflare Worker", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(run).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledTimes(1);
     const groqCalls = vi.mocked(fetch).mock.calls.filter(([input]) =>
       String(input instanceof Request ? input.url : input).includes("api.groq.com"),
     );
