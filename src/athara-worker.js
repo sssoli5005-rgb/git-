@@ -1,5 +1,9 @@
 const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
-const FALLBACK_VISION_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct";
+const FALLBACK_VISION_MODELS = [
+  "@cf/mistralai/mistral-small-3.1-24b-instruct",
+  "@cf/meta/llama-4-scout-17b-16e-instruct",
+];
+const FALLBACK_VISION_MODEL = FALLBACK_VISION_MODELS[0];
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
 const MAX_IMAGE_CHARS = 8_500_000;
@@ -183,15 +187,6 @@ function safeVisionFailureCategory(reason) {
   return "request_failed";
 }
 
-function safeVisionDiagnosticReason(reason, env) {
-  let message = String(reason || "").replace(/\s+/g, " ").trim();
-  for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY]) {
-    if (typeof secret === "string" && secret.length > 6) {
-      message = message.split(secret).join("[redacted]");
-    }
-  }
-  return message.replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]").slice(0, 180);
-}
 
 function isRetryableVisionNetworkError(error) {
   return ["AbortError", "TimeoutError", "TypeError"].includes(error?.name) ||
@@ -2887,6 +2882,7 @@ export default {
             ? env.OLLAMA_VISION_MODEL
             : VISION_MODEL,
         visionFallbackModel: localOllama ? null : FALLBACK_VISION_MODEL,
+        visionFallbackModels: localOllama ? [] : FALLBACK_VISION_MODELS,
         visionProvider: geminiConfigured ? "Gemini Vision" : localOllama ? "Ollama (local)" : "Cloudflare Workers AI",
       });
     }
@@ -3205,41 +3201,49 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        // Independent Cloudflare-hosted vision fallback. Moondream can be busy,
-        // return an unsupported response, or fail on a particular photo; Mistral
-        // Small 3.1 has its own multimodal image input path on the same AI binding.
+        // Try independent Cloudflare-hosted vision models before leaving the
+        // Cloudflare provider. Model availability can differ by account; move on
+        // immediately when a model is not enabled or is temporarily unavailable.
         if (!localOllama && !independentObservations.length && typeof env.AI?.run === "function") {
-          try {
-            const mistralVision = await withScannerTimeout(env.AI.run(FALLBACK_VISION_MODEL, {
-              messages: [{
-                role: "system",
-                content: prompt,
-              }, {
-                role: "user",
-                content: [
-                  { type: "text", text: "حلّل الصورة بصريًا وأخرج JSON فقط بالمفاتيح المطلوبة. اقترح أقرب هوية كاحتمال، ولا تخترع مكانًا أو اسمًا مؤكدًا." },
-                  { type: "image_url", image_url: { url: imageDataUrl } },
-                ],
-              }],
-              temperature: 0.1,
-              max_tokens: 1100,
-              stream: false,
-            }, { rejectIfBusy: true }), VISION_PROVIDER_TIMEOUT_MS.gemini, "Cloudflare Mistral Small 3.1 Vision");
-            rawVisual = extractText(mistralVision).trim();
-            if (!rawVisual) throw new Error("Cloudflare Mistral Small 3.1 returned an empty response.");
-            const observation = parseVisionObservation(rawVisual);
-            if (!hasUsableVisionObservation(observation, mode)) {
-              throw new Error("Cloudflare Mistral Small 3.1 returned invalid or non-informative visual data.");
+          for (const fallbackVisionModel of FALLBACK_VISION_MODELS) {
+            if (independentObservations.length) break;
+            const fallbackVisionLabel = fallbackVisionModel === "@cf/mistralai/mistral-small-3.1-24b-instruct"
+              ? "Mistral Small 3.1"
+              : fallbackVisionModel === "@cf/meta/llama-4-scout-17b-16e-instruct"
+                ? "Llama 4 Scout"
+                : fallbackVisionModel;
+            try {
+              const fallbackVision = await withScannerTimeout(env.AI.run(fallbackVisionModel, {
+                messages: [{
+                  role: "system",
+                  content: prompt,
+                }, {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "حلّل الصورة بصريًا وأخرج JSON فقط بالمفاتيح المطلوبة. اقترح أقرب هوية كاحتمال، ولا تخترع مكانًا أو اسمًا مؤكدًا." },
+                    { type: "image_url", image_url: { url: imageDataUrl } },
+                  ],
+                }],
+                temperature: 0.1,
+                max_tokens: 1100,
+                stream: false,
+              }, { rejectIfBusy: true }), VISION_PROVIDER_TIMEOUT_MS.gemini, "Cloudflare " + fallbackVisionLabel + " Vision");
+              rawVisual = extractText(fallbackVision).trim();
+              if (!rawVisual) throw new Error("Cloudflare " + fallbackVisionLabel + " returned an empty response.");
+              const observation = parseVisionObservation(rawVisual);
+              if (!hasUsableVisionObservation(observation, mode)) {
+                throw new Error("Cloudflare " + fallbackVisionLabel + " returned invalid or non-informative visual data.");
+              }
+              independentObservations.push(observation);
+              visionUsed = fallbackVisionModel;
+              visionProviderUsed = "Cloudflare " + fallbackVisionLabel;
+            } catch (modelError) {
+              console.error("[Image scanner] Cloudflare " + fallbackVisionLabel + " failed:", String(modelError?.message || modelError));
+              visionAttempts.push({
+                model: fallbackVisionModel,
+                reason: String(modelError?.message || modelError).slice(0, 180),
+              });
             }
-            independentObservations.push(observation);
-            visionUsed = FALLBACK_VISION_MODEL;
-            visionProviderUsed = "Cloudflare Mistral";
-          } catch (modelError) {
-            console.error("[Image scanner] Cloudflare Mistral Small 3.1 failed:", String(modelError?.message || modelError));
-            visionAttempts.push({
-              model: "Cloudflare Mistral Small 3.1",
-              reason: String(modelError?.message || modelError).slice(0, 180),
-            });
           }
         }
 
@@ -3968,8 +3972,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               ? `Ollama - ${visionUsed || env.OLLAMA_VISION_MODEL || ollamaModel}`
               : visionUsed === VISION_MODEL
                 ? "Cloudflare Workers AI - Moondream 3.1"
-                : visionUsed === FALLBACK_VISION_MODEL
-                  ? "Cloudflare Workers AI - Mistral Small 3.1"
+                : visionUsed === "@cf/mistralai/mistral-small-3.1-24b-instruct"
+                ? "Cloudflare Workers AI - Mistral Small 3.1"
+                : visionUsed === "@cf/meta/llama-4-scout-17b-16e-instruct"
+                  ? "Cloudflare Workers AI - Llama 4 Scout"
                   : `Free visual consensus (${independentObservations.length} engine)`,
           visionDiagnostics: {
             provider: visionProviderUsed || (independentObservations.length > 1 ? "Independent visual consensus" : localOllama ? "Ollama (local)" : "Unknown"),
@@ -3980,7 +3986,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             failedAttempts: visionAttempts.map((attempt) => ({
               engine: attempt.model,
               category: safeVisionFailureCategory(attempt.reason),
-              reason: safeVisionDiagnosticReason(attempt.reason, env),
             })),
           },
           photoGps,
@@ -4013,6 +4018,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 Gemini: Boolean(geminiVisionKey),
                 Groq: Boolean(groqVisionKey),
               },
+              cloudflareFallbackModels: typeof env.AI?.run === "function" ? FALLBACK_VISION_MODELS : [],
               failedAttempts: visionAttempts.map((attempt) => ({
                 engine: attempt.model,
                 category: safeVisionFailureCategory(attempt.reason),
