@@ -1705,7 +1705,13 @@ async function readGroundedScannerSource(entry, observation) {
     const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
       .replace(/<[^>]*>/g, " ")).slice(0, 6000);
     const source = { ...initial, title, url: finalUrl.href, snippet: snippet.length > 50 ? snippet : initial.snippet };
-    if (!scannerSourceSupportsCandidate(source, observation)) return null;
+    const officialCatalogueDetail = /(^|\.)egymonuments\.gov\.eg$/i.test(finalUrl.hostname) &&
+      /^\/(?:ar|en)\/(?:monuments|archaeological-sites|collections|museums)\/[^/]+/i.test(finalUrl.pathname) &&
+      !/(?:faqs?|terms|privacy|historical-periods|events|children|about|news)/i.test(finalUrl.pathname);
+    // Ministry catalogue detail pages are eligible visual candidates even when the
+    // vision model supplied only generic visual traits; the image comparison below
+    // must still confirm the uploaded photo before identifying the artifact.
+    if (!scannerSourceSupportsCandidate(source, observation) && !officialCatalogueDetail) return null;
     const imageRef = scannerMeta(html, "og:image") || scannerMeta(html, "twitter:image");
     let candidate = null;
     if (imageRef) {
@@ -1736,9 +1742,6 @@ function scannerHasDistinctiveArtifactIdentity(observation) {
 
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
-  if (!scannerHasDistinctiveArtifactIdentity(observation)) {
-    return { sources: [], candidates: [], availableSources: 0, failedSources: 0, provider: "" };
-  }
   const providers = [];
   const geminiKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
   const groqKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
@@ -2503,7 +2506,7 @@ function scannerSourceSupportsCandidate(source, observation) {
     return false;
   }
   const identityTerms = scannerCandidateTerms(observation);
-  if (identityTerms.length < 2) return false;
+  if (identityTerms.length < 1) return false;
   const titleTerms = new Set(normalizeSearchTerms(source.title || ""));
   const snippetTerms = new Set(normalizeSearchTerms(source.snippet || ""));
   const genericIdentityTerms = new Set([
@@ -3264,13 +3267,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ])].slice(0, 8),
                 }
               : observation;
-            const [imageSearch, textSearch] = await Promise.all([
+            const [imageSearch, textSearch, groundedSearch] = await Promise.all([
               searchClevelandByImage(comparisonImageBytes || imageBytes),
               searchOpenScannerCandidates(searchObservation, language),
+              searchArtifactGroundedSources(env, searchObservation, language),
             ]);
-            const groundedSearch = imageSearch.candidates.length || textSearch.candidates.length
-              ? { sources: [], candidates: [], availableSources: 0, failedSources: 0 }
-              : await searchArtifactGroundedSources(env, searchObservation, language);
             openScannerWebSources = groundedSearch.sources;
             const mergedCandidates = [
               ...imageSearch.candidates,
