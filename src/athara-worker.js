@@ -286,7 +286,7 @@ async function freeArtifactIdentificationFallback(observation, language) {
    .map((x) => x.trim()).filter((x, i, a) => a.indexOf(x) === i).slice(0, 4);
   if (!terms.length) return null;
   const query = terms.join(" ").slice(0, 140);
-  const headers = { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" };
+  const headers = { Accept: "application/json" };
   const lookups = await Promise.allSettled([
     (async () => {
       const url = new URL("https://commons.wikimedia.org/w/api.php");
@@ -1270,7 +1270,7 @@ function makeScannerCandidate(candidate) {
 
 async function scannerJson(url, label) {
   const response = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": "ATHARA-ImageScanner/1.0" },
+    headers: { accept: "application/json" },
     signal: AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
