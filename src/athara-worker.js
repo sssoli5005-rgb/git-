@@ -8,6 +8,8 @@ const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
 const OPENROUTER_VISION_MODELS = [
   "nvidia/nemotron-3.5-super-vl:free",
+  "inclusionai/ling-3.2-flash:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
   "google/gemma-4-31b-it:free",
   "openrouter/free",
 ];
@@ -233,6 +235,20 @@ function extractText(result) {
   if (typeof result?.result === "string") return result.result;
   if (typeof result?.output_text === "string") return result.output_text;
   if (typeof result?.description === "string") return result.description;
+  return "";
+}
+
+function extractOpenRouterMessageText(message) {
+  const content = message?.content;
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => typeof part === "string" ? part : typeof part?.text === "string" ? part.text : "")
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (typeof content?.text === "string") return content.text.trim();
   return "";
 }
 
@@ -3562,6 +3578,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   },
                   body: JSON.stringify({
                     model: openRouterModel,
+                    reasoning: { enabled: false },
                     temperature: 0.1,
                     max_tokens: 1100,
                     messages: [
@@ -3586,10 +3603,21 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               );
               const openRouterPayload = await openRouterResponse.json().catch(() => null);
               if (!openRouterResponse.ok) {
-                throw new Error(openRouterPayload?.error?.message || `OpenRouter returned HTTP ${openRouterResponse.status}`);
+                const detail = openRouterPayload?.error?.message ||
+                  openRouterPayload?.error?.metadata?.raw ||
+                  (openRouterPayload?.error ? JSON.stringify(openRouterPayload.error) : "");
+                throw new Error(String(detail || `OpenRouter returned HTTP ${openRouterResponse.status}`).slice(0, 180));
               }
-              rawVisual = openRouterPayload?.choices?.[0]?.message?.content?.trim() || "";
-              if (!rawVisual) throw new Error("OpenRouter returned an empty response.");
+              const openRouterMessage = openRouterPayload?.choices?.[0]?.message;
+              rawVisual = extractOpenRouterMessageText(openRouterMessage);
+              if (!rawVisual) {
+                const finishReason = openRouterPayload?.choices?.[0]?.finish_reason;
+                throw new Error(
+                  "OpenRouter returned no final text" +
+                  (finishReason ? " (finish_reason: " + finishReason + ")" : "") +
+                  (openRouterMessage?.refusal ? ": " + String(openRouterMessage.refusal).slice(0, 100) : "."),
+                );
+              }
               const observation = parseVisionObservation(rawVisual);
               if (!hasUsableVisionObservation(observation, mode)) {
                 throw new Error("OpenRouter returned invalid or non-informative visual data.");
@@ -4348,6 +4376,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 Cloudflare: typeof env.AI?.run === "function",
                 Gemini: Boolean(geminiVisionKey),
                 Groq: Boolean(groqVisionKey),
+                OpenRouter: Boolean(openRouterVisionKey),
               },
               cloudflareFallbackModels: typeof env.AI?.run === "function" ? FALLBACK_VISION_MODELS : [],
               failedAttempts: visionAttempts.map((attempt) => ({
