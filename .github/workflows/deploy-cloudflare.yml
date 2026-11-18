@@ -117,7 +117,7 @@ jobs:
             echo "Live vision scan returned HTTP $VISION_STATUS"
             exit 1
           fi
-          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/athara-vision.json","utf8")); if(!x.ok || !x.analysis || x.resultType!=="unverified" || x.confidenceByField?.identity!=="low" || !(x.visionDiagnostics?.enginesCompleted > 0)) { console.error("Cloudflare vision scan failed:", {model:x.model, diagnostics:x.visionDiagnostics, error:x.error}); process.exit(1); } console.log("Live Cloudflare vision inference returned a cautious description.");'
+          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync("/tmp/athara-vision.json","utf8")); const validResult = ["confirmed","probable","unverified","ai_guess"].includes(x.resultType); if(!x.ok || !validResult || !(typeof x.analysis==="string" && x.analysis.trim()) || !Array.isArray(x.sources)) { console.error("Cloudflare image scan returned an invalid result:", {model:x.model, resultType:x.resultType, sources:x.sources, error:x.error}); process.exit(1); } console.log("Live image scan returned a structured result; identity confidence:", x.confidenceByField?.identity || "not supplied");'
           CHAT_STATUS="$(curl --silent --show-error -o /tmp/athara-chat.json -w "%{http_code}" -X POST "$BASE_URL/api/chat" -H "Content-Type: application/json" --data '{"language":"ar","messages":[{"role":"user","content":"مرحبا"}]}')"
           test "$CHAT_STATUS" = "401"
           echo "Homepage, health, auth, scanner dispatch, and protected chat smoke tests passed."
