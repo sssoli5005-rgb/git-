@@ -419,12 +419,24 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                   candidate.url || "",
                 ].filter(Boolean).join(" — ");
               });
+              const sourceLeads = Array.isArray(data.sources)
+                ? data.sources.filter((source) => source.trusted).slice(0, 5)
+                : [];
+              const sourceLines = sourceLeads
+                .filter((source) => !candidates.some((candidate) => candidate.url === source.url))
+                .map((source) => [
+                  source.title,
+                  source.snippet || "",
+                  source.url || "",
+                ].filter(Boolean).join(" — "));
+              const hasLeads = candidateLines.length > 0 || sourceLines.length > 0;
               analysis = [
                 identificationLabel || resultCopy.unverifiedStatus,
-                candidates.length
-                  ? "لم تتأكد هوية القطعة؛ هذه سجلات قريبة تحتاج إلى مطابقة إضافية:"
+                hasLeads
+                  ? "لم تتأكد المطابقة البصرية بعد؛ هذه سجلات متحفية/أثرية مرتبطة بالاسم أو العلامات وتحتاج إلى تأكيد:"
                   : resultCopy.notIdentified,
                 ...candidateLines,
+                ...sourceLines,
               ].filter(Boolean).join("\n");
             }
           }
