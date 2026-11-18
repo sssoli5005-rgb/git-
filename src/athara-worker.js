@@ -1730,24 +1730,25 @@ function formatScannerResult(observation, sources, mode, language, confidenceByF
     const text = Array.isArray(content) ? content.filter(Boolean).join("\n") : String(content || "").trim();
     return text ? `${title}\n${text}` : "";
   };
-  const facts = [
+  const allowHistoricalContext = mode !== "objects" || observation.historicalEvidenceConfirmed === true;
+  const facts = allowHistoricalContext ? [
     observation.period ? (language === "ar" ? "الفترة المحتملة: " : "Probable period: ") + observation.period : "",
     observation.periodClues?.join("، "),
     observation.writingHistory,
     observation.objectOrTextPurpose,
     placeConfidence === "low" ? "" : observation.siteHistory,
-  ].filter((part) => typeof part === "string" && part.trim()).join(" ");
+  ].filter((part) => typeof part === "string" && part.trim()).join(" ") : "";
   const rawSourceConflict = String(observation.sourceConflicts || "").trim();
   const sourceConflictText = /لا يوجد تعارض|no conflict|لا يوجد اختلاف/i.test(rawSourceConflict)
     ? ""
     : rawSourceConflict;
-  let storyText = [
+  let storyText = allowHistoricalContext ? [
     observation.contextualStory,
     observation.interpretation,
     facts,
     observation.historicalVerification ? "تحقق تاريخي: " + observation.historicalVerification : "",
     sourceConflictText ? "اختلاف المصادر: " + sourceConflictText : "",
-  ].filter(Boolean).join("\n");
+  ].filter(Boolean).join("\n") : "";
   if (identity && observation.historicalEvidenceConfirmed === false) {
     storyText = "لم يتم التحقق من الهوية والتاريخ بصريًا؛ لا تُنسب هذه المعلومات إلى الآثار أو الشخصيات التاريخية دون دليل مطابق.";
   }
@@ -1755,14 +1756,14 @@ function formatScannerResult(observation, sources, mode, language, confidenceByF
     storyText = "";
   }
   const unconfirmedAttribution = /ليس دليل|not evidence|مكتوب أسفل|written below/i;
-  const provenanceFacts = [
+  const provenanceFacts = allowHistoricalContext ? [
     observation.discoverer && !unconfirmedAttribution.test(observation.discoverer) ? (language === "ar" ? "المكتشف المؤكد: " : "Confirmed discoverer: ") + observation.discoverer : "",
     observation.discoveryDate && !unconfirmedAttribution.test(observation.discoveryDate) ? (language === "ar" ? "تاريخ الاكتشاف: " : "Discovery date: ") + observation.discoveryDate : "",
     observation.creationDate && !unconfirmedAttribution.test(observation.creationDate) ? (language === "ar" ? "تاريخ الإنشاء أو الإسناد: " : "Creation/attribution date: ") + observation.creationDate : "",
     observation.studyAttribution && !unconfirmedAttribution.test(observation.studyAttribution) ? (language === "ar" ? "الدارس أو الناشر الأكاديمي: " : "Studying/publishing archaeologist: ") + observation.studyAttribution : "",
     observation.publicationAttribution && !unconfirmedAttribution.test(observation.publicationAttribution) ? (language === "ar" ? "من نشر التوثيق: " : "Publication attribution: ") + observation.publicationAttribution : "",
     observation.publicationDate && !unconfirmedAttribution.test(observation.publicationDate) ? (language === "ar" ? "تاريخ النشر: " : "Publication date: ") + observation.publicationDate : "",
-  ].filter(Boolean);
+  ].filter(Boolean) : [];
   if (provenanceFacts.length) storyText = [storyText, ...provenanceFacts].filter(Boolean).join("\n");
   if (observation.printedTextTranslation) {
     storyText = (storyText ? storyText + "\n" : "") +
@@ -2027,8 +2028,11 @@ async function searchHeritageSources(query, language = "ar") {
   };
 }
 
-function relatedSourceSummary(sources, language) {
-  const trustedSources = sources.filter((source) => source?.trusted).slice(0, 2);
+function relatedSourceSummary(sources, language, observation = null) {
+  const trustedSources = sources
+    .filter((source) => source?.trusted)
+    .filter((source) => !observation || scannerSourceSupportsCandidate(source, observation))
+    .slice(0, 2);
   if (!trustedSources.length) return "";
   return [
     SOURCE_EVIDENCE_LABELS[language] || SOURCE_EVIDENCE_LABELS.en,
@@ -2051,27 +2055,34 @@ function normalizeSearchTerms(value) {
 }
 
 function scannerCandidateTerms(observation) {
-  const genericTerms = new Set([
-    "statue",
-    "artifact",
-    "egyptian",
-    "ancient",
-    "temple",
-    "wooden",
-    "المحتمل", "محتمل", "تمثال", "أثري", "أثر", "مصرية", "مصري", "القديمة", "قديم",
-  ]);
-  return normalizeSearchTerms([
+  const terms = normalizeSearchTerms([
     observation.visualCandidateIdentity,
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
-  ].filter(Boolean).join(" "))
-    .filter((term) => !genericTerms.has(term));
+  ].filter(Boolean).join(" "));
+  const genericTerms = new Set([
+    "statue", "artifact", "egyptian", "ancient", "temple", "wooden",
+    "bust", "plaster", "stone", "painted", "royal", "figurine",
+    "تمثال", "أثري", "أثر", "مصرية", "مصري", "القديمة", "قديم",
+    "ملون", "حجر", "جص", "ملكي", "نصفي", "خشبي",
+  ]);
+  const distinctive = [...new Set(terms.filter((term) => !genericTerms.has(term)))];
+  return distinctive;
 }
 
 function scannerSourceSupportsCandidate(source, observation) {
   if (source?.trusted !== true) return false;
-  const sourceTerms = normalizeSearchTerms(`${source.title || ""} ${source.snippet || ""}`);
-  return scannerCandidateTerms(observation).some((term) => sourceTerms.includes(term));
+  const identityTerms = scannerCandidateTerms(observation);
+  if (identityTerms.length < 2) return false;
+  const titleTerms = new Set(normalizeSearchTerms(source.title || ""));
+  const snippetTerms = new Set(normalizeSearchTerms(source.snippet || ""));
+  const genericIdentityTerms = new Set([
+    "king", "queen", "goddess", "god", "pharaoh", "royal", "ancient",
+    "egyptian", "statue", "bust", "wooden", "painted", "plaster", "stone",
+    "ملك", "ملكه", "اله", "الهه", "فرعون", "ملكي", "قديم", "مصري", "مصرية",
+  ]);
+  const namedTerms = identityTerms.filter((term) => !genericIdentityTerms.has(term));
+  return namedTerms.some((term) => titleTerms.has(term) || snippetTerms.has(term));
 }
 
 async function searchOfficialMonumentsArchive(query) {
@@ -3146,9 +3157,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           sourcesChecked: sources.map((source) => source.source || source.title),
         });
         const relatedContext = mode === "objects" && !officialVisualMatch && !sourceBackedCandidate
-          ? relatedSourceSummary(responseSources, language)
+          ? relatedSourceSummary(responseSources, language, observation)
           : "";
-        const freeCandidateContext = freeFallbackCandidate
+        const freeCandidateContext = freeFallbackCandidate && officialVisualMatch
           ? [
               language === "ar" ? "مرشحات بحث من كتالوجات عامة (غير مؤكدة بصريًا)" : "Public-catalog research leads (not visually confirmed)",
               freeFallbackCandidate.name
