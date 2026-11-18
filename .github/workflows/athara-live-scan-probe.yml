@@ -1,0 +1,69 @@
+name: Temporary ATHARA live image scan probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/athara-live-scan-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live-image-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Send an official Met museum artifact image to the published scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const imageUrl = "https://images.metmuseum.org/CRDImages/eg/original/DP330277.jpg";
+          const endpoint = "https://ektaberha500-current.sssoli5005.workers.dev/api/scan";
+          const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(30000) });
+          if (!imageResponse.ok) throw new Error(`Museum image download failed: HTTP ${imageResponse.status}`);
+          const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+          const bytes = Buffer.from(await imageResponse.arrayBuffer());
+          if (!bytes.length || bytes.length > 5_000_000) throw new Error(`Unexpected image size: ${bytes.length}`);
+          console.log("Test image downloaded:", { contentType, bytes: bytes.length, imageUrl });
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              image: `data:image/jpeg;base64,${bytes.toString("base64")}`,
+              language: "ar",
+              mode: "objects"
+            }),
+            signal: AbortSignal.timeout(180000)
+          });
+          const raw = await response.text();
+          let result;
+          try { result = JSON.parse(raw); } catch { throw new Error(`Scanner returned non-JSON HTTP ${response.status}: ${raw.slice(0, 1200)}`); }
+          const name = result.matchedArtifact?.name || "";
+          const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+          const candidateNames = candidates.map(item => item?.name || "");
+          const sources = Array.isArray(result.sources) ? result.sources : [];
+          const output = {
+            httpStatus: response.status,
+            ok: result.ok,
+            resultType: result.resultType,
+            reverseImageSearchStatus: result.reverseImageSearchStatus,
+            matchedArtifact: result.matchedArtifact || null,
+            candidates: candidateNames,
+            sources: sources.map(source => ({ title: source.title, url: source.url, trusted: source.trusted })),
+            analysis: result.analysis || "",
+            visualMatchMethod: result.visualMatchMethod || null
+          };
+          console.log("LIVE SCAN RESULT:");
+          console.log(JSON.stringify(output, null, 2));
+          if (!response.ok || result.ok !== true) throw new Error("Published scanner request did not complete successfully.");
+          if (!String(result.analysis || "").trim()) throw new Error("Scanner returned no analysis.");
+          const matchingName = [name, ...candidateNames].some(value => /Sehetepibreankh/i.test(value));
+          const metSource = sources.some(source => /metmuseum\.org/i.test(String(source.url || "")));
+          if (!matchingName || !metSource) {
+            console.error("The live test did not identify the expected Met object with a museum source.");
+            process.exit(2);
+          }
+          console.log("PASS: the published scanner identified Sehetepibreankh and returned a Met catalogue source.");
+          NODE
