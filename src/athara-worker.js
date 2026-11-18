@@ -2307,6 +2307,18 @@ function scannerCandidateTerms(observation) {
 
 function scannerSourceSupportsCandidate(source, observation) {
   if (source?.trusted !== true) return false;
+  try {
+    const sourceUrl = new URL(source.url);
+    const path = sourceUrl.pathname.toLowerCase().replace(/\\/+$/, "") || "/";
+    if (/(?:^|\\/)(?:faqs?|terms(?:-and-conditions)?|privacy(?:-policy)?|historical-periods|events|children|about|news)(?:\\/|$)/.test(path)) return false;
+    if (sourceUrl.hostname === "egymonuments.gov.eg" || sourceUrl.hostname.endsWith(".egymonuments.gov.eg")) {
+      const segments = path.split("/").filter(Boolean);
+      if (segments.length < 3 || !["ar", "en"].includes(segments[0]) ||
+          !["monuments", "archaeological-sites", "collections", "museums"].includes(segments[1])) return false;
+    }
+  } catch {
+    return false;
+  }
   const identityTerms = scannerCandidateTerms(observation);
   if (identityTerms.length < 2) return false;
   const titleTerms = new Set(normalizeSearchTerms(source.title || ""));
