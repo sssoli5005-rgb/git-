@@ -1705,8 +1705,8 @@ async function readGroundedScannerSource(entry, observation) {
     const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
       .replace(/<[^>]*>/g, " ")).slice(0, 6000);
     const source = { ...initial, title, url: finalUrl.href, snippet: snippet.length > 50 ? snippet : initial.snippet };
-    const officialCatalogueDetail = /(^|\\.)egymonuments\\.gov\\.eg$/i.test(finalUrl.hostname) &&
-      /^\\/(?:ar|en)\\/(?:monuments|archaeological-sites|collections|museums)\\/[^/]+/i.test(finalUrl.pathname) &&
+    const officialCatalogueDetail = /(^|\.)egymonuments\.gov\.eg$/i.test(finalUrl.hostname) &&
+      /^\/(?:ar|en)\/(?:monuments|archaeological-sites|collections|museums)\/[^/]+/i.test(finalUrl.pathname) &&
       !/(?:faqs?|terms|privacy|historical-periods|events|children|about|news)/i.test(finalUrl.pathname);
     // Ministry catalogue detail pages are eligible visual candidates even when the
     // vision model supplied only generic visual traits; the image comparison below
