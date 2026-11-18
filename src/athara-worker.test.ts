@@ -353,7 +353,7 @@ describe("ATHARA Cloudflare Worker", () => {
         url: "https://commons.wikimedia.org/wiki/File%3AAbu_Simbel_temple.jpg",
         trusted: true,
       }));
-      expect(body.reverseImageSearchStatus).toBe("no_match");
+      expect(body.reverseImageSearchStatus).toBe("failed");
     } finally {
       vi.unstubAllGlobals();
     }
