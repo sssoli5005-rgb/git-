@@ -3187,8 +3187,6 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             ? {
                 visualDescription: scannerVisualDescription(observation),
                 candidates: [...new Map([
-                  ...openScannerRankedCandidates,
-                  ...openScannerSourceCandidates,
                   ...openScannerDiscoveredCandidates.map((candidate) => ({
                     name: candidate.name,
                     museum: candidate.museum,
@@ -3198,6 +3196,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                     description: candidate.sourceText || "",
                     similarity: null,
                   })),
+                  ...openScannerSourceCandidates,
+                  ...openScannerRankedCandidates,
                   ...indexCandidates,
                   ...(freeFallbackCandidate ? [freeFallbackCandidate] : []),
                 ].map((candidate) => [candidate.url || candidate.name, candidate])).values()].slice(0, 5),
