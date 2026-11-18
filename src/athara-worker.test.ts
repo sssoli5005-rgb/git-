@@ -855,7 +855,8 @@ describe("ATHARA Cloudflare Worker", () => {
       expectUnverifiedScan(body);
       expect(body.analysis).toContain(printedLabel);
       expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال محتمل للملك خوفو");
-      expect(body.sources).toContainEqual(expect.objectContaining({ url: institutionalUrl, trusted: true }));
+      // The museum page does not name Khufu, so it must not be presented as supporting that identity.
+      expect(body.sources).toEqual([]);
       expect(fetchedUrls.length).toBeGreaterThan(0);
       expect(fetchedUrls.filter((url) => decodeURIComponent(url).includes(printedLabel))).toEqual([]);
       expect(run).toHaveBeenCalledOnce();
