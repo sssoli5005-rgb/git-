@@ -329,7 +329,7 @@ describe("ATHARA Cloudflare Worker", () => {
       aiBound: true,
       visionProvider: "Cloudflare Workers AI",
       visionModel: "@cf/moondream/moondream3.1-9B-A2B",
-      visionFallbackModel: "@cf/moondream/moondream3.1-9B-A2B",
+      visionFallbackModel: "@cf/mistralai/mistral-small-3.1-24b-instruct",
     });
   });
 
@@ -1241,6 +1241,55 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body).toMatchObject({ resultType: "unverified", reverseImageSearchStatus: "unavailable" });
     expectUnverifiedScan(body);
     expect(body.sources).toEqual([]);
+  });
+
+  it("falls back from Moondream to Cloudflare Mistral Vision before using external providers", async () => {
+    const fetchMock = stubEmptyHeritageSearch();
+    const run = vi.fn()
+      .mockRejectedValueOnce(new Error("Moondream inference failed on this request"))
+      .mockResolvedValueOnce({
+        response: JSON.stringify({
+          visualDescription: "تمثال خشبي ملون لامرأة ترتدي غطاء رأس",
+          identity: "تمثال خشبي للمعبودة نفتيس",
+          objectType: "wooden statue",
+          material: "painted wood",
+          searchTerms: ["Nephthys", "wooden statue"],
+          keywords: ["Nephthys", "painted wood"],
+          confidence: "medium",
+        }),
+      });
+    const response = await worker.fetch(
+      post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+      {
+        AI: { run },
+        ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+      },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.model).toBe("Cloudflare Workers AI - Mistral Small 3.1");
+    expect(body.visionDiagnostics).toMatchObject({
+      provider: "Cloudflare Mistral",
+      enginesCompleted: 1,
+      usedFallback: true,
+      failedAttempts: [{
+        engine: "@cf/moondream/moondream3.1-9B-A2B",
+        category: "request_failed",
+        reason: "Moondream inference failed on this request",
+      }],
+    });
+    expect(run).toHaveBeenNthCalledWith(
+      2,
+      "@cf/mistralai/mistral-small-3.1-24b-instruct",
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: "user", content: expect.any(Array) }),
+        ]),
+      }),
+      { rejectIfBusy: true },
+    );
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
   });
 
   it("uses Cloudflare Moondream vision as the primary scanner even when chat provider keys exist", async () => {
