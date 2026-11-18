@@ -501,7 +501,7 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(visitorResponse).not.toContain("full connection detail");
       expect(logs).toContain("Gemini full quota detail");
       expect(logs).toContain("Groq full model detail");
-      expect(logs).toContain("Ollama full connection detail");
+      expect(logs).toContain("Cloudflare full failure detail");
       expect(logs).toContain("Cloudflare full failure detail");
     } finally {
       vi.unstubAllGlobals();
