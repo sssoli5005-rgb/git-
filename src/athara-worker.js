@@ -2236,7 +2236,6 @@ function scannerCandidateTerms(observation) {
   ].filter(Boolean).join(" "));
   const aliases = {
     "نفتيس": ["nephthys"],
-    "نفتيس": ["nephthys"],
     "خوفو": ["khufu"],
     "زوسر": ["djoser"],
     "توت": ["tut"],
