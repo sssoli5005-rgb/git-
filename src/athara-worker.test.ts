@@ -1274,7 +1274,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(response.status).toBe(200);
     expect(body.model).toBe("Cloudflare Workers AI - Mistral Small 3.1");
     expect(body.visionDiagnostics).toMatchObject({
-      provider: "Cloudflare Mistral",
+      provider: "Cloudflare Mistral Small 3.1",
       enginesCompleted: 1,
       usedFallback: true,
       failedAttempts: [{
@@ -1372,7 +1372,7 @@ describe("ATHARA Cloudflare Worker", () => {
     });
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("does not use a vision fallback to identify artifacts without reverse-image search", async () => {
