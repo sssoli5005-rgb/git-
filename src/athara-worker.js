@@ -3034,14 +3034,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           sources.some((source) => scannerSourceSupportsCandidate(source, observation))
         );
         const indexedProbable = indexCandidates.some((candidate) => candidate.similarity >= probableThreshold);
-        const identificationStatus = sourceBackedCandidate || indexedProbable ||
-          officialTextCandidates.length || openScannerSourceCandidates.length
-          ? "probable"
-          : "unverified";
-        const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold) ||
-          officialTextCandidateArtifact(officialTextCandidates[0]) ||
-          openScannerCandidateArtifact(openScannerSourceCandidates[0]);
-        const responseSources = probableArtifact
+        // Text/catalog overlap alone is context, never proof of visual identity.
+        // Only an indexed image-similarity score above threshold may raise confidence.
+        const identificationStatus = indexedProbable ? "probable" : "unverified";
+        const probableArtifact = indexCandidates.find((candidate) => candidate.similarity >= probableThreshold);
+        let responseSources = probableArtifact
           ? sources.filter((source) => source.url === probableArtifact.url)
           : sources;
         const responseSourceText = probableArtifact?.description || responseSources
@@ -3062,33 +3059,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
 
         if (identificationStatus === "unverified" && freeFallbackEnabled) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
-          if (freeFallback && (freeFallback.confidence === "medium" || freeFallback.confidence === "low-medium")) {
-            return json({
-              ok: true,
-              analysis: freeFallback.story || freeFallback.name || "",
-              sourceStory: freeFallback.story,
-              sources: freeFallback.sources,
-              trustedSourcesAvailable: freeFallback.sources.length > 0,
-              wikipediaAvailable: null,
-              resultType: "probable",
-              identificationStatus: "probable",
-              reverseImageSearchStatus: "no_match",
-              confidence: freeFallback.confidence === "medium" ? "medium" : "low",
-              confidenceByField: { identity: freeFallback.confidence, place: "low", period: "low" },
-              matchedArtifact: freeFallback.name
-                ? {
-                    name: freeFallback.name,
-                    museum: freeFallback.location,
-                    objectNumber: "",
-                    url: freeFallback.sources[0]?.url,
-                    similarity: null,
-                  }
-                : undefined,
-              candidates: [],
-              visualMatchMethod: "Free public sources (Wikimedia/Wikidata/Met Museum)",
-              model: "Free public sources",
-              usedFreeFallback: true,
-            });
+          if (freeFallback?.sources?.length) {
+            // Keep free catalog hits as research leads, not confirmed/probable identities.
+            responseSources = [...new Map(
+              [...responseSources, ...freeFallback.sources].map((source) => [source.url, source]),
+            ).values()].slice(0, 8);
           }
         }
 
