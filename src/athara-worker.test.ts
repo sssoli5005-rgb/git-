@@ -1283,6 +1283,81 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.sources).toEqual([]);
   });
 
+  it("runs independent museum image retrieval when every vision provider quota is exhausted", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        return Response.json({ error: { message: "429 Gemini daily quota exhausted" } }, { status: 429 });
+      }
+      if (url.includes("api.groq.com")) {
+        return Response.json({ error: { message: "429 Groq daily token limit reached" } }, { status: 429 });
+      }
+      if (url.includes("openaccess-api.clevelandart.org/api/artworks") && init?.method === "POST") {
+        return Response.json({ data: [{
+          title: "Ancient Egyptian Statue of Nephthys",
+          accession_number: "1925.100",
+          url: "https://www.clevelandart.org/art/1925.100",
+          images: { web: { url: "https://openaccess-cdn.clevelandart.org/1925.100/1925.100_web.jpg" } },
+          current_location: "Gallery 210",
+          find_spot: "Egypt",
+          creation_date: "Late Period, Ancient Egypt",
+          technique: "Painted wood",
+          description: "Ancient Egyptian statue of the goddess Nephthys.",
+        }] });
+      }
+      if (url.includes("openaccess-cdn.clevelandart.org")) {
+        return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn().mockRejectedValue(
+      new Error("4006: you have used up your daily free allocation of 10,000 neurons"),
+    );
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          GEMINI_API_KEY: "gemini-test-key",
+          GROQ_API_KEY: "groq-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        ok: true,
+        resultType: "unverified",
+        identificationStatus: "unverified",
+        reverseImageSearchStatus: "no_match",
+        confidence: "low",
+        candidates: [expect.objectContaining({
+          name: "Ancient Egyptian Statue of Nephthys",
+          museum: "Cleveland Museum of Art",
+          objectNumber: "1925.100",
+        })],
+        imageRetrievalDiagnostics: {
+          provider: "Cleveland Museum of Art Open Access API",
+          imageSimilarityAvailable: true,
+          candidatesReturned: 1,
+          embeddingAvailable: false,
+          embeddingSkippedReason: "cloudflare_daily_quota_exhausted",
+        },
+      });
+      expect(body.analysis).toContain("ليست تأكيدًا");
+      expect(aiRun).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("openaccess-api.clevelandart.org/api/artworks"))).toBe(true);
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("openaccess-cdn.clevelandart.org"))).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("stops same-account Cloudflare vision retries after the daily neuron quota is exhausted", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
