@@ -2226,19 +2226,45 @@ function normalizeSearchTerms(value) {
 }
 
 function scannerCandidateTerms(observation) {
-  const terms = normalizeSearchTerms([
+  const rawTerms = normalizeSearchTerms([
+    observation.identity,
     observation.visualCandidateIdentity,
+    observation.place,
+    observation.possibleLocation,
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
   ].filter(Boolean).join(" "));
+  const aliases = {
+    "نفتيس": ["nephthys"],
+    "نفتيس": ["nephthys"],
+    "خوفو": ["khufu"],
+    "زوسر": ["djoser"],
+    "توت": ["tut"],
+    "عنخ": ["ankh"],
+    "امون": ["amun"],
+    "ابو": ["abu"],
+    "سمبل": ["simbel"],
+    "الاربعه": ["four"],
+    "اربعه": ["four"],
+    "جالسه": ["seated"],
+    "ضخمه": ["colossal"],
+    "واجهه": ["facade"],
+    "جبل": ["rock"],
+    "منحوت": ["cut"],
+    "معبد": ["temple"],
+    "خشبي": ["wooden"],
+    "برونزي": ["bronze"],
+    "قاعد": ["seated"],
+  };
+  const expandedTerms = rawTerms.flatMap((term) => [term, ...(aliases[term] || [])]);
   const genericTerms = new Set([
     "statue", "artifact", "egyptian", "ancient", "temple", "wooden",
     "bust", "plaster", "stone", "painted", "royal", "figurine",
-    "تمثال", "أثري", "أثر", "مصرية", "مصري", "القديمة", "قديم",
-    "ملون", "حجر", "جص", "ملكي", "نصفي", "خشبي",
+    "تمثال", "اثري", "اثر", "مصرية", "مصري", "القديمة", "قديم",
+    "ملون", "حجر", "جص", "ملكي", "نصفي", "خشبي", "ملك", "ملكه",
+    "اله", "الهه", "فرعون", "ال", "في", "من", "على", "the", "and",
   ]);
-  const distinctive = [...new Set(terms.filter((term) => !genericTerms.has(term)))];
-  return distinctive;
+  return [...new Set(expandedTerms.filter((term) => !genericTerms.has(term)))];
 }
 
 function scannerSourceSupportsCandidate(source, observation) {
