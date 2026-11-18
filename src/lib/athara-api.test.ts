@@ -84,7 +84,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
       expect(response?.status).toBe(200);
       await expect(response?.json()).resolves.toMatchObject({
         visionProvider: "Cloudflare Workers AI",
-        visionModel: "@cf/meta/llama-3.2-11b-vision-instruct",
+        visionModel: "@cf/moondream/moondream3.1-9B-A2B",
       });
     } finally {
       vi.unstubAllEnvs();
