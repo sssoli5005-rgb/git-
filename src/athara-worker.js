@@ -1,7 +1,7 @@
-const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
-const FALLBACK_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
+const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
+const FALLBACK_VISION_MODEL = VISION_MODEL;
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
-const DEFAULT_VISION_PROVIDER_ORDER = ["Gemini", "Groq", "Cloudflare"];
+const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
 const MAX_IMAGE_CHARS = 8_500_000;
 const MAX_COMPARISON_IMAGE_BYTES = 500_000;
 const DEFAULT_SCANNER_MATCH_THRESHOLD = 0.8;
@@ -148,6 +148,7 @@ function json(data, status = 200) {
 }
 
 function extractText(result) {
+  if (typeof result?.answer === "string") return result.answer;
   if (typeof result?.response === "string") return result.response;
   if (typeof result?.result === "string") return result.result;
   if (typeof result?.output_text === "string") return result.output_text;
@@ -220,200 +221,51 @@ function stripHtml(html) {
 }
 
 async function freeArtifactIdentificationFallback(observation, language) {
-  const wikiLang = language === "ar" ? "ar" : "en";
+  const lang = language === "ar" ? "ar" : "en";
   const terms = [
-    observation?.identity,
-    observation?.visualCandidateIdentity,
-    observation?.objectType,
-    observation?.material,
-    ...(Array.isArray(observation?.symbols) ? observation.symbols : []),
+    observation?.visualCandidateIdentity, observation?.identity,
     ...(Array.isArray(observation?.searchTerms) ? observation.searchTerms : []),
-    observation?.possibleLocation,
-    "Egyptian antiquity",
-  ]
-    .filter(Boolean)
-    .map((t) => String(t).trim())
-    .filter((t, i, arr) => arr.indexOf(t) === i)
-    .slice(0, 6);
-
+    observation?.objectType, observation?.material,
+    ...(Array.isArray(observation?.symbols) ? observation.symbols : []),
+  ].filter((x) => typeof x === "string" && x.trim())
+   .map((x) => x.trim()).filter((x, i, a) => a.indexOf(x) === i).slice(0, 4);
   if (!terms.length) return null;
-
-  const query = terms.join(" ");
-  const result = { sources: [], confidence: "low" };
-
-  try {
-    const commonsUrl = new URL("https://commons.wikimedia.org/w/api.php");
-    commonsUrl.searchParams.set("action", "query");
-    commonsUrl.searchParams.set("generator", "search");
-    commonsUrl.searchParams.set("gsrsearch", query);
-    commonsUrl.searchParams.set("gsrnamespace", "6");
-    commonsUrl.searchParams.set("gsrlimit", "5");
-    commonsUrl.searchParams.set("prop", "imageinfo");
-    commonsUrl.searchParams.set("iiprop", "url|extmetadata");
-    commonsUrl.searchParams.set("format", "json");
-    commonsUrl.searchParams.set("origin", "*");
-    const response = await fetch(commonsUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
-      headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
-    });
-    if (response.ok) {
-      const data = await response.json();
-      const pages = data?.query?.pages;
-      if (pages) {
-        for (const page of Object.values(pages)) {
-          const title = page?.title || "";
-          const info = page?.imageinfo?.[0];
-          const ext = info?.extmetadata || {};
-          const description = ext?.ImageDescription?.value || ext?.ObjectName?.value || "";
-          if (title || description) {
-            const cleanTitle = title.replace(/^File:/, "");
-            result.name = result.name || cleanTitle;
-            result.story = result.story || stripHtml(description);
-            result.sources.push({
-              title: cleanTitle,
-              url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(title)}`,
-              snippet: stripHtml(description),
-              source: "Wikimedia Commons",
-              trusted: true,
-            });
-            if (result.name && result.story) break;
-          }
-        }
-      }
-    }
-  } catch { /* fall through */ }
-
-  // 2) ويكيبيديا — بحث مقال
-  try {
-    const wikiUrl = new URL(`https://${wikiLang}.wikipedia.org/w/api.php`);
-    wikiUrl.searchParams.set("action", "query");
-    wikiUrl.searchParams.set("list", "search");
-    wikiUrl.searchParams.set("srsearch", query);
-    wikiUrl.searchParams.set("srlimit", "3");
-    wikiUrl.searchParams.set("format", "json");
-    wikiUrl.searchParams.set("origin", "*");
-    const response = await fetch(wikiUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
-      headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
-    });
-    if (response.ok) {
-      const data = await response.json();
-      const hits = data?.query?.search || [];
-      if (hits.length) {
-        const hit = hits[0];
-        result.name = result.name || hit.title;
-        result.sources.push({
-          title: hit.title,
-          url: `https://${wikiLang}.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`,
-          snippet: stripHtml(hit.snippet),
-          source: `${wikiLang}.wikipedia.org`,
-          trusted: true,
-        });
-      }
-    }
-  } catch { /* fall through */ }
-
-  // 3) استخراج قصة ويكيبيديا
-  if (result.name && !result.story) {
-    try {
-      const extractUrl = new URL(`https://${wikiLang}.wikipedia.org/w/api.php`);
-      extractUrl.searchParams.set("action", "query");
-      extractUrl.searchParams.set("prop", "extracts");
-      extractUrl.searchParams.set("exintro", "1");
-      extractUrl.searchParams.set("explaintext", "1");
-      extractUrl.searchParams.set("titles", result.name);
-      extractUrl.searchParams.set("format", "json");
-      extractUrl.searchParams.set("origin", "*");
-      const response = await fetch(extractUrl.toString(), {
-        signal: AbortSignal.timeout(15000),
-        headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const pages = data?.query?.pages;
-        if (pages) {
-          const page = Object.values(pages)[0];
-          if (page?.extract) result.story = stripHtml(page.extract).slice(0, 1500);
-        }
-      }
-    } catch { /* fall through */ }
-  }
-
-  // 4) ويكي بيانات — موقع وعصر
-  try {
-    const wbUrl = new URL("https://www.wikidata.org/w/api.php");
-    wbUrl.searchParams.set("action", "wbsearchentities");
-    wbUrl.searchParams.set("search", query);
-    wbUrl.searchParams.set("language", wikiLang);
-    wbUrl.searchParams.set("format", "json");
-    wbUrl.searchParams.set("origin", "*");
-    const response = await fetch(wbUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
-      headers: { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" },
-    });
-    if (response.ok) {
-      const data = await response.json();
-      const entities = data?.search || [];
-      if (entities.length) {
-        const entity = entities[0];
-        result.name = result.name || entity.label;
-        result.story = result.story || entity.description;
-        result.sources.push({
-          title: entity.label,
-          url: `https://www.wikidata.org/wiki/${entity.id}`,
-          snippet: entity.description || "",
-          source: "Wikidata",
-          trusted: true,
-        });
-      }
-    }
-  } catch { /* fall through */ }
-
-  // 5) متحف متروبوليتان — مجموعة متحفية
-  try {
-    const metUrl = new URL("https://collectionapi.metmuseum.org/public/collection/v1/search");
-    metUrl.searchParams.set("q", `Egyptian ${query}`);
-    metUrl.searchParams.set("hasImages", "true");
-    const response = await fetch(metUrl.toString(), {
-      signal: AbortSignal.timeout(15000),
-      headers: { Accept: "application/json" },
-    });
-    if (response.ok) {
-      const data = await response.json();
-      const ids = data?.objectIDs || [];
-      for (const id of ids.slice(0, 3)) {
-        try {
-          const objResponse = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, {
-            signal: AbortSignal.timeout(10000),
-          });
-          if (objResponse.ok) {
-            const obj = await objResponse.json();
-            if (obj.title) {
-              result.name = result.name || obj.title;
-              result.story = result.story || [obj.culture, obj.period, obj.objectName].filter(Boolean).join(" — ");
-              result.location = result.location || obj.repository || obj.city || obj.country;
-              result.sources.push({
-                title: obj.title,
-                url: obj.objectURL,
-                snippet: [obj.objectName, obj.culture, obj.period].filter(Boolean).join(" — "),
-                source: "Met Museum",
-                trusted: true,
-              });
-              if (result.name && result.location) break;
-            }
-          }
-        } catch { /* continue */ }
-      }
-    }
-  } catch { /* fall through */ }
-
-  if (!result.name && result.sources.length === 0) return null;
-
-  if (result.name && result.story && result.sources.length >= 2) result.confidence = "medium";
-  else if (result.name || result.sources.length >= 1) result.confidence = "low-medium";
-
-  result.usedFreeFallback = true;
-  return result;
+  const query = terms.join(" ").slice(0, 140);
+  const headers = { Accept: "application/json", "User-Agent": "ATHARA/1.0 (heritage scanner)" };
+  const lookups = await Promise.allSettled([
+    (async () => {
+      const url = new URL("https://commons.wikimedia.org/w/api.php");
+      url.search = new URLSearchParams({action:"query",generator:"search",gsrsearch:query,gsrnamespace:"6",gsrlimit:"4",prop:"imageinfo",iiprop:"url|extmetadata",format:"json",origin:"*"}).toString();
+      const response = await fetch(url,{headers,signal:AbortSignal.timeout(3_500)});
+      if(!response.ok)throw new Error(`Commons HTTP ${response.status}`);
+      const data=await response.json();
+      return Object.values(data?.query?.pages||{}).map((page)=>{
+        const info=page?.imageinfo?.[0]||{},meta=info.extmetadata||{};
+        const title=String(page?.title||"").replace(/^File:/,"");
+        return title?{title:title.replace(/\.[a-z0-9]{2,5}$/i,""),url:`https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,snippet:stripHtml(meta.ImageDescription?.value||meta.ObjectName?.value||""),source:"Wikimedia Commons",trusted:true}:null;
+      }).filter(Boolean);
+    })(),
+    (async () => {
+      const url=new URL(`https://${lang}.wikipedia.org/w/api.php`);
+      url.search=new URLSearchParams({action:"query",list:"search",srsearch:query,srlimit:"3",format:"json",origin:"*"}).toString();
+      const response=await fetch(url,{headers,signal:AbortSignal.timeout(3_500)});
+      if(!response.ok)throw new Error(`Wikipedia HTTP ${response.status}`);
+      const data=await response.json();
+      return (data?.query?.search||[]).map(x=>({title:x.title,url:`https://${lang}.wikipedia.org/wiki/${encodeURIComponent(x.title)}`,snippet:stripHtml(x.snippet||""),source:`Wikipedia (${lang})`,trusted:true}));
+    })(),
+    (async () => {
+      const url=new URL("https://www.wikidata.org/w/api.php");
+      url.search=new URLSearchParams({action:"wbsearchentities",search:query,language:lang,limit:"3",format:"json",origin:"*"}).toString();
+      const response=await fetch(url,{headers,signal:AbortSignal.timeout(3_500)});
+      if(!response.ok)throw new Error(`Wikidata HTTP ${response.status}`);
+      const data=await response.json();
+      return (data?.search||[]).map(x=>({title:x.label||x.id,url:`https://www.wikidata.org/wiki/${x.id}`,snippet:x.description||"",source:"Wikidata",trusted:true}));
+    })(),
+  ]);
+  const sources=[...new Map(lookups.flatMap(x=>x.status==="fulfilled"?x.value:[]).filter(x=>x?.url&&scannerSourceUrlAllowed(x.url)).map(x=>[x.url,x])).values()].slice(0,6);
+  if(!sources.length)return null;
+  const best=sources.find(x=>x.snippet)||sources[0];
+  return {name:best.title||"",story:best.snippet||"",location:"",sources,confidence:"low",usedFreeFallback:true};
 }
 
 function parseVisionObservation(rawVisual) {
@@ -1064,7 +916,7 @@ async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, 
         contents: [{ role: "user", parts }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(10_000),
     },
   );
   const payload = await response.json().catch(() => null);
@@ -1358,7 +1210,7 @@ function makeScannerCandidate(candidate) {
 async function scannerJson(url, label) {
   const response = await fetch(url, {
     headers: { accept: "application/json", "user-agent": "ATHARA-ImageScanner/1.0" },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
   return response.json();
@@ -1542,7 +1394,7 @@ async function searchWikidataScannerCandidates(query) {
 }
 
 async function searchOpenScannerCandidates(observation, language = "en") {
-  const queries = scannerSearchQueries(observation);
+  const queries = scannerSearchQueries(observation).slice(0, 1);
   if (!queries.length) return { candidates: [], availableSources: 0, failedSources: 0 };
   const providers = queries.flatMap((query) => [
     [`Met (${query})`, () => searchMetScannerCandidates(query)],
@@ -1584,10 +1436,10 @@ async function searchOpenScannerCandidates(observation, language = "en") {
 }
 
 async function downloadScannerCandidateImages(candidates) {
-  const downloads = await Promise.all(candidates.slice(0, 10).map(async (candidate) => {
+  const downloads = await Promise.all(candidates.slice(0, 5).map(async (candidate) => {
     try {
       const response = await fetch(candidate.imageUrl, {
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(4_500),
       });
       if (!response.ok) throw new Error(`Image returned HTTP ${response.status}`);
       const resolvedUrl = new URL(response.url || candidate.imageUrl);
@@ -1639,7 +1491,7 @@ async function compareOpenScannerCandidates(imageBytes, candidates, apiKey, mode
         contents: [{ role: "user", parts }],
         generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 700 },
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(10_000),
     },
   );
   const payload = await response.json().catch(() => null);
@@ -2558,16 +2410,46 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const imageForAnalysis = documentImageBytes || enhancedImageBytes || imageBytes;
         const ollamaModel =
           typeof env.OLLAMA_VISION_MODEL === "string" ? env.OLLAMA_VISION_MODEL : "gemma3:4b";
-        const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL, FALLBACK_VISION_MODEL];
+        const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL];
         const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
-        const geminiVisionModels = [
-          configuredGeminiVisionModel(env),
-          "gemini-3.6-flash",
-        ].filter((model, index, models) => models.indexOf(model) === index);
+        const geminiVisionModels = [configuredGeminiVisionModel(env)];
         const independentObservations = [];
+        let visionProviderUsed = "";
+        const imageDataUrl = `data:${detectImageMimeType(imageForAnalysis)};base64,${bytesToBase64(imageForAnalysis)}`;
 
-        for (const geminiModel of geminiVisionModels) {
-          if (!geminiVisionKey) break;
+        // Cloudflare-hosted Moondream is the first, fast vision path. It avoids
+        // the Meta Llama license handshake and rejects busy capacity immediately.
+        if (!localOllama && typeof env.AI?.run === "function") {
+          try {
+            const cloudflareVision = await env.AI.run(VISION_MODEL, {
+              task: "query",
+              image: imageDataUrl,
+              question: `${prompt}\n\nحلّل الصورة نفسها، واقترح أقرب هوية أثرية كاحتمال مع قرائن مرئية. أخرج JSON فقط بالمفاتيح المطلوبة في التعليمات. لا تدّعِ تطابقًا بصريًا أو مكانًا مؤكدًا بلا صورة مرجعية ومصدر مطابق.\nلغة الإجابة: ${LANGUAGES[language]}.`,
+              reasoning: false,
+              temperature: 0.1,
+              max_tokens: 950,
+              stream: false,
+            }, { rejectIfBusy: true });
+            rawVisual = extractText(cloudflareVision).trim();
+            if (!rawVisual) throw new Error("Cloudflare Moondream returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) {
+              throw new Error("Cloudflare Moondream returned invalid or non-informative visual data.");
+            }
+            independentObservations.push(observation);
+            visionUsed = VISION_MODEL;
+            visionProviderUsed = "Cloudflare";
+          } catch (modelError) {
+            console.error(`[Image scanner] Cloudflare Moondream failed: ${String(modelError?.message || modelError)}`);
+            visionAttempts.push({
+              model: VISION_MODEL,
+              reason: String(modelError?.message || modelError).slice(0, 180),
+            });
+          }
+        }
+
+        if (!independentObservations.length && geminiVisionKey) {
+          const geminiModel = geminiVisionModels[0];
           try {
             const geminiResponse = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`,
@@ -2576,10 +2458,13 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 headers: { "content-type": "application/json", "x-goog-api-key": geminiVisionKey },
                 body: JSON.stringify({
                   systemInstruction: { parts: [{ text: prompt }] },
-                  contents: [{ role: "user", parts: [{ text: "حلّل هذه الصورة بصريًا وأعطني JSON فقط." }, { inlineData: { mimeType: detectImageMimeType(imageForAnalysis), data: bytesToBase64(imageForAnalysis) } }] }],
-                  generationConfig: { temperature: 0.1, maxOutputTokens: 1400 },
+                  contents: [{ role: "user", parts: [
+                    { text: "حلّل هذه الصورة بصريًا وأعطني JSON فقط." },
+                    { inlineData: { mimeType: detectImageMimeType(imageForAnalysis), data: bytesToBase64(imageForAnalysis) } },
+                  ] }],
+                  generationConfig: { temperature: 0.1, maxOutputTokens: 1100 },
                 }),
-                signal: AbortSignal.timeout(30_000),
+                signal: AbortSignal.timeout(10_000),
               },
             );
             const geminiPayload = await geminiResponse.json().catch(() => null);
@@ -2587,15 +2472,13 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             rawVisual = geminiPayload?.candidates?.[0]?.content?.parts?.map((part) => part?.text || "").join("").trim() || "";
             if (!rawVisual) throw new Error("Gemini Vision returned an empty response.");
             const observation = parseVisionObservation(rawVisual);
-            if (!hasUsableVisionObservation(observation, mode)) {
-              throw new Error("Gemini Vision returned invalid or non-informative visual data.");
-            }
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("Gemini Vision returned invalid visual data.");
             independentObservations.push(observation);
             visionUsed = `gemini:${geminiModel}`;
-            break;
-          } catch (modelError) {
-            console.error(`[Image scanner] Gemini Vision (${geminiModel}) failed: ${String(modelError?.message || modelError)}`);
-            visionAttempts.push({ model: `Gemini Vision (${geminiModel})`, reason: String(modelError?.message || modelError).slice(0, 180) });
+            visionProviderUsed = "Gemini";
+          } catch (error) {
+            console.error("[Image scanner] Gemini Vision failed:", String(error?.message || error));
+            visionAttempts.push({ model: `Gemini Vision (${geminiModel})`, reason: String(error?.message || error).slice(0, 180) });
           }
         }
 
@@ -2617,7 +2500,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               body: JSON.stringify({
                 model: groqVisionModel,
                 temperature: 0.1,
-                max_tokens: 1400,
+                max_tokens: 950,
                 messages: [{
                   role: "user",
                   content: [
@@ -2631,7 +2514,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   ],
                 }],
               }),
-              signal: AbortSignal.timeout(30_000),
+              signal: AbortSignal.timeout(10_000),
             });
             const groqPayload = await groqResponse.json().catch(() => null);
             if (!groqResponse.ok) throw new Error(groqPayload?.error?.message || `Groq Vision returned HTTP ${groqResponse.status}`);
@@ -2642,6 +2525,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               throw new Error("Groq Vision returned invalid or non-informative visual data.");
             }
             independentObservations.push(observation);
+            visionProviderUsed = "Groq";
           } catch (modelError) {
             console.error(`[Image scanner] Groq Vision (${groqVisionModel}) failed: ${String(modelError?.message || modelError)}`);
             visionAttempts.push({
@@ -2689,30 +2573,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (!independentObservations.length) {
-          for (const model of visionModels) {
-            try {
-              if (typeof env.AI?.run !== "function") {
-                throw new Error("Cloudflare Workers AI binding is unavailable.");
-              }
-              const visual = await env.AI.run(model, {
-                image: imageForAnalysis, prompt, max_tokens: 1400, temperature: 0.1,
-              });
-              rawVisual = extractText(visual).trim();
-              if (!rawVisual) throw new Error("Vision model returned an empty response.");
-              const observation = parseVisionObservation(rawVisual);
-              if (!hasUsableVisionObservation(observation, mode)) {
-                throw new Error("Cloudflare Vision returned invalid or non-informative visual data.");
-              }
-              independentObservations.push(observation);
-              visionUsed = model;
-              break;
-            } catch (modelError) {
-              console.error(`[Image scanner] Cloudflare Vision (${model}) failed: ${String(modelError?.message || modelError)}`);
-              visionAttempts.push({ model, reason: String(modelError?.message || modelError).slice(0, 180) });
-            }
-          }
-        }
+
 
         if (!independentObservations.length) {
           const detail = visionAttempts
@@ -2829,7 +2690,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               : observation;
             const search = await searchOpenScannerCandidates(searchObservation, language);
             openScannerSourceCandidates = rankOpenScannerCandidates(search.candidates, observation);
-            const candidateImages = await downloadScannerCandidateImages(search.candidates);
+            const candidateImages = await downloadScannerCandidateImages(search.candidates.slice(0, 5));
             if (!search.candidates.length) {
               openScannerSearchStatus = search.availableSources === 0 ? "failed" : "no_match";
             } else if (!candidateImages.length) {
@@ -2849,7 +2710,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             } else {
               const comparison = await compareOpenScannerCandidates(
                 comparisonImageBytes || imageBytes,
-                candidateImages,
+                candidateImages.slice(0, 3),
                 env.GEMINI_API_KEY.trim(),
                 geminiVisionModels[0],
                 matchThreshold,
@@ -2973,7 +2834,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               .map((query) => ({ query: query.slice(0, 180), language }))
           : searchQueries;
         const searchResults = await Promise.all(
-          selectedSearchQueries.map(({ query, language: queryLanguage }) =>
+          selectedSearchQueries.slice(0, 1).map(({ query, language: queryLanguage }) =>
             searchHeritageSources(query, queryLanguage),
           ),
         );
@@ -3072,7 +2933,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : true;
 
         let freeFallbackCandidate = null;
-        if (identificationStatus === "unverified" && freeFallbackEnabled) {
+        if (identificationStatus === "unverified" && freeFallbackEnabled && responseSources.length === 0) {
           const freeFallback = await freeArtifactIdentificationFallback(observation, language);
           if (freeFallback?.sources?.length) {
             // Keep free catalog hits as explicit research leads, never as confirmed visual matches.
@@ -3167,20 +3028,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : localOllama
               ? `Ollama - ${visionUsed || env.OLLAMA_VISION_MODEL || ollamaModel}`
               : visionUsed === VISION_MODEL
-                ? "Cloudflare Workers AI - Llama 3.2 11B Vision"
-                : visionUsed === FALLBACK_VISION_MODEL
-                  ? "Cloudflare Workers AI - LLaVA 1.5 7B (fallback)"
-                  : `Free visual consensus (${independentObservations.length} engine)`,
+                ? "Cloudflare Workers AI - Moondream 3.1"
+                : `Free visual consensus (${independentObservations.length} engine)`,
           visionDiagnostics: {
-            provider: independentObservations.length > 1
-              ? "Independent visual consensus"
-              : localOllama
-                ? "Ollama (local)"
-                : "Cloudflare Workers AI",
+            provider: visionProviderUsed || (independentObservations.length > 1 ? "Independent visual consensus" : localOllama ? "Ollama (local)" : "Unknown"),
             providerOrder: visionProviderOrder,
             fallbackOrder: visionProviderOrder.filter((provider) => provider !== "Gemini"),
             enginesCompleted: independentObservations.length,
-            usedFallback: !String(visionUsed || "").startsWith("gemini:") && !localOllama && visionUsed !== VISION_MODEL,
+            usedFallback: Boolean(visionProviderUsed && visionProviderUsed !== "Cloudflare"),
           },
           photoGps,
         });

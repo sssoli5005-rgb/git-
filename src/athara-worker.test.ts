@@ -51,8 +51,8 @@ describe("ATHARA Cloudflare Worker", () => {
       service: "ATHARA",
       aiBound: true,
       visionProvider: "Cloudflare Workers AI",
-      visionModel: "@cf/meta/llama-3.2-11b-vision-instruct",
-      visionFallbackModel: "@cf/llava-hf/llava-1.5-7b-hf",
+      visionModel: "@cf/moondream/moondream3.1-9B-A2B",
+      visionFallbackModel: "@cf/moondream/moondream3.1-9B-A2B",
     });
   });
 
@@ -67,8 +67,8 @@ describe("ATHARA Cloudflare Worker", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.visionProviderOrder).toEqual(["Gemini", "Groq", "Cloudflare"]);
-    expect(body.visionFallbackOrder).toEqual(["Groq", "Cloudflare"]);
+    expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
+    expect(body.visionFallbackOrder).toEqual(["Cloudflare", "Groq"]);
   });
 
   it("falls through Gemini and Groq failures to Cloudflare, and stops at the first usable result", async () => {
@@ -111,13 +111,13 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(body.ok).toBe(true);
       expect(body.analysis).toContain("نقش بارز على جدار حجري");
       expect(run).toHaveBeenCalledTimes(1);
-      expect(run.mock.calls[0][0]).toBe("@cf/meta/llama-3.2-11b-vision-instruct");
+      expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
-      )).toBe(true);
+      )).toBe(false);
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("api.groq.com"),
-      )).toBe(true);
+      )).toBe(false);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -216,7 +216,7 @@ describe("ATHARA Cloudflare Worker", () => {
         },
       );
       const body = await response.json();
-      const prompt = run.mock.calls[0][1].prompt as string;
+      const prompt = run.mock.calls[0][1].question as string;
 
       expect(body.identificationStatus).toBe("probable");
       expect(prompt).toContain("أقرب اسم معروف");
@@ -648,19 +648,19 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.analysis).toContain("3. القصة والخلفية التاريخية");
     expect(body.analysis).toContain("صيغة قرابين شائعة في مناظر المعابد");
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0][0]).toBe("@cf/meta/llama-3.2-11b-vision-instruct");
-    expect(run.mock.calls[0][1].image).toEqual([104, 101, 108, 108, 111]);
-    expect(run.mock.calls[0][1].prompt).toContain("استفد من معرفتك الداخلية");
-    expect(run.mock.calls[0][1].prompt).toContain("العنخ");
-    expect(run.mock.calls[0][1].prompt).toContain("افحص كل شخصية على حدة");
-    expect(run.mock.calls[0][1].prompt).toContain("خطمِه الطويل العريض");
-    expect(run.mock.calls[0][1].prompt).toContain("سوبك كهوية محتملة فقط");
-    expect(run.mock.calls[0][1].prompt).toContain("لا توجد في هذه الخدمة قاعدة صور متجهية");
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(6);
+    expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
+    expect(String(run.mock.calls[0][1].image)).toContain("data:image/jpeg;base64,");
+    expect(run.mock.calls[0][1].question).toContain("استفد من معرفتك الداخلية");
+    expect(run.mock.calls[0][1].question).toContain("العنخ");
+    expect(run.mock.calls[0][1].question).toContain("افحص كل شخصية على حدة");
+    expect(run.mock.calls[0][1].question).toContain("خطمِه الطويل العريض");
+    expect(run.mock.calls[0][1].question).toContain("سوبك كهوية محتملة فقط");
+    expect(run.mock.calls[0][1].question).toContain("لا توجد في هذه الخدمة قاعدة صور متجهية");
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(String(fetchMock.mock.calls[0][0])).toContain(
       encodeURIComponent("ancient Egyptian offering scene"),
     );
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("en.wikipedia.org"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("ar.wikipedia.org"))).toBe(true);
   });
 
   it("uses official monument records as related context without claiming a visual match", async () => {
@@ -882,7 +882,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.sources).toEqual([]);
   });
 
-  it("uses Cloudflare Llama vision as the primary scanner even when chat provider keys exist", async () => {
+  it("uses Cloudflare Moondream vision as the primary scanner even when chat provider keys exist", async () => {
     const fetchMock = stubEmptyHeritageSearch();
     const run = vi.fn().mockResolvedValue({
       response: JSON.stringify({
@@ -899,27 +899,25 @@ describe("ATHARA Cloudflare Worker", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.model).toBe("Cloudflare Workers AI - Llama 3.2 11B Vision");
+    expect(body.model).toBe("Cloudflare Workers AI - Moondream 3.1");
     expect(body.visionDiagnostics).toMatchObject({
       usedFallback: false,
     });
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0][0]).toBe("@cf/meta/llama-3.2-11b-vision-instruct");
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(6);
+    expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
   });
 
   it("does not use a vision fallback to identify artifacts without reverse-image search", async () => {
     stubEmptyHeritageSearch();
-    const run = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("model license not accepted"))
-      .mockResolvedValueOnce({
-        response: JSON.stringify({
-          visualDescription: "Ancient carved stone",
-          keywords: ["stone"],
-          periodClues: [],
-        }),
-      });
+    const run = vi.fn().mockResolvedValueOnce({
+      answer: JSON.stringify({
+        visualDescription: "Ancient carved stone",
+        objectType: "carved stone",
+        keywords: ["stone"],
+        periodClues: [],
+      }),
+    });
     const response = await worker.fetch(
       post("/api/scan", { image: png, language: "ar", mode: "objects" }),
       { AI: { run } },
@@ -930,7 +928,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body).toMatchObject({ resultType: "unverified", reverseImageSearchStatus: "unavailable" });
     expectUnverifiedScan(body);
     expect(body.analysis).toContain("Ancient carved stone");
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("does not return an official catalog match from description keywords alone", async () => {
@@ -1394,14 +1392,14 @@ describe("ATHARA Cloudflare Worker", () => {
         headers: { "content-type": "application/json" },
       });
     }));
-    const run = vi.fn();
+    const run = vi.fn().mockRejectedValueOnce(new Error("Cloudflare Moondream busy"));
     const response = await worker.fetch(
       post("/api/scan", { image: png, language: "ar", mode: "objects" }),
       { AI: { run }, GROQ_API_KEY: "test-groq-key" },
     );
 
     expect(response.status).toBe(200);
-    expect(run).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledTimes(1);
     const groqCalls = vi.mocked(fetch).mock.calls.filter(([input]) =>
       String(input instanceof Request ? input.url : input).includes("api.groq.com"),
     );
@@ -1572,9 +1570,9 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(run.mock.calls[0][1].prompt).toContain("الهيراطيقية والديموطيقية");
-      expect(run.mock.calls[0][1].prompt).toContain("ترجمة حرفية");
-      expect(run.mock.calls[0][1].prompt).toContain("أنشئ searchTerms قصيرة ودقيقة");
+      expect(run.mock.calls[0][1].question).toContain("الهيراطيقية والديموطيقية");
+      expect(run.mock.calls[0][1].question).toContain("ترجمة حرفية");
+      expect(run.mock.calls[0][1].question).toContain("أنشئ searchTerms قصيرة ودقيقة");
       expect(body.analysis).toContain("لم يتم التأكد من الهوية بدقة");
       expect(body.analysis).not.toContain("قراءة أو ترجمة مخترعة");
     } finally {
