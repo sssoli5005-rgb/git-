@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   deploy:
@@ -128,6 +129,9 @@ jobs:
         if: github.event_name == 'push' && steps.credentials.outputs.cloudflare_ready == 'true'
         env:
           ATHARA_BASE_URL: https://ektaberha500-current.sssoli5005.workers.dev
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
           const pageUrl = "https://egymonuments.gov.eg/ar/collections/statue-of-nephthys-6";
@@ -171,19 +175,54 @@ jobs:
           const visuallyMatched =
             result.identificationStatus === "probable" &&
             result.reverseImageSearchStatus === "match";
+          const recognitionPassed = nephthysNamed && officialSource && visuallyMatched;
+          const diagnosticDescription = [
+            result.identificationStatus || "missing identity status",
+            result.reverseImageSearchStatus || "missing match status",
+            "Nephthys=" + nephthysNamed,
+            "officialSource=" + officialSource,
+            "visualMatch=" + visuallyMatched,
+            "candidates=" + (result.candidates || []).length,
+          ].join("; ").slice(0, 140);
+          const statusResponse = await fetch(
+            "https://api.github.com/repos/" + process.env.GITHUB_REPOSITORY +
+              "/statuses/" + process.env.GITHUB_SHA,
+            {
+              method: "POST",
+              headers: {
+                "accept": "application/vnd.github+json",
+                "authorization": "Bearer " + process.env.GITHUB_TOKEN,
+                "content-type": "application/json",
+                "x-github-api-version": "2022-11-28",
+              },
+              body: JSON.stringify({
+                state: recognitionPassed ? "success" : "failure",
+                context: "ATHARA live scanner recognition",
+                description: diagnosticDescription,
+                target_url: process.env.ATHARA_BASE_URL,
+              }),
+              signal: AbortSignal.timeout(15000),
+            },
+          );
+          if (!statusResponse.ok) {
+            throw new Error("Could not publish live scanner test status: HTTP " + statusResponse.status);
+          }
+          console.log("Published GitHub recognition status:", diagnosticDescription);
           console.log(JSON.stringify({
             identificationStatus: result.identificationStatus,
             reverseImageSearchStatus: result.reverseImageSearchStatus,
             confidenceByField: result.confidenceByField,
             visionDiagnostics: result.visionDiagnostics || null,
+            imageRetrievalDiagnostics: result.imageRetrievalDiagnostics || null,
             matchedArtifact: result.matchedArtifact || null,
+            candidates: result.candidates || [],
             sources: result.sources,
             nephthysNamed,
             officialMinistryCatalogueSource: officialSource,
             visuallyMatched,
             analysis: result.analysis,
           }, null, 2));
-          if (!nephthysNamed || !officialSource || !visuallyMatched) {
+          if (!recognitionPassed) {
             console.error("LIVE ARTIFACT RECOGNITION FAILED: the same Ministry catalogue image must return the Nephthys identity, its official record, and a visual match.");
             process.exit(1);
           }
