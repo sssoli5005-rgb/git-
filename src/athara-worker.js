@@ -1,4 +1,5 @@
 const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
+const FALLBACK_VISION_MODEL = VISION_MODEL;
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
 const MAX_IMAGE_CHARS = 8_500_000;
