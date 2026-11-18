@@ -1722,8 +1722,26 @@ async function readGroundedScannerSource(entry, observation) {
   }
 }
 
+function scannerHasDistinctiveArtifactIdentity(observation) {
+  const generic = new Set([
+    "statue","artifact","egyptian","ancient","temple","wooden","bust","plaster","stone","painted","royal","figurine",
+    "تمثال","اثري","اثر","مصرية","مصري","القديمة","قديم","ملون","حجر","جص","ملكي","خشبي","ملك","ملكه","اله","الهه","فرعون",
+  ]);
+  const identity = [
+    observation?.visualCandidateIdentity,
+    observation?.identity,
+    ...(Array.isArray(observation?.searchTerms) ? observation.searchTerms : []),
+    ...(Array.isArray(observation?.keywords) ? observation.keywords : []),
+  ].filter((value) => typeof value === "string").join(" ");
+  const terms = normalizeSearchTerms(identity).filter((term) => !generic.has(term));
+  return terms.some((term) => term.length >= 5);
+}
+
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
+  if (!scannerHasDistinctiveArtifactIdentity(observation)) {
+    return { sources: [], candidates: [], availableSources: 0, failedSources: 0, provider: "" };
+  }
   const providers = [];
   const geminiKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
   const groqKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
