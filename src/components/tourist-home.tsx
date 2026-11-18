@@ -320,8 +320,20 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             candidates?: ScanArtifactCandidate[];
             identificationStatus?: "confirmed" | "probable" | "unverified";
             sourceStory?: string;
+            researchCandidate?: {
+              name?: string;
+              museum?: string;
+              location?: string;
+              period?: string;
+              description?: string;
+              source?: string;
+              url?: string;
+              visuallyMatched?: boolean;
+              status?: string;
+            } | null;
           };
-          let analysis = data.analysis || "";
+          const sourceAnalysis = data.analysis || "";
+          let analysis = sourceAnalysis;
           if (data.visualDescription) {
             const visual = data.visualDescription;
             const details = [
@@ -423,12 +435,57 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                   : "The details above come from a related museum record and do not confirm that the uploaded image shows this exact object.",
               ].filter(Boolean).join("\n\n");
             } else {
-              // Do not turn keyword-search records or low-scoring candidates into an
-              // artifact identification. Keep the result honest and uncluttered.
+              // Keep the model's actual first-pass identification visible.
+              // A missing catalog/image match changes the confidence label; it must
+              // not erase a useful visual hypothesis returned in data.analysis.
+              const cleanText = (value: unknown) => String(value || "")
+                .replace(/https?:\/\/\S+/g, "")
+                .replace(/\n{3,}/g, "\n\n")
+                .trim();
+              const analysisSections = sourceAnalysis.split(/\n(?=\d+\.\s)/);
+              const sectionText = (number: number) => {
+                const block = analysisSections.find((part) =>
+                  new RegExp("^" + number + "\\.\\s").test(part.trim()),
+                );
+                return block ? cleanText(block.trim().replace(/^\d+\.\s*[^\n]*\n?/, "")) : "";
+              };
+              const initialIdentification = sectionText(1);
+              const initialLocation = sectionText(2);
+              const initialStory = sectionText(3);
+              const lead = data.researchCandidate ||
+                candidates.find((candidate) => Boolean(candidate.name && candidate.url)) ||
+                null;
+              const trustedSource = data.sources?.find((source) => source.trusted);
+              const story = cleanText(
+                lead?.description || data.sourceStory || trustedSource?.snippet || initialStory,
+              );
+              const reliableLocation = cleanText(lead?.location || lead?.museum ||
+                (data.confidenceByField?.place === "high" || data.confidenceByField?.place === "medium"
+                  ? initialLocation
+                  : ""));
+              const initialTextIsOnlyFailure =
+                !initialIdentification ||
+                /^(?:لم يتم التأكد|لم أستطع تحديد|لا أستطيع تحديد|غير مؤكد|unknown|not identified|not confirmed)/i
+                  .test(initialIdentification);
+              const nameOrVisualLead = lead?.name
+                ? `اسم مرشح من سجل متحفي: ${lead.name}`
+                : !initialTextIsOnlyFailure
+                  ? `التعرّف المبدئي من الصورة: ${initialIdentification}`
+                  : "";
               analysis = [
                 resultCopy.unverifiedStatus,
-                resultCopy.notIdentified,
-              ].join("\n\n");
+                nameOrVisualLead,
+                reliableLocation ? `المكان الوارد في المصدر: ${reliableLocation}` : "",
+                lead?.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
+                story ? `${resultCopy.storyLabel}: ${story.slice(0, 1100)}` : "",
+                !nameOrVisualLead && !story
+                  ? (lang === "ar"
+                    ? "لم يظهر اسم موثوق للقطعة في هذه المحاولة. جرّبي صورة أوضح أو زاوية أمامية."
+                    : resultCopy.notIdentified)
+                  : (lang === "ar"
+                    ? "المعلومات المبدئية لا تعني أن المطابقة البصرية مع سجل المتحف قد تأكدت."
+                    : "These preliminary details do not mean that a visual match to the museum record has been confirmed."),
+              ].filter(Boolean).join("\n\n");
             }
           }
 
