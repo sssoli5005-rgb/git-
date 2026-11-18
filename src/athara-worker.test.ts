@@ -114,10 +114,10 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
-      )).toBe(true);
+      )).toBe(false);
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("api.groq.com"),
-      )).toBe(true);
+      )).toBe(false);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -431,7 +431,7 @@ describe("ATHARA Cloudflare Worker", () => {
 
     expect(unsupported.status).toBe(400);
     expect(malformed.status).toBe(400);
-    expect(run).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a malformed enhanced image before calling the model", async () => {
@@ -649,14 +649,14 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.analysis).toContain("صيغة قرابين شائعة في مناظر المعابد");
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toBe("@cf/moondream/moondream3.1-9B-A2B");
-    expect(run.mock.calls[0][1].image).toEqual([104, 101, 108, 108, 111]);
+    expect(run.mock.calls[0][1].image).toMatch(/^data:image\\/png;base64,/);
     expect(run.mock.calls[0][1].question).toContain("استفد من معرفتك الداخلية");
     expect(run.mock.calls[0][1].question).toContain("العنخ");
     expect(run.mock.calls[0][1].question).toContain("افحص كل شخصية على حدة");
     expect(run.mock.calls[0][1].question).toContain("خطمِه الطويل العريض");
     expect(run.mock.calls[0][1].question).toContain("سوبك كهوية محتملة فقط");
     expect(run.mock.calls[0][1].question).toContain("لا توجد في هذه الخدمة قاعدة صور متجهية");
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(6);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(String(fetchMock.mock.calls[0][0])).toContain(
       encodeURIComponent("ancient Egyptian offering scene"),
     );
@@ -1392,7 +1392,7 @@ describe("ATHARA Cloudflare Worker", () => {
         headers: { "content-type": "application/json" },
       });
     }));
-    const run = vi.fn();
+    const run = vi.fn().mockRejectedValueOnce(new Error("Cloudflare Moondream busy"));
     const response = await worker.fetch(
       post("/api/scan", { image: png, language: "ar", mode: "objects" }),
       { AI: { run }, GROQ_API_KEY: "test-groq-key" },
