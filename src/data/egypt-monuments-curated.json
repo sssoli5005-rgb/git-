@@ -178,6 +178,64 @@
       "imageUrls": [
         "https://egymonuments.gov.eg/media/2744/palettee.jpg?crop=0.088753275152030964%2C0.098456128338768184%2C0.11470751500736706%2C0.060102966772102334&cropmode=percentage&height=423&rnd=132581519660000000&width=645"
       ]
+    },
+    {
+      "id": "mota-mentuhotep-ii-je-36195",
+      "title": "Statue of Mentuhotep II (Nebhepetre)",
+      "mode": "objects",
+      "keywords": [
+        "Mentuhotep II",
+        "Mentuhotep",
+        "Nebhepetre",
+        "Nebheptre",
+        "Nebhepetra",
+        "Mentuhotep Nebhepetre",
+        "منتوحتب الثاني",
+        "منتوحتب",
+        "نب حبت رع",
+        "JE 36195",
+        "red crown",
+        "deshret",
+        "black painted skin",
+        "Osiris",
+        "crossed arms",
+        "Sed festival",
+        "Heb Sed",
+        "jubilee garment",
+        "painted sandstone",
+        "seated king",
+        "Middle Kingdom",
+        "Eleventh Dynasty",
+        "Deir el-Bahari",
+        "Bab el-Hosan",
+        "Thebes",
+        "العرش",
+        "تاج أحمر"
+      ],
+      "description": "The seated painted sandstone statue represents King Nebhepetre Mentuhotep II (Mentuhotep II), the ruler who reunified Upper and Lower Egypt and established the Middle Kingdom after the First Intermediate Period. He wears the Red Crown of Lower Egypt and the close-fitting jubilee garment associated with the Sed festival. His crossed arms and black-painted skin associate him with Osiris and ideas of death, fertility, and resurrection. The statue was discovered by Howard Carter in 1900 inside a subterranean chamber (Bab el-Hosan) in the king's mortuary complex at Deir el-Bahari. The official Egyptian Museum Cairo record lists it in Gallery 26 on the Ground Floor.",
+      "period": "Middle Kingdom, 11th Dynasty, reign of Nebhepetre Mentuhotep II (c. 2055–2004 BC)",
+      "location": "The Egyptian Museum, Cairo, Gallery 26, Ground Floor",
+      "museum": "The Egyptian Museum, Cairo",
+      "objectNumber": "JE 36195",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/en/collections/statue-of-mentuhotep-4",
+      "additionalSources": [
+        {
+          "title": "Statue of King Mentuhotep II — Egyptian Museum Cairo",
+          "sourceTitle": "The Egyptian Museum, Cairo",
+          "url": "https://egyptianmuseumcairo.eg/artefacts/statue-of-mentuhotep/",
+          "description": "Official museum record: Gallery 26, Ground Floor; painted sandstone; discovered at Deir el-Bahari in 1900."
+        },
+        {
+          "title": "Seated Statue of King Nebhepetre Mentuhotep II — ARCE",
+          "sourceTitle": "American Research Center in Egypt",
+          "url": "https://arce.org/seated-statue-king-nebhepetre-mentuhotep-ii/",
+          "description": "Scholarly description and provenance; current location Egyptian Museum, Cairo, JE 36195."
+        }
+      ],
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/1290/montuhotep.jpg?center=0.2857142857142857%2C0.51851851851851849%26height=423%26mode=crop%26rnd=134248696440000000%26width=645"
+      ]
     }
   ]
 }
