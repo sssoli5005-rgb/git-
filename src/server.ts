@@ -62,7 +62,14 @@ export default {
         env && typeof env === "object" && "AI" in env
           ? (env as { AI?: Parameters<typeof handleChatPost>[2] }).AI
           : undefined;
-      return handleChatPost(request, fetch, cloudflareAI, env as Record<string, string | undefined>);
+      try {
+        return await handleChatPost(request, fetch, cloudflareAI, env as Record<string, string | undefined>);
+      } catch (error) {
+        console.error("[Chat] Unhandled request failure", {
+          name: error instanceof Error ? error.name : "unknown",
+        });
+        return Response.json({ code: "unavailable" }, { status: 503 });
+      }
     }
 
     // Make other Cloudflare bindings available to TanStack route handlers.
