@@ -990,6 +990,20 @@ function officialTextCandidateArtifact(candidate) {
   };
 }
 
+function scannerSourceSupportsVisualIdentity(source, observation) {
+  if (source?.trusted !== true || !source?.url) return false;
+  const visualIdentity = String(observation?.visualCandidateIdentity || observation?.identity || "").trim();
+  const visualEvidence = String(observation?.identityEvidence || "").trim();
+  if (!visualIdentity || visualEvidence.length < 12) return false;
+  if (!scannerSourceUrlAllowed(source.url)) return false;
+  const identityTerms = scannerCandidateTerms({ identity: visualIdentity })
+    .filter((term) => term.length > 2);
+  const sourceTerms = new Set(normalizeSearchTerms(
+    `${source.title || ""} ${source.snippet || ""}`,
+  ));
+  return identityTerms.some((term) => sourceTerms.has(term));
+}
+
 function scannerSourceBackedArtifact(source, observation, candidates, officialTextCandidates) {
   if (!source?.url) return null;
   const sourceUrl = String(source.url);
@@ -1000,7 +1014,7 @@ function scannerSourceBackedArtifact(source, observation, candidates, officialTe
 
   const candidate = candidates.find((item) => item?.url === sourceUrl);
   const sourceTitle = cleanScannerArtifactName(source.title);
-  const titleSupportsIdentity = scannerSourceSupportsCandidate({
+  const titleSupportsIdentity = scannerSourceSupportsVisualIdentity({
     title: sourceTitle,
     url: sourceUrl,
     snippet: "",
@@ -4201,8 +4215,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           (result) => result.trustedSourcesAvailable === true,
         );
         const sourceBackedSource = sources.find((source) =>
-          (observation.visualCandidateIdentity || observation.identity) &&
-          scannerSourceSupportsCandidate(source, observation),
+          scannerSourceSupportsVisualIdentity(source, observation),
         ) || null;
         const sourceBackedCandidate = Boolean(sourceBackedSource);
         const sourceBackedArtifact = sourceBackedSource
