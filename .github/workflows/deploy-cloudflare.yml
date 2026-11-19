@@ -26,9 +26,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Dedicated secrets take priority. Legacy key names are compatibility fallbacks
+          # during migration; set separate CHAT_* and SCANNER_* keys to isolate provider quotas.
+          CHAT_GEMINI_API_KEY: ${{ secrets.CHAT_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
+          CHAT_GROQ_API_KEY: ${{ secrets.CHAT_GROQ_API_KEY || secrets.GROQ_API_KEY }}
+          SCANNER_GEMINI_API_KEY: ${{ secrets.SCANNER_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
+          SCANNER_GROQ_API_KEY: ${{ secrets.SCANNER_GROQ_API_KEY || secrets.GROQ_API_KEY }}
+          SCANNER_OPENROUTER_API_KEY: ${{ secrets.SCANNER_OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY }}
         run: |
           if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "cloudflare_ready=true" >> "$GITHUB_OUTPUT"
@@ -36,24 +40,15 @@ jobs:
             echo "cloudflare_ready=false" >> "$GITHUB_OUTPUT"
             echo "Cloudflare deployment credentials are not configured."
           fi
-          if [ -n "$GEMINI_API_KEY" ]; then
-            echo "gemini_ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "gemini_ready=false" >> "$GITHUB_OUTPUT"
-            echo "GEMINI_API_KEY is not configured; Gemini chat will not be updated."
-          fi
-          if [ -n "$GROQ_API_KEY" ]; then
-            echo "groq_ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "groq_ready=false" >> "$GITHUB_OUTPUT"
-            echo "GROQ_API_KEY is not configured; Groq chat will not be updated."
-          fi
-          if [ -n "$OPENROUTER_API_KEY" ]; then
-            echo "openrouter_ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "openrouter_ready=false" >> "$GITHUB_OUTPUT"
-            echo "OPENROUTER_API_KEY is not configured; free OpenRouter vision fallbacks remain disabled."
-          fi
+          for name in CHAT_GEMINI CHAT_GROQ SCANNER_GEMINI SCANNER_GROQ SCANNER_OPENROUTER; do
+            value_name="${name}_API_KEY"
+            if [ -n "${!value_name:-}" ]; then
+              echo "${name,,}_ready=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${name,,}_ready=false" >> "$GITHUB_OUTPUT"
+              echo "$value_name is not configured."
+            fi
+          done
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -77,32 +72,50 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Configure Gemini chat secret
-        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.gemini_ready == 'true'
+      - name: Configure chat Gemini secret
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.chat_gemini_ready == 'true'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: printf '%s' "$GEMINI_API_KEY" | bunx wrangler@4.141.0 secret put GEMINI_API_KEY --name ektaberha500-current
+          CHAT_GEMINI_API_KEY: ${{ secrets.CHAT_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
+        run: printf '%s' "$CHAT_GEMINI_API_KEY" | bunx wrangler@4.141.0 secret put CHAT_GEMINI_API_KEY --name ektaberha500-current
 
-      - name: Configure Groq chat secret
-        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.groq_ready == 'true'
+      - name: Configure chat Groq secret
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.chat_groq_ready == 'true'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: printf '%s' "$GROQ_API_KEY" | bunx wrangler@4.141.0 secret put GROQ_API_KEY --name ektaberha500-current
+          CHAT_GROQ_API_KEY: ${{ secrets.CHAT_GROQ_API_KEY || secrets.GROQ_API_KEY }}
+        run: printf '%s' "$CHAT_GROQ_API_KEY" | bunx wrangler@4.141.0 secret put CHAT_GROQ_API_KEY --name ektaberha500-current
 
-      - name: Configure OpenRouter vision secret
-        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.openrouter_ready == 'true'
+      - name: Configure scanner Gemini secret
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.scanner_gemini_ready == 'true'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: printf '%s' "$OPENROUTER_API_KEY" | bunx wrangler@4.141.0 secret put OPENROUTER_API_KEY --name ektaberha500-current
+          SCANNER_GEMINI_API_KEY: ${{ secrets.SCANNER_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
+        run: printf '%s' "$SCANNER_GEMINI_API_KEY" | bunx wrangler@4.141.0 secret put SCANNER_GEMINI_API_KEY --name ektaberha500-current
+
+      - name: Configure scanner Groq secret
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.scanner_groq_ready == 'true'
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SCANNER_GROQ_API_KEY: ${{ secrets.SCANNER_GROQ_API_KEY || secrets.GROQ_API_KEY }}
+        run: printf '%s' "$SCANNER_GROQ_API_KEY" | bunx wrangler@4.141.0 secret put SCANNER_GROQ_API_KEY --name ektaberha500-current
+
+      - name: Configure scanner OpenRouter secret
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.scanner_openrouter_ready == 'true'
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SCANNER_OPENROUTER_API_KEY: ${{ secrets.SCANNER_OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY }}
+        run: printf '%s' "$SCANNER_OPENROUTER_API_KEY" | bunx wrangler@4.141.0 secret put SCANNER_OPENROUTER_API_KEY --name ektaberha500-current
 
       - name: Smoke test deployed application
         if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true'
