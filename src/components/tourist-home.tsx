@@ -329,6 +329,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               source?: string;
               url?: string;
               visuallyMatched?: boolean;
+              sourceBacked?: boolean;
               status?: string;
             } | null;
           };
@@ -389,7 +390,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               (data.identificationStatus === "probable" ? bestVisualCandidate : null);
             const isIdentified = data.identificationStatus === "confirmed" ||
               data.identificationStatus === "probable" ||
-              (data.researchCandidate?.visuallyMatched !== false &&
+              (data.researchCandidate?.sourceBacked === true &&
                 Boolean(data.researchCandidate?.name) &&
                 data.sources?.some((source) => source.trusted && source.url === data.researchCandidate?.url));
             const identificationLabel = data.identificationStatus === "confirmed"
@@ -430,15 +431,19 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const leadDetails = [
                 leadStory,
                 lead.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
-                lang === "ar"
-                  ? "الاسم مدعوم بقرائن الصورة وسجل أثري موثوق، لكن لم تُجرَ مطابقة مباشرة لصورة الكتالوج."
-                  : "The image clues and a trusted artifact record support this candidate, but a direct catalogue-image match was not completed.",
+                lead.sourceBacked
+                  ? (lang === "ar"
+                    ? "الاسم مدعوم بقرائن الصورة وسجل أثري موثوق؛ المطابقة المرجعية المباشرة لم تكتمل."
+                    : "The image clues and a trusted artifact record support this candidate; direct reference-image matching was not completed.")
+                  : (lang === "ar"
+                    ? "ده سجل أثري مرتبط بالبحث، لكنه لا يثبت وحده إن الصورة لنفس القطعة."
+                    : "This is a related artifact record; by itself it does not prove that the image shows the same object."),
               ].filter(Boolean).join(" ");
-              const sourceBacked = lead.visuallyMatched !== false &&
+              const sourceBacked = lead.sourceBacked === true &&
                 data.sources?.some((source) => source.trusted && source.url === lead.url);
               const leadStatus = sourceBacked
-                ? (lang === "ar" ? "تم التعرف على الأثر — تطابق مرجّح" : resultCopy.probableStatus)
-                : resultCopy.unverifiedStatus;
+                ? (lang === "ar" ? "تم التعرف على الأثر بنجاح — تطابق مرجّح" : resultCopy.probableStatus)
+                : (lang === "ar" ? "اسم مرشح يحتاج مراجعة" : resultCopy.unverifiedStatus);
               const leadName = String(lead.name || "")
                 .replace(/\s*[-–—]\s*(?:إكتشف|اكتشف)\s+الآثار(?:\s+المصرية)?(?:\s*[-–—].*)?$/iu, "")
                 .trim();
