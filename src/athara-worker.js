@@ -43,12 +43,13 @@ const SCANNER_IMAGE_HOSTS = new Set([
 const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
   "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
-  "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org",
+  "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org", "egyptianmuseumcairo.eg",
   "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org",
 ];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
+  "egyptianmuseumcairo.eg",
   "ucl.ac.uk",
   "metmuseum.org",
   "britishmuseum.org",
@@ -68,6 +69,7 @@ const TRUSTED_SOURCE_DOMAINS = [
 ];
 const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
+  "egyptianmuseumcairo.eg",
   "whc.unesco.org",
   "ucl.ac.uk",
   "metmuseum.org",
@@ -568,19 +570,18 @@ function hasVisionIdentityAgreement(identities) {
   return false;
 }
 
-function needsAdditionalArtifactVision(observations, mode) {
+function needsAdditionalArtifactVision(observations, mode, configuredProviders = 1) {
   if (!observations.length) return true;
   if (mode !== "objects") return false;
+  const providerLimit = Math.max(1, Math.min(3, Number(configuredProviders) || 1));
   const identities = observations
     .map((observation) => meaningfulVisionText(observation.identity || observation.visualCandidateIdentity))
     .filter(Boolean);
-  // A generic label such as "an ancient Egyptian bust" is not enough to stop:
-  // ask the next independent vision provider for a named artifact hypothesis.
-  if (identities.length === 0) return true;
-  if (identities.length === 1) return specificVisionIdentityTerms(identities[0]).length === 0;
-  // Ask for at most one tie-breaker when two engines disagree; do not exhaust
-  // every free vision provider on an ordinary scan.
-  return identities.length < 3 && !hasVisionIdentityAgreement(identities);
+  // With more than one configured provider, obtain at least two independent
+  // visual readings. Ask a third only when the first two do not agree.
+  if (observations.length < Math.min(2, providerLimit)) return true;
+  if (identities.length < 2) return observations.length < providerLimit;
+  return observations.length < providerLimit && !hasVisionIdentityAgreement(identities);
 }
 
 function readExifGps(bytes) {
@@ -3610,7 +3611,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
       const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
+      const openAiVisionConfigured = Boolean(openAiVisionKey);
+      const mistralVisionConfigured = Boolean(mistralVisionKey);
+      const anthropicVisionConfigured = Boolean(anthropicVisionKey);
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
@@ -3894,6 +3898,19 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const visionAttempts = [];
       const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
       const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+      const openRouterVisionKey = typeof env.OPENROUTER_API_KEY === "string" ? env.OPENROUTER_API_KEY.trim() : "";
+      const openAiVisionKey = typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY.trim() : "";
+      const mistralVisionKey = typeof env.MISTRAL_API_KEY === "string" ? env.MISTRAL_API_KEY.trim() : "";
+      const anthropicVisionKey = typeof env.ANTHROPIC_API_KEY === "string" ? env.ANTHROPIC_API_KEY.trim() : "";
+      const configuredVisionProviderCount = [
+        typeof env.AI?.run === "function" || localOllama,
+        Boolean(geminiVisionKey),
+        Boolean(groqVisionKey),
+        Boolean(openRouterVisionKey),
+        Boolean(openAiVisionKey),
+        Boolean(mistralVisionKey),
+        Boolean(anthropicVisionKey),
+      ].filter(Boolean).length;
       try {
         let rawVisual = "";
         let visionUsed = "";
@@ -4000,7 +4017,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (geminiVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+        if (geminiVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
           const geminiModel = geminiVisionModels[0];
           try {
             const geminiResponse = await fetchVisionWithRetry(
@@ -4040,7 +4057,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
               ? env.GROQ_MODEL.trim()
               : "qwen/qwen3.8-27b";
-        if (groqVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+        if (groqVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
           try {
             const groqResponse = await fetchVisionWithRetry(
               "https://api.groq.com/openai/v1/chat/completions",
@@ -4089,12 +4106,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        const openRouterVisionKey = typeof env.OPENROUTER_API_KEY === "string"
-          ? env.OPENROUTER_API_KEY.trim()
-          : "";
-        if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+        if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
           for (const openRouterModel of OPENROUTER_VISION_MODELS) {
-            if (!needsAdditionalArtifactVision(independentObservations, mode)) break;
+            if (!needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) break;
             try {
               const openRouterResponse = await fetchVisionWithRetry(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -4161,6 +4175,124 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 reason: String(modelError?.message || modelError).slice(0, 180),
               });
             }
+          }
+        }
+
+        if (openAiVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
+          const model = typeof env.OPENAI_VISION_MODEL === "string" && env.OPENAI_VISION_MODEL.trim()
+            ? env.OPENAI_VISION_MODEL.trim()
+            : "gpt-5.4-mini";
+          try {
+            const response = await fetchVisionWithRetry("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: "Bearer " + openAiVisionKey },
+              body: JSON.stringify({
+                model,
+                max_completion_tokens: 1200,
+                messages: [
+                  { role: "system", content: prompt },
+                  { role: "user", content: [
+                    { type: "text", text: "افحص الصورة باستقلال عن المحركات السابقة. لا تفترض صحة أي اسم اقترحته محركات أخرى. أخرج JSON فقط بالمفاتيح المطلوبة." },
+                    { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } },
+                  ] },
+                ],
+              }),
+            }, { provider: "OpenAI Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.error?.message || "OpenAI Vision returned HTTP " + response.status);
+            const content = payload?.choices?.[0]?.message?.content;
+            rawVisual = typeof content === "string" ? content
+              : Array.isArray(content) ? content.map((part) => part?.text || "").join("\n").trim() : "";
+            if (!rawVisual) throw new Error("OpenAI Vision returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("OpenAI Vision returned invalid visual data.");
+            independentObservations.push(observation);
+            visionProviderUsed = "OpenAI " + model;
+          } catch (error) {
+            visionAttempts.push({ model: "OpenAI Vision", reason: String(error?.message || error).slice(0, 180) });
+            console.warn("[Image scanner] OpenAI Vision unavailable:", String(error?.message || error).slice(0, 180));
+          }
+        }
+
+        if (mistralVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
+          const model = typeof env.MISTRAL_VISION_MODEL === "string" && env.MISTRAL_VISION_MODEL.trim()
+            ? env.MISTRAL_VISION_MODEL.trim()
+            : "mistral-small-latest";
+          try {
+            const response = await fetchVisionWithRetry("https://api.mistral.ai/v1/chat/completions", {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: "Bearer " + mistralVisionKey },
+              body: JSON.stringify({
+                model,
+                temperature: 0.1,
+                max_tokens: 1200,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "text", text: prompt + "\n\nافحص الصورة باستقلال عن المحركات السابقة، وأخرج JSON فقط." },
+                    { type: "image_url", image_url: { url: imageDataUrl } },
+                  ],
+                }],
+              }),
+            }, { provider: "Mistral Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.message || payload?.error?.message || "Mistral Vision returned HTTP " + response.status);
+            const content = payload?.choices?.[0]?.message?.content;
+            rawVisual = typeof content === "string" ? content
+              : Array.isArray(content) ? content.map((part) => part?.text || "").join("\n").trim() : "";
+            if (!rawVisual) throw new Error("Mistral Vision returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("Mistral Vision returned invalid visual data.");
+            independentObservations.push(observation);
+            visionProviderUsed = "Mistral " + model;
+          } catch (error) {
+            visionAttempts.push({ model: "Mistral Vision", reason: String(error?.message || error).slice(0, 180) });
+            console.warn("[Image scanner] Mistral Vision unavailable:", String(error?.message || error).slice(0, 180));
+          }
+        }
+
+        if (anthropicVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
+          const model = typeof env.ANTHROPIC_VISION_MODEL === "string" && env.ANTHROPIC_VISION_MODEL.trim()
+            ? env.ANTHROPIC_VISION_MODEL.trim()
+            : "claude-haiku-5-5";
+          try {
+            const response = await fetchVisionWithRetry("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-api-key": anthropicVisionKey,
+                "anthropic-version": "2023-06-01",
+              },
+              body: JSON.stringify({
+                model,
+                max_tokens: 1200,
+                system: prompt,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "image", source: {
+                      type: "base64",
+                      media_type: detectImageMimeType(imageForAnalysis),
+                      data: bytesToBase64(imageForAnalysis),
+                    } },
+                    { type: "text", text: "افحص الصورة باستقلال عن المحركات السابقة، ولا تفترض صحة أي اسم مقترح سابقًا. أخرج JSON فقط." },
+                  ],
+                }],
+              }),
+            }, { provider: "Anthropic Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.error?.message || "Anthropic Vision returned HTTP " + response.status);
+            rawVisual = Array.isArray(payload?.content)
+              ? payload.content.filter((part) => part?.type === "text").map((part) => part.text || "").join("\n").trim()
+              : "";
+            if (!rawVisual) throw new Error("Anthropic Vision returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("Anthropic Vision returned invalid visual data.");
+            independentObservations.push(observation);
+            visionProviderUsed = "Anthropic " + model;
+          } catch (error) {
+            visionAttempts.push({ model: "Anthropic Vision", reason: String(error?.message || error).slice(0, 180) });
+            console.warn("[Image scanner] Anthropic Vision unavailable:", String(error?.message || error).slice(0, 180));
           }
         }
 
@@ -4962,7 +5094,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 Cloudflare: typeof env.AI?.run === "function",
                 Gemini: Boolean(geminiVisionKey),
                 Groq: Boolean(groqVisionKey),
-                OpenRouter: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+                OpenRouter: Boolean(openRouterVisionKey),
+                OpenAI: openAiVisionConfigured,
+                Mistral: mistralVisionConfigured,
+                Anthropic: anthropicVisionConfigured,
               },
               cloudflareFallbackModels: typeof env.AI?.run === "function" ? FALLBACK_VISION_MODELS : [],
               failedAttempts: visionAttempts.map((attempt) => ({
