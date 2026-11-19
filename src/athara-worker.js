@@ -377,7 +377,11 @@ async function freeArtifactIdentificationFallback(observation, language) {
       return (data?.search||[]).map(x=>({title:x.label||x.id,url:`https://www.wikidata.org/wiki/${x.id}`,snippet:x.description||"",source:"Wikidata",trusted:true}));
     })(),
   ]);
-  const sources=[...new Map(lookups.flatMap(x=>x.status==="fulfilled"?x.value:[]).filter(x=>x?.url&&scannerSourceUrlAllowed(x.url)).map(x=>[x.url,x])).values()].slice(0,6);
+  // Wikipedia, Wikidata, and Wikimedia Commons are discovery leads only.
+  // This endpoint may return only pages from approved institutions/museums.
+  const sources=[...new Map(lookups.flatMap(x=>x.status==="fulfilled"?x.value:[])
+    .filter(x=>x?.url&&scannerInstitutionalSourceUrlAllowed(x.url))
+    .map(x=>[x.url,{...x,trusted:true}])).values()].slice(0,6);
   if(!sources.length)return null;
   const best=sources.find(x=>x.snippet)||sources[0];
   return {name:best.title||"",story:best.snippet||"",location:"",sources,confidence:"low",usedFreeFallback:true};
@@ -1411,7 +1415,7 @@ function scannerIndexArtifactResult(indexHit) {
   const metadata = indexHit.metadata;
   const title = String(metadata.title_ar || metadata.title_en || "").trim();
   const pageUrl = String(metadata.page_url || "").trim();
-  if (!title || !scannerSourceUrlAllowed(pageUrl)) return null;
+  if (!title || !scannerInstitutionalSourceUrlAllowed(pageUrl)) return null;
   const description = String(metadata.description || "").trim();
   const location = [metadata.institution, metadata.city, metadata.country]
     .filter((part) => typeof part === "string" && part.trim())
@@ -1458,7 +1462,7 @@ function scannerIndexCandidates(indexResult) {
     const metadata = hit.metadata || {};
     const name = String(metadata.title_ar || metadata.title_en || "").trim();
     const url = String(metadata.page_url || "").trim();
-    if (!name || !scannerSourceUrlAllowed(url)) return [];
+    if (!name || !scannerInstitutionalSourceUrlAllowed(url)) return [];
     return [{
       name,
       museum: String(metadata.institution || "").trim(),
@@ -1473,7 +1477,7 @@ function scannerIndexCandidates(indexResult) {
 }
 
 function openScannerCandidateArtifact(candidate) {
-  if (!candidate || !scannerSourceUrlAllowed(candidate.url)) return null;
+  if (!candidate || !scannerInstitutionalSourceUrlAllowed(candidate.url)) return null;
   return {
     name: cleanScannerArtifactName(candidate.name),
     museum: candidate.museum || "",
@@ -3217,8 +3221,9 @@ async function searchHeritageSources(query, language = "ar") {
   const dedupedSources = [...new Map([
     ...officialSources.map((source) => [source.url, { ...source, trusted: true }]),
     ...trustedSources.map((source) => [source.url, source]),
-    ...results.map((source) => [source.url, source]),
-  ].filter(([, value]) => Boolean(value?.url))).values()].slice(0, 8);
+    ...results.filter((source) => scannerInstitutionalSourceUrlAllowed(source.url))
+      .map((source) => [source.url, { ...source, trusted: true }]),
+  ].filter(([, value]) => Boolean(value?.url) && scannerInstitutionalSourceUrlAllowed(value.url))).values()].slice(0, 8);
   return {
     sources: dedupedSources,
     trustedSourcesAvailable: trustedSources.length > 0 || officialSources.length > 0,
@@ -4669,7 +4674,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             trusted: true,
           }));
         sources = [...new Map(
-          [...sources, ...candidateSources, ...openScannerWebSources, ...indexSources, ...officialTextSources].map((source) => [source.url, source]),
+          [...sources, ...candidateSources, ...openScannerWebSources, ...indexSources, ...officialTextSources]
+            .filter((source) => scannerInstitutionalSourceUrlAllowed(source?.url))
+            .map((source) => [source.url, { ...source, trusted: true }]),
         ).values()].slice(0, 8);
         if (
           mode === "objects" &&
@@ -4740,7 +4747,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           sourceBackedArtifact;
         let responseSources = probableArtifact
           ? sources.filter((source) => source.url === probableArtifact.url)
-          : [...new Map([...sources, ...openScannerWebSources].map((source) => [source.url, source])).values()];
+          : [...new Map([...sources, ...openScannerWebSources]
+              .filter((source) => scannerInstitutionalSourceUrlAllowed(source?.url))
+              .map((source) => [source.url, { ...source, trusted: true }])).values()];
         const responseSourceText = probableArtifact?.description || responseSources
           .filter((source) => source?.trusted === true && typeof source.snippet === "string")
           .slice(0, 1)
@@ -4798,16 +4807,18 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               }
             : null);
         if (researchCandidate?.url && !responseSources.some((source) => source.url === researchCandidate.url)) {
-          responseSources = [
-            ...responseSources,
-            {
-              title: researchCandidate.name || "Museum catalogue record",
-              url: researchCandidate.url,
-              snippet: researchCandidate.description || researchCandidate.sourceText || "",
-              source: researchCandidate.source || researchCandidate.museum || "Museum catalogue",
-              trusted: true,
-            },
-          ].slice(0, 8);
+          if (scannerInstitutionalSourceUrlAllowed(researchCandidate.url)) {
+            responseSources = [
+              ...responseSources,
+              {
+                title: researchCandidate.name || "Museum catalogue record",
+                url: researchCandidate.url,
+                snippet: researchCandidate.description || researchCandidate.sourceText || "",
+                source: researchCandidate.source || researchCandidate.museum || "Museum catalogue",
+                trusted: true,
+              },
+            ].slice(0, 8);
+          }
         }
 
         console.info("[Image scanner] Final decision:", {
