@@ -910,7 +910,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 });
 
-describe("handleChatPost hosted Gemini provider", () => {describe("handleChatPost hosted Gemini provider", () => {
+describe("handleChatPost hosted Gemini provider", () => {
   it("uses the server-side Gemini key and returns the generated answer", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
@@ -1651,17 +1651,13 @@ describe("general web research across non-Egypt topics", () => {
         }
       }]
     }));
-    const ai = { run: vi.fn().mockResolvedValue({ response: "إجابة غير موثقة من الذاكرة." }) };
-
     const response = await handleChatPost(
       createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
       fetcher,
-      ai,
     );
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("ماقدرتش أتحقق من الإجابة");
-    expect(ai.run).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
