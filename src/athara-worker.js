@@ -43,12 +43,14 @@ const SCANNER_IMAGE_HOSTS = new Set([
 const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
   "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
-  "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org",
-  "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org",
+  "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org", "egyptianmuseumcairo.eg",
+  "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org", "arce.org",
 ];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
+  "egyptianmuseumcairo.eg",
+  "arce.org",
   "ucl.ac.uk",
   "metmuseum.org",
   "britishmuseum.org",
@@ -68,6 +70,8 @@ const TRUSTED_SOURCE_DOMAINS = [
 ];
 const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
+  "egyptianmuseumcairo.eg",
+  "arce.org",
   "whc.unesco.org",
   "ucl.ac.uk",
   "metmuseum.org",
@@ -198,7 +202,7 @@ const VISION_PROVIDER_RETRIES = 1;
 
 function safeVisionDiagnosticReason(reason, env) {
   let message = String(reason || "").replace(/\s+/g, " ").trim();
-  for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY]) {
+  for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY, env?.OPENROUTER_API_KEY, env?.OPENAI_API_KEY, env?.MISTRAL_API_KEY, env?.ANTHROPIC_API_KEY]) {
     if (typeof secret === "string" && secret.length > 6) {
       message = message.split(secret).join("[redacted]");
     }
@@ -313,9 +317,10 @@ function cleanVisionObservation(value) {
 
 function resolveVisionProviderOrder(env) {
   const order = [...DEFAULT_VISION_PROVIDER_ORDER];
-  if (typeof env?.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim()) {
-    order.push("OpenRouter");
-  }
+  if (typeof env?.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim()) order.push("OpenRouter");
+  if (typeof env?.OPENAI_API_KEY === "string" && env.OPENAI_API_KEY.trim()) order.push("OpenAI");
+  if (typeof env?.MISTRAL_API_KEY === "string" && env.MISTRAL_API_KEY.trim()) order.push("Mistral");
+  if (typeof env?.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.trim()) order.push("Anthropic");
   return order;
 }
 
@@ -568,19 +573,18 @@ function hasVisionIdentityAgreement(identities) {
   return false;
 }
 
-function needsAdditionalArtifactVision(observations, mode) {
+function needsAdditionalArtifactVision(observations, mode, configuredProviders = 1) {
   if (!observations.length) return true;
   if (mode !== "objects") return false;
+  const providerLimit = Math.max(1, Math.min(3, Number(configuredProviders) || 1));
   const identities = observations
     .map((observation) => meaningfulVisionText(observation.identity || observation.visualCandidateIdentity))
     .filter(Boolean);
-  // A generic label such as "an ancient Egyptian bust" is not enough to stop:
-  // ask the next independent vision provider for a named artifact hypothesis.
-  if (identities.length === 0) return true;
-  if (identities.length === 1) return specificVisionIdentityTerms(identities[0]).length === 0;
-  // Ask for at most one tie-breaker when two engines disagree; do not exhaust
-  // every free vision provider on an ordinary scan.
-  return identities.length < 3 && !hasVisionIdentityAgreement(identities);
+  // With more than one configured provider, obtain at least two independent
+  // visual readings. Ask a third only when the first two do not agree.
+  if (observations.length < Math.min(2, providerLimit)) return true;
+  if (identities.length < 2) return observations.length < providerLimit;
+  return observations.length < providerLimit && !hasVisionIdentityAgreement(identities);
 }
 
 function readExifGps(bytes) {
@@ -1230,12 +1234,20 @@ function officialVisualMatchResponse(officialVisualMatch, observation = null) {
   const sourceStory = String(item.description || "").trim();
   const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
   const sources = [{
-    title: item.sourceTitle,
+    title: item.sourceTitle || "Ministry of Tourism and Antiquities, Egypt",
     url: item.sourceUrl,
     snippet: item.description || "",
-    source: item.sourceTitle,
+    source: item.sourceTitle || "Ministry of Tourism and Antiquities, Egypt",
     trusted: true,
-  }];
+  }, ...(Array.isArray(item.additionalSources) ? item.additionalSources : [])
+    .filter((source) => source && scannerSourceUrlAllowed(source.url))
+    .map((source) => ({
+      title: String(source.title || source.sourceTitle || "Institutional catalogue record"),
+      url: source.url,
+      snippet: String(source.description || ""),
+      source: String(source.sourceTitle || source.source || ""),
+      trusted: true,
+    }))];
   const exactOfficialFingerprint = officialVisualMatch.engine === "Exact official Ministry image fingerprint";
   return {
     ok: true,
@@ -2630,6 +2642,167 @@ async function compareOfficialCatalogPhotosWithGroq(imageBytes, candidates, apiK
     : null;
 }
 
+async function compareImageCandidatesWithOpenAICompatible(
+  imageBytes,
+  candidates,
+  apiKey,
+  model,
+  threshold,
+  endpoint,
+  provider,
+  tokenField = "max_tokens",
+) {
+  const selected = candidates.slice(0, 6);
+  if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
+  const imageContent = (bytes) => {
+    const url = `data:${detectImageMimeType(bytes)};base64,${bytesToBase64(bytes)}`;
+    return provider === "Mistral"
+      ? { type: "image_url", image_url: url }
+      : { type: "image_url", image_url: { url, detail: "high" } };
+  };
+  const content = [{
+    type: "text",
+    text: `قارن صورة الزائر بالصور المرجعية التالية اعتمادًا على السمات البصرية الفعلية فقط، ولا تعتمد على أسماء القطع أو معلوماتك السابقة. أخرج JSON فقط بالشكل {"rankedMatches":[{"candidateId":"R1","similarity":0.0,"visualEvidence":["علامة بصرية مميزة أولى","علامة بصرية مميزة ثانية"]}]}. لا تمنح درجة ${threshold} أو أعلى إلا عند تطابق علامتين بصريتين مميزتين على الأقل. إذا لم يوجد تطابق واضح أعد rankedMatches فارغة.`,
+  }, imageContent(imageBytes)];
+  for (const [index, candidate] of selected.entries()) {
+    const candidateId = candidate.id || candidate.label || `R${index + 1}`;
+    content.push({ type: "text", text: `الصورة المرجعية ${candidateId}: ${candidate.name || candidate.item?.title || "سجل أثري"}` });
+    content.push(imageContent(candidate.imageBytes));
+  }
+  const requestBody = {
+    model,
+    temperature: 0.1,
+    messages: [{ role: "user", content }],
+  };
+  requestBody[tokenField] = 900;
+  const response = await fetchVisionWithRetry(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + apiKey },
+    body: JSON.stringify(requestBody),
+  }, { provider: provider + " official reference comparison", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `${provider} comparison returned HTTP ${response.status}`);
+  const raw = typeof payload?.choices?.[0]?.message?.content === "string"
+    ? payload.choices[0].message.content
+    : Array.isArray(payload?.choices?.[0]?.message?.content)
+      ? payload.choices[0].message.content.map((part) => part?.text || "").join("\n")
+      : "";
+  const jsonText = raw.match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) throw new Error(provider + " comparison returned invalid JSON.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch { throw new Error(provider + " comparison returned invalid JSON."); }
+  const ranked = (Array.isArray(parsed.rankedMatches) ? parsed.rankedMatches : [])
+    .map((entry, index) => {
+      const candidate = selected.find((item, itemIndex) =>
+        (item.id || item.label || `R${itemIndex + 1}`) === entry?.candidateId,
+      );
+      return {
+        candidate,
+        similarity: Number(entry?.similarity),
+        visualEvidence: Array.isArray(entry?.visualEvidence)
+          ? entry.visualEvidence.filter((item) => typeof item === "string" && item.trim()).slice(0, 3)
+          : [],
+      };
+    })
+    .filter((entry) => entry.candidate && Number.isFinite(entry.similarity) &&
+      entry.similarity >= 0 && entry.similarity <= 1)
+    .sort((left, right) => right.similarity - left.similarity);
+  const best = ranked[0];
+  return {
+    ranked: ranked.map(({ candidate, similarity }) => ({
+      name: candidate.name || candidate.item?.title || "",
+      url: candidate.url || candidate.item?.sourceUrl || "",
+      similarity: Math.round(similarity * 1000) / 1000,
+    })),
+    match: best && best.similarity >= threshold && best.visualEvidence.length >= 2
+      ? { candidate: best.candidate, similarity: best.similarity }
+      : null,
+  };
+}
+
+async function compareOfficialCatalogPhotosWithOpenAI(
+  imageBytes, candidates, apiKey, model, threshold,
+) {
+  const result = await compareImageCandidatesWithOpenAICompatible(
+    imageBytes, candidates, apiKey, model, threshold,
+    "https://api.openai.com/v1/chat/completions", "OpenAI", "max_completion_tokens",
+  );
+  return result.match
+    ? { item: result.match.candidate.item, url: result.match.candidate.item.sourceUrl,
+        engine: "OpenAI official catalogue image comparison", similarity: result.match.similarity }
+    : null;
+}
+
+async function compareOfficialCatalogPhotosWithMistral(
+  imageBytes, candidates, apiKey, model, threshold,
+) {
+  const result = await compareImageCandidatesWithOpenAICompatible(
+    imageBytes, candidates, apiKey, model, threshold,
+    "https://api.mistral.ai/v1/chat/completions", "Mistral", "max_tokens",
+  );
+  return result.match
+    ? { item: result.match.candidate.item, url: result.match.candidate.item.sourceUrl,
+        engine: "Mistral official catalogue image comparison", similarity: result.match.similarity }
+    : null;
+}
+
+async function compareOfficialCatalogPhotosWithAnthropic(imageBytes, candidates, apiKey, model, threshold) {
+  const selected = candidates.slice(0, 6);
+  if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return null;
+  const content = [{
+    type: "text",
+    text: `قارن صورة الزائر بالصور المرجعية التالية اعتمادًا على التشابه البصري الفعلي فقط، ولا تعتمد على أسماء القطع أو معلوماتك السابقة. أخرج JSON فقط بالشكل {"matchId":"R1","similarity":0.0,"visualEvidence":["علامة بصرية مميزة أولى","علامة بصرية مميزة ثانية"]}. لا تمنح درجة ${threshold} أو أعلى إلا عند تطابق علامتين بصريتين مميزتين.`,
+  }, {
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: detectImageMimeType(imageBytes),
+      data: bytesToBase64(imageBytes),
+    },
+  }];
+  for (const [index, candidate] of selected.entries()) {
+    content.push({ type: "text", text: `الصورة المرجعية R${index + 1}: ${candidate.item?.title || "سجل أثري"}` });
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: detectImageMimeType(candidate.imageBytes),
+        data: bytesToBase64(candidate.imageBytes),
+      },
+    });
+  }
+  const response = await fetchVisionWithRetry("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({ model, max_tokens: 500, messages: [{ role: "user", content }] }),
+  }, { provider: "Anthropic official reference comparison", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Anthropic comparison returned HTTP ${response.status}`);
+  const raw = Array.isArray(payload?.content)
+    ? payload.content.filter((part) => part?.type === "text").map((part) => part.text || "").join("\n")
+    : "";
+  const jsonText = raw.match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) throw new Error("Anthropic comparison returned invalid JSON.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch { throw new Error("Anthropic comparison returned invalid JSON."); }
+  const candidate = selected.find((item, index) => (item.label || `R${index + 1}`) === parsed.matchId);
+  const similarity = Number(parsed.similarity);
+  const evidence = Array.isArray(parsed.visualEvidence)
+    ? parsed.visualEvidence.filter((item) => typeof item === "string" && item.trim())
+    : [];
+  return candidate && Number.isFinite(similarity) && similarity >= threshold &&
+    similarity <= 1 && evidence.length >= 2
+    ? { item: candidate.item, url: candidate.item.sourceUrl,
+        engine: "Anthropic official catalogue image comparison", similarity }
+    : null;
+}
+
 async function compareImageCandidatesWithOpenRouterOnce(imageBytes, candidates, apiKey, model, threshold) {
   const selected = candidates.slice(0, 6);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
@@ -3485,6 +3658,9 @@ export default {
         guideModel: TEXT_MODEL,
         visionEngines: [
           { name: "Gemini", configured: geminiConfigured, model: configuredGeminiVisionModel(env) },
+          { name: "OpenAI", configured: typeof env.OPENAI_API_KEY === "string" && Boolean(env.OPENAI_API_KEY.trim()), model: env.OPENAI_VISION_MODEL || "gpt-5.4-mini" },
+          { name: "Mistral", configured: typeof env.MISTRAL_API_KEY === "string" && Boolean(env.MISTRAL_API_KEY.trim()), model: env.MISTRAL_VISION_MODEL || "mistral-small-latest" },
+          { name: "Anthropic", configured: typeof env.ANTHROPIC_API_KEY === "string" && Boolean(env.ANTHROPIC_API_KEY.trim()), model: env.ANTHROPIC_VISION_MODEL || "claude-haiku-5-5" },
           { name: "Groq", configured: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()), model: env.GROQ_VISION_MODEL || env.GROQ_MODEL || "qwen/qwen3.8-27b" },
           { name: "Cloudflare Workers AI", configured: typeof env.AI?.run === "function", model: VISION_MODEL, fallbackModels: FALLBACK_VISION_MODELS },
           {
@@ -3500,6 +3676,9 @@ export default {
           groqBrowserSearch: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()),
           cloudflareWebSearch: typeof env.AI?.websearch === "function",
           openRouterVision: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+          openAiVision: typeof env.OPENAI_API_KEY === "string" && Boolean(env.OPENAI_API_KEY.trim()),
+          mistralVision: typeof env.MISTRAL_API_KEY === "string" && Boolean(env.MISTRAL_API_KEY.trim()),
+          anthropicVision: typeof env.ANTHROPIC_API_KEY === "string" && Boolean(env.ANTHROPIC_API_KEY.trim()),
         },
         visionProviderOrder,
         visionFallbackOrder,
@@ -3595,7 +3774,23 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
     if (url.pathname === "/api/scan" && request.method === "POST") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const groqVisionConfigured = typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim());
+      const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
+      const openAiVisionKey = typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY.trim() : "";
+      const mistralVisionKey = typeof env.MISTRAL_API_KEY === "string" ? env.MISTRAL_API_KEY.trim() : "";
+      const anthropicVisionKey = typeof env.ANTHROPIC_API_KEY === "string" ? env.ANTHROPIC_API_KEY.trim() : "";
+      const openAiVisionConfigured = Boolean(openAiVisionKey);
+      const mistralVisionConfigured = Boolean(mistralVisionKey);
+      const anthropicVisionConfigured = Boolean(anthropicVisionKey);
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const configuredVisionProviderCount = [
+        typeof env.AI?.run === "function" || localOllama,
+        geminiConfigured,
+        groqVisionConfigured,
+        openRouterConfigured,
+        openAiVisionConfigured,
+        mistralVisionConfigured,
+        anthropicVisionConfigured,
+      ].filter(Boolean).length;
       const visionProviderOrder = resolveVisionProviderOrder(env);
       let body;
       try {
@@ -3609,9 +3804,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
-      if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
+      if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured &&
+          !groqVisionConfigured && !openRouterConfigured && !openAiVisionConfigured &&
+          !mistralVisionConfigured && !anthropicVisionConfigured) {
         return json(
           {
             ok: true,
@@ -3894,6 +4090,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const visionAttempts = [];
       const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
       const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+      const openRouterVisionKey = openRouterConfigured ? env.OPENROUTER_API_KEY.trim() : "";
       try {
         let rawVisual = "";
         let visionUsed = "";
@@ -3970,7 +4167,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   role: "user",
                   content: [
                     { type: "text", text: "حلّل الصورة بصريًا وأخرج JSON فقط بالمفاتيح المطلوبة. اقترح أقرب هوية كاحتمال، ولا تخترع مكانًا أو اسمًا مؤكدًا." },
-                    { type: "image_url", image_url: { url: imageDataUrl } },
+                    { type: "image_url", image_url: imageDataUrl },
                   ],
                 }],
                 temperature: 0.1,
@@ -4000,7 +4197,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (geminiVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+        if (geminiVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
           const geminiModel = geminiVisionModels[0];
           try {
             const geminiResponse = await fetchVisionWithRetry(
@@ -4040,7 +4237,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
               ? env.GROQ_MODEL.trim()
               : "qwen/qwen3.8-27b";
-        if (groqVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+        if (groqVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
           try {
             const groqResponse = await fetchVisionWithRetry(
               "https://api.groq.com/openai/v1/chat/completions",
@@ -4089,12 +4286,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        const openRouterVisionKey = typeof env.OPENROUTER_API_KEY === "string"
-          ? env.OPENROUTER_API_KEY.trim()
-          : "";
-        if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
+        if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
           for (const openRouterModel of OPENROUTER_VISION_MODELS) {
-            if (!needsAdditionalArtifactVision(independentObservations, mode)) break;
+            if (!needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) break;
             try {
               const openRouterResponse = await fetchVisionWithRetry(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -4161,6 +4355,124 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 reason: String(modelError?.message || modelError).slice(0, 180),
               });
             }
+          }
+        }
+
+        if (openAiVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
+          const model = typeof env.OPENAI_VISION_MODEL === "string" && env.OPENAI_VISION_MODEL.trim()
+            ? env.OPENAI_VISION_MODEL.trim()
+            : "gpt-5.4-mini";
+          try {
+            const response = await fetchVisionWithRetry("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: "Bearer " + openAiVisionKey },
+              body: JSON.stringify({
+                model,
+                max_completion_tokens: 1200,
+                messages: [
+                  { role: "system", content: prompt },
+                  { role: "user", content: [
+                    { type: "text", text: "افحص الصورة باستقلال عن المحركات السابقة. لا تفترض صحة أي اسم اقترحته محركات أخرى. أخرج JSON فقط بالمفاتيح المطلوبة." },
+                    { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } },
+                  ] },
+                ],
+              }),
+            }, { provider: "OpenAI Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.error?.message || "OpenAI Vision returned HTTP " + response.status);
+            const content = payload?.choices?.[0]?.message?.content;
+            rawVisual = typeof content === "string" ? content
+              : Array.isArray(content) ? content.map((part) => part?.text || "").join("\n").trim() : "";
+            if (!rawVisual) throw new Error("OpenAI Vision returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("OpenAI Vision returned invalid visual data.");
+            independentObservations.push(observation);
+            visionProviderUsed = "OpenAI " + model;
+          } catch (error) {
+            visionAttempts.push({ model: "OpenAI Vision", reason: String(error?.message || error).slice(0, 180) });
+            console.warn("[Image scanner] OpenAI Vision unavailable:", String(error?.message || error).slice(0, 180));
+          }
+        }
+
+        if (mistralVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
+          const model = typeof env.MISTRAL_VISION_MODEL === "string" && env.MISTRAL_VISION_MODEL.trim()
+            ? env.MISTRAL_VISION_MODEL.trim()
+            : "mistral-small-latest";
+          try {
+            const response = await fetchVisionWithRetry("https://api.mistral.ai/v1/chat/completions", {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: "Bearer " + mistralVisionKey },
+              body: JSON.stringify({
+                model,
+                temperature: 0.1,
+                max_tokens: 1200,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "text", text: prompt + "\n\nافحص الصورة باستقلال عن المحركات السابقة، وأخرج JSON فقط." },
+                    { type: "image_url", image_url: imageDataUrl },
+                  ],
+                }],
+              }),
+            }, { provider: "Mistral Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.message || payload?.error?.message || "Mistral Vision returned HTTP " + response.status);
+            const content = payload?.choices?.[0]?.message?.content;
+            rawVisual = typeof content === "string" ? content
+              : Array.isArray(content) ? content.map((part) => part?.text || "").join("\n").trim() : "";
+            if (!rawVisual) throw new Error("Mistral Vision returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("Mistral Vision returned invalid visual data.");
+            independentObservations.push(observation);
+            visionProviderUsed = "Mistral " + model;
+          } catch (error) {
+            visionAttempts.push({ model: "Mistral Vision", reason: String(error?.message || error).slice(0, 180) });
+            console.warn("[Image scanner] Mistral Vision unavailable:", String(error?.message || error).slice(0, 180));
+          }
+        }
+
+        if (anthropicVisionKey && needsAdditionalArtifactVision(independentObservations, mode, configuredVisionProviderCount)) {
+          const model = typeof env.ANTHROPIC_VISION_MODEL === "string" && env.ANTHROPIC_VISION_MODEL.trim()
+            ? env.ANTHROPIC_VISION_MODEL.trim()
+            : "claude-haiku-5-5";
+          try {
+            const response = await fetchVisionWithRetry("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-api-key": anthropicVisionKey,
+                "anthropic-version": "2023-06-01",
+              },
+              body: JSON.stringify({
+                model,
+                max_tokens: 1200,
+                system: prompt,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "image", source: {
+                      type: "base64",
+                      media_type: detectImageMimeType(imageForAnalysis),
+                      data: bytesToBase64(imageForAnalysis),
+                    } },
+                    { type: "text", text: "افحص الصورة باستقلال عن المحركات السابقة، ولا تفترض صحة أي اسم مقترح سابقًا. أخرج JSON فقط." },
+                  ],
+                }],
+              }),
+            }, { provider: "Anthropic Vision", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(payload?.error?.message || "Anthropic Vision returned HTTP " + response.status);
+            rawVisual = Array.isArray(payload?.content)
+              ? payload.content.filter((part) => part?.type === "text").map((part) => part.text || "").join("\n").trim()
+              : "";
+            if (!rawVisual) throw new Error("Anthropic Vision returned an empty response.");
+            const observation = parseVisionObservation(rawVisual);
+            if (!hasUsableVisionObservation(observation, mode)) throw new Error("Anthropic Vision returned invalid visual data.");
+            independentObservations.push(observation);
+            visionProviderUsed = "Anthropic " + model;
+          } catch (error) {
+            visionAttempts.push({ model: "Anthropic Vision", reason: String(error?.message || error).slice(0, 180) });
+            console.warn("[Image scanner] Anthropic Vision unavailable:", String(error?.message || error).slice(0, 180));
           }
         }
 
@@ -4242,7 +4554,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ? rankOfficialTextCandidates(catalog, observation)
           : [];
         let matchThreshold = DEFAULT_SCANNER_MATCH_THRESHOLD;
-        if (mode === "objects" && (geminiConfigured || groqVisionConfigured || openRouterConfigured)) {
+        if (mode === "objects" && (geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured)) {
           try {
             matchThreshold = scannerMatchThreshold(env);
           } catch (error) {
@@ -4258,7 +4570,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         let openScannerSourceCandidates = [];
         let openScannerDiscoveredCandidates = [];
         let openScannerWebSources = [];
-        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured || openRouterConfigured)) {
+        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured)) {
           const candidates = rankOfficialCatalogCandidates(catalog, observation);
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
@@ -4329,6 +4641,39 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 });
               }
             }
+            if (!officialVisualMatch && openAiVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithOpenAI(
+                  referenceImage, candidateImages, openAiVisionKey,
+                  (env.OPENAI_VISION_MODEL || "gpt-5.4-mini").trim(), matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({ model: "OpenAI official catalog comparison", reason: String(error?.message || error).slice(0, 180) });
+              }
+            }
+            if (!officialVisualMatch && mistralVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithMistral(
+                  referenceImage, candidateImages, mistralVisionKey,
+                  (env.MISTRAL_VISION_MODEL || "mistral-small-latest").trim(), matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({ model: "Mistral official catalog comparison", reason: String(error?.message || error).slice(0, 180) });
+              }
+            }
+            if (!officialVisualMatch && anthropicVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithAnthropic(
+                  referenceImage, candidateImages, anthropicVisionKey,
+                  (env.ANTHROPIC_VISION_MODEL || "claude-haiku-5-5").trim(), matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({ model: "Anthropic official catalog comparison", reason: String(error?.message || error).slice(0, 180) });
+              }
+            }
           }
         }
         if (officialVisualMatch) {
@@ -4394,16 +4739,16 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             if (!search.candidates.length) {
               openScannerSearchStatus = search.availableSources === 0
                 ? "failed"
-                : geminiConfigured || groqVisionConfigured
+                : geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured
                   ? "no_match"
                   : "unavailable";
             } else if (!candidateImages.length) {
               openScannerSearchStatus = search.availableSources === 0
                 ? "failed"
-                : geminiConfigured || groqVisionConfigured
+                : geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured
                   ? "no_match"
                   : "unavailable";
-            } else if (!geminiConfigured && !groqVisionConfigured) {
+            } else if (!(geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured)) {
               openScannerRankedCandidates = openScannerSourceCandidates.map((candidate) => ({
                 ...candidate,
                 similarity: null,
@@ -4484,7 +4829,46 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   });
                 }
               }
-
+              for (const comparisonProvider of [
+                openAiVisionConfigured ? {
+                  name: "OpenAI",
+                  run: () => compareImageCandidatesWithOpenAICompatible(
+                    comparisonImageBytes || imageBytes, candidateImages.slice(0, 5), openAiVisionKey,
+                    (env.OPENAI_VISION_MODEL || "gpt-5.4-mini").trim(), matchThreshold,
+                    "https://api.openai.com/v1/chat/completions", "OpenAI", "max_completion_tokens",
+                  ),
+                } : null,
+                mistralVisionConfigured ? {
+                  name: "Mistral",
+                  run: () => compareImageCandidatesWithOpenAICompatible(
+                    comparisonImageBytes || imageBytes, candidateImages.slice(0, 5), mistralVisionKey,
+                    (env.MISTRAL_VISION_MODEL || "mistral-small-latest").trim(), matchThreshold,
+                    "https://api.mistral.ai/v1/chat/completions", "Mistral", "max_tokens",
+                  ),
+                } : null,
+              ].filter(Boolean)) {
+                if (comparison?.match) break;
+                try {
+                  const peerComparison = await comparisonProvider.run();
+                  comparison = peerComparison?.match || !comparison
+                    ? peerComparison
+                    : {
+                        ...comparison,
+                        ranked: [...(comparison.ranked || []), ...(peerComparison.ranked || [])]
+                          .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
+                          .slice(0, 6),
+                      };
+                  openScannerComparisonSucceeded = true;
+                } catch (error) {
+                  visionAttempts.push({
+                    model: comparisonProvider.name + " open-catalog comparison",
+                    reason: String(error?.message || error).slice(0, 180),
+                  });
+                }
+              }
+              // Anthropic is used for official Ministry catalogue verification above.
+              // Public open-catalog candidates have a different shape and are not
+              // passed through the official-record matcher.
               openScannerRankedCandidates = comparison?.ranked?.length
                 ? comparison.ranked
                 : openScannerSourceCandidates.map((candidate) => ({ ...candidate, similarity: null }));
@@ -4962,7 +5346,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 Cloudflare: typeof env.AI?.run === "function",
                 Gemini: Boolean(geminiVisionKey),
                 Groq: Boolean(groqVisionKey),
-                OpenRouter: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+                OpenRouter: Boolean(openRouterVisionKey),
+                OpenAI: openAiVisionConfigured,
+                Mistral: mistralVisionConfigured,
+                Anthropic: anthropicVisionConfigured,
               },
               cloudflareFallbackModels: typeof env.AI?.run === "function" ? FALLBACK_VISION_MODELS : [],
               failedAttempts: visionAttempts.map((attempt) => ({
