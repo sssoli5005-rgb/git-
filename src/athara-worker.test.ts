@@ -376,8 +376,16 @@ describe("ATHARA Cloudflare Worker", () => {
       throw new Error("Embedding service unavailable in this test");
     });
     try {
+      const transformedCanvasImage = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+      const transformedSearchImage = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xd8, 0xff, 0xd9]).toString("base64");
       const response = await worker.fetch(
-        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        post("/api/scan", {
+          image: transformedCanvasImage,
+          originalImage: png,
+          searchImage: transformedSearchImage,
+          language: "ar",
+          mode: "objects",
+        }),
         {
           AI: { run: aiRun },
           OPENROUTER_API_KEY: "test-openrouter-key",
