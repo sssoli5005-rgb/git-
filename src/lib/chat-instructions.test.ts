@@ -164,6 +164,8 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("do not force an Egyptian connection");
     expect(prompt).toContain("Answer ordinary and specialist questions across the world");
     expect(prompt).toContain("official government and intergovernmental agencies");
+    expect(prompt).toContain("When a live web-search tool is available for a factual question, use it");
+    expect(prompt).toContain("never invent source names, links, or citations");
     expect(prompt).toContain("Infer the user's intended meaning despite spelling");
   });
 
