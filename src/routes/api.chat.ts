@@ -684,7 +684,7 @@ export async function handleChatPost(
           const choice = groqPayload?.choices?.[0];
           const rawAnswer = choice?.message?.content?.trim() ?? "";
           const parsedGroqAnswer = parseGroqSearchCitations(rawAnswer);
-          let answer = parsedGroqAnswer.answer;
+          const answer = parsedGroqAnswer.answer;
           const groqBrowserResults = (choice?.message?.executed_tools ?? [])
             .flatMap((tool) => tool.browser_results ?? [])
             .filter((result) => {
