@@ -526,6 +526,81 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
+  it("checks multiple official catalogue angles and can match the third reference view", async () => {
+    const imageBytes = Buffer.from(png.split(",")[1], "base64");
+    const imageUrls = [
+      "https://egymonuments.gov.eg/media/test/front.jpg",
+      "https://egymonuments.gov.eg/media/test/side.jpg",
+      "https://egymonuments.gov.eg/media/test/rear.jpg",
+    ];
+    const sourceUrl = "https://egymonuments.gov.eg/en/collections/multi-view-test-object/";
+    const otherBytes = new Uint8Array([0xff, 0xd8, 0x00, 0x01]);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const index = imageUrls.indexOf(url);
+      if (index >= 0) {
+        return new Response(index === 2 ? imageBytes : otherBytes, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const record = {
+      id: "multi-view-test-object",
+      title: "Multi-view Test Object",
+      mode: "objects",
+      keywords: ["multi-view", "test object", "carved figure"],
+      description: "A carved figure shown in several official catalogue views.",
+      location: "Egyptian Museum, Cairo",
+      museum: "Egyptian Museum",
+      sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
+      sourceUrl,
+      imageUrls,
+    };
+    const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/egypt-monuments-curated.json")) {
+        return Response.json({ records: [record] });
+      }
+      return new Response("", { status: 404 });
+    });
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "carved figure in side view",
+          identity: "Multi-view Test Object",
+          objectType: "carved figure",
+          searchTerms: ["multi-view", "carved figure"],
+          keywords: ["carved figure"],
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { AI: { run: aiRun }, OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        matchedArtifact: {
+          name: "Multi-view Test Object",
+          location: "Egyptian Museum, Cairo",
+          similarity: 1,
+        },
+      });
+      for (const url of imageUrls) {
+        expect(fetchMock).toHaveBeenCalledWith(url, expect.anything());
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // Keep the regression suite aligned with trusted visual evidence and isolated free-fallback behavior.
   it("reports the two Cloudflare vision models", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
