@@ -2694,6 +2694,83 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
+  it("continues through every OpenRouter vision fallback after quota and provider errors", async () => {
+    const attemptedModels: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+        return Response.json({ error: { message: "Gemini daily quota exhausted" } }, { status: 429 });
+      }
+      if (url === "https://api.groq.com/openai/v1/chat/completions") {
+        return Response.json({ error: { message: "Groq daily token limit reached" } }, { status: 429 });
+      }
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        const requestBody = JSON.parse(String(init?.body));
+        attemptedModels.push(requestBody.model);
+        if (requestBody.model !== "openrouter/free") {
+          return Response.json({ error: { message: "Free model quota exhausted" } }, { status: 429 });
+        }
+        return Response.json({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                visualDescription: "تمثال مصري قديم مصور من الجانب بغطاء رأس أخضر وكتف ملون",
+                identity: "تمثال مصري قديم من الجانب",
+                objectType: "تمثال ملون",
+                material: "خشب ملون",
+                searchTerms: ["تمثال مصري", "غطاء رأس أخضر", "صورة جانبية"],
+                keywords: ["تمثال", "غطاء رأس"],
+              }),
+            },
+          }],
+        });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn().mockRejectedValue(
+      new Error("4006: daily free allocation of 10,000 neurons exhausted"),
+    );
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects", diagnostics: true }),
+        {
+          AI: { run: aiRun },
+          GEMINI_API_KEY: "gemini-test-key",
+          GROQ_API_KEY: "groq-test-key",
+          OPENROUTER_API_KEY: "openrouter-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      // First four calls are the visual-description fallback chain. The next
+      // three are an independent official-catalogue comparison pass, which has
+      // its own OpenRouter model chain.
+      expect(attemptedModels).toEqual([
+        "inclusionai/ling-3.2-flash:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "google/gemma-4-31b-it:free",
+        "openrouter/free",
+        "inclusionai/ling-3.2-flash:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "google/gemma-4-31b-it:free",
+      ]);
+      expect(body.visionDiagnostics).toMatchObject({
+        provider: "OpenRouter openrouter/free",
+        usedFallback: true,
+      });
+      expect(body.visionDiagnostics.failedAttempts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ engine: "OpenRouter inclusionai/ling-3.2-flash:free" }),
+        expect.objectContaining({ engine: "OpenRouter nvidia/nemotron-3.5-super-vl:free" }),
+        expect.objectContaining({ engine: "OpenRouter google/gemma-4-31b-it:free" }),
+      ]));
+      expect(body.analysis).not.toContain("لم يتم تحليل الصورة أو مطابقتها");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("reports Gemini then Groq as the actual hosted fallback order", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key" });
     const body = await response.json();
