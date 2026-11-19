@@ -834,36 +834,73 @@ function rankOfficialCatalogCandidates(catalog, observation) {
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
   ].filter(Boolean).join(" ");
-  // Use a model-suggested name only to retrieve possible reference records.
-  // It is not proof: the reference-photo comparison below remains mandatory.
+  const curatedRecords = catalog.filter((record) =>
+    typeof record?.id === "string" && record.id.startsWith("mota-") &&
+    (record.mode === "objects" || record.mode === "both") &&
+    canonicalOfficialArchiveUrl(record.sourceUrl) &&
+    (record.imageUrls || []).some((imageUrl) => {
+      const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
+      return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
+    }),
+  );
+  const curatedFallback = curatedRecords.map((record) => ({
+    record,
+    score: 0,
+    titleMatches: [],
+    descriptionMatches: [],
+    curatedFallback: true,
+  }));
+  // A generic visual label (e.g. "royal bust") must not prevent comparison
+  // against the small bilingual official reference set.
+  const genericIdentityTerms = new Set([
+    "statue", "figure", "bust", "head", "face", "portrait", "profile", "woman", "female",
+    "man", "male", "king", "queen", "royal", "pharaoh", "egyptian", "ancient", "new",
+    "kingdom", "period", "green", "orange", "brown", "painted", "wooden", "stone",
+    "headdress", "crown", "shoulder", "carved", "goddess", "god", "deity",
+    "تمثال", "تماثيل", "نصفي", "رأس", "راس", "وجه", "امرأة", "انثى", "أنثى", "رجل",
+    "ملك", "ملكة", "ملكي", "ملكية", "فرعون", "مصري", "مصرية", "قديم", "قديمة",
+    "اخضر", "أخضر", "برتقالي", "بني", "خشبي", "حجري", "غطاء", "رأس", "تاج",
+  ]);
   const queryTerms = [...new Set([
     ...normalizeSearchTerms(queryText),
     ...scannerCandidateTerms({ identity: identityText }),
   ])].filter((term) => !GENERIC_IMAGE_SEARCH_TERMS.has(term));
-  if (queryTerms.length < 2) return [];
+  if (queryTerms.length < 2) return curatedFallback;
 
-  return catalog
-    .filter((record) => {
-      if (record.mode !== "objects" && record.mode !== "both") return false;
-      if (!canonicalOfficialArchiveUrl(record.sourceUrl)) return false;
-      return (record.imageUrls || []).some((imageUrl) => {
-        const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
-        return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
-      });
-    })
-    .map((record) => {
-      const titleTerms = new Set(normalizeSearchTerms(
-        [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),
-      ));
-      const descriptionTerms = new Set(normalizeSearchTerms(record.description));
-      const titleMatches = queryTerms.filter((term) => titleTerms.has(term));
-      const descriptionMatches = queryTerms.filter((term) => descriptionTerms.has(term));
-      const score = titleMatches.length * 4 + descriptionMatches.length;
-      return { record, score, titleMatches, descriptionMatches };
-    })
+  const eligibleRecords = catalog.filter((record) => {
+    if (record.mode !== "objects" && record.mode !== "both") return false;
+    if (!canonicalOfficialArchiveUrl(record.sourceUrl)) return false;
+    return (record.imageUrls || []).some((imageUrl) => {
+      const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
+      return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
+    });
+  });
+  const scored = eligibleRecords.map((record) => {
+    const titleTerms = new Set(normalizeSearchTerms(
+      [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),
+    ));
+    const descriptionTerms = new Set(normalizeSearchTerms(record.description));
+    const titleMatches = queryTerms.filter((term) => titleTerms.has(term));
+    const descriptionMatches = queryTerms.filter((term) => descriptionTerms.has(term));
+    const score = titleMatches.length * 4 + descriptionMatches.length;
+    return { record, score, titleMatches, descriptionMatches };
+  });
+  const ranked = scored
     .filter((candidate) => candidate.titleMatches.length > 0 || candidate.descriptionMatches.length >= 2)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 4);
+    .sort((left, right) => right.score - left.score);
+  const specificIdentityTerms = scannerCandidateTerms({ identity: identityText })
+    .filter((term) => term.length >= 4 && !genericIdentityTerms.has(term));
+  const hasNamedIdentityMatch = specificIdentityTerms.length > 0 && ranked.some((candidate) =>
+    specificIdentityTerms.some((term) => candidate.titleMatches.includes(term)),
+  );
+  if (!hasNamedIdentityMatch && curatedFallback.length) {
+    const bestGeneralCandidate = ranked.find((candidate) => !candidate.record.id?.startsWith("mota-"));
+    return [
+      ...curatedFallback,
+      ...(bestGeneralCandidate ? [{ ...bestGeneralCandidate, curatedFallback: false }] : []),
+    ];
+  }
+  return ranked.slice(0, 4);
 }
 
 const GENERIC_SCANNER_DESCRIPTION_TERMS = new Set([
