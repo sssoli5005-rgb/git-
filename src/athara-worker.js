@@ -2318,7 +2318,6 @@ async function searchArtifactGroundedSources(env, observation, language = "en") 
   };
 }
 
-async function downloadScannerCandidateImages(
 async function downloadScannerCandidateImages(candidates) {
   const downloads = await Promise.all(candidates.slice(0, 5).map(async (candidate) => {
     try {
