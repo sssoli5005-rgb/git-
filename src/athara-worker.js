@@ -3804,7 +3804,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured &&
           !groqVisionConfigured && !openRouterConfigured && !openAiVisionConfigured &&
           !mistralVisionConfigured && !anthropicVisionConfigured) {
@@ -4866,25 +4866,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   });
                 }
               }
-              if (!comparison?.match && anthropicVisionConfigured) {
-                try {
-                  const peerMatch = await compareOfficialCatalogPhotosWithAnthropic(
-                    comparisonImageBytes || imageBytes,
-                    candidateImages.slice(0, 5),
-                    anthropicVisionKey,
-                    (env.ANTHROPIC_VISION_MODEL || "claude-haiku-5-5").trim(),
-                    matchThreshold,
-                  );
-                  if (peerMatch) comparison = {
-                    ranked: [{ name: peerMatch.item?.title || "", url: peerMatch.url, similarity: peerMatch.similarity }],
-                    match: { candidate: candidateImages.find((item) => item.item?.id === peerMatch.item?.id), similarity: peerMatch.similarity },
-                  };
-                  openScannerComparisonSucceeded = true;
-                } catch (error) {
-                  visionAttempts.push({ model: "Anthropic open-catalog comparison", reason: String(error?.message || error).slice(0, 180) });
-                }
-              }
-
+              // Anthropic is used for official Ministry catalogue verification above.
+              // Public open-catalog candidates have a different shape and are not
+              // passed through the official-record matcher.
               openScannerRankedCandidates = comparison?.ranked?.length
                 ? comparison.ranked
                 : openScannerSourceCandidates.map((candidate) => ({ ...candidate, similarity: null }));
