@@ -1489,4 +1489,74 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(await response.text()).toContain("محتاج صورة واضحة");
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+
+describe("general web research across non-Egypt topics", () => {
+  it("uses Groq browser search when the user explicitly asks for current research", async () => {
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
+      const payload = JSON.parse(String(init?.body)) as {
+        model: string;
+        tools?: Array<{ type: string }>;
+        tool_choice?: string;
+        reasoning_effort?: string;
+      };
+      expect(payload.model).toBe("openai/gpt-oss-20b");
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
+      expect(payload.reasoning_effort).toBe("low");
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: { content: "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗." },
+        }],
+      });
+    });
+    const response = await handleChatPost(
+      createChatRequest("ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر"),
+      fetcher,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("إحالات نتائج البحث");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
+    vi.stubEnv("GROQ_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      expect(url).toContain("generativelanguage.googleapis.com");
+      const payload = JSON.parse(String(init?.body)) as {
+        tools?: Array<{ google_search?: Record<string, never> }>;
+      };
+      expect(payload.tools).toEqual([{ google_search: {} }]);
+      return Response.json({
+        candidates: [{
+          finishReason: "STOP",
+          content: { parts: [{ text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء." }] },
+          groundingMetadata: {
+            groundingChunks: [
+              { web: { uri: "https://science.nasa.gov/mission/webb/", title: "NASA — James Webb Space Telescope" } },
+              { web: { uri: "https://webbtelescope.org/", title: "WebbTelescope.org" } },
+            ],
+          },
+        }],
+      });
+    });
+    const response = await handleChatPost(
+      createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب"),
+      fetcher,
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("تلسكوب جيمس ويب مرصد فضائي");
+    expect(body).toContain("https://science.nasa.gov/mission/webb/");
+    expect(body).toContain("https://webbtelescope.org/");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+});
+
 });
