@@ -3740,7 +3740,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       // Run deterministic official-image matching before any quota-limited vision call.
       // This allows exact official catalogue images to resolve even when every AI
       // provider is exhausted. The original upload is checked before transformed copies.
-      if (mode === "objects" && Array.isArray(EMBEDDED_CURATED_RECORDS) && EMBEDDED_CURATED_RECORDS.length) {
+      if (mode === "objects" && body?.originalImage !== undefined &&
+          Array.isArray(EMBEDDED_CURATED_RECORDS) && EMBEDDED_CURATED_RECORDS.length) {
         try {
           const directRecords = EMBEDDED_CURATED_RECORDS.filter((record) =>
             record && (record.mode === "objects" || record.mode === "both") &&
