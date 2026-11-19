@@ -19,7 +19,7 @@ describe("Egypt Smart Guide conversation instructions", () => {
     }).body);
 
     expect(request.messages[0].role).toBe("system");
-    expect(request.messages[0].content).toContain("EGYPT SPECIALIST PROTOCOL AND IDENTITY");
+    expect(request.messages[0].content).toContain("GENERAL KNOWLEDGE, EGYPT SPECIALISM, AND CONVERSATION PROTOCOL");
     expect(request.messages[0].content).toContain("UNDERSTANDING AND CONVERSATION");
     expect(request.messages.map((message: { role: string }) => message.role)).toEqual([
       "system",
