@@ -1075,62 +1075,93 @@ function scannerSourceBackedArtifact(source, observation, candidates, officialTe
   };
 }
 
-async function findCachedOfficialImage(record) {
-  const officialImageUrls = (record.imageUrls || []).filter((imageUrl) => {
+async function findCachedOfficialImages(record, maxImages = 3) {
+  const imageUrls = Array.isArray(record.imageUrls) ? record.imageUrls : [];
+  const officialImageUrls = imageUrls.filter((imageUrl) => {
     const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
     return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
   });
   const localImageUrls = Array.isArray(record.localImageUrls) ? record.localImageUrls : [];
+  const references = [];
   for (const imageUrl of officialImageUrls) {
-    const imageIndex = record.imageUrls.indexOf(imageUrl);
-    if (record.imageUrls.length === localImageUrls.length && localImageUrls[imageIndex]) {
-      return { imageUrl, localUrl: localImageUrls[imageIndex] };
+    const imageIndex = imageUrls.indexOf(imageUrl);
+    let localUrl = "";
+    if (imageUrls.length === localImageUrls.length && localImageUrls[imageIndex]) {
+      localUrl = localImageUrls[imageIndex];
+    } else if (globalThis.crypto?.subtle) {
+      const digest = await globalThis.crypto.subtle.digest(
+        "SHA-1",
+        new TextEncoder().encode(imageUrl),
+      );
+      const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const candidateLocalUrl = `/egypt-monuments-images/${hash}.jpg`;
+      if (localImageUrls.includes(candidateLocalUrl)) localUrl = candidateLocalUrl;
     }
-    if (!globalThis.crypto?.subtle) continue;
-    const digest = await globalThis.crypto.subtle.digest(
-      "SHA-1",
-      new TextEncoder().encode(imageUrl),
-    );
-    const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    const localUrl = `/egypt-monuments-images/${hash}.jpg`;
-    if (localImageUrls.includes(localUrl)) return { imageUrl, localUrl };
+    // Use the official original when no cached derivative exists.
+    references.push({ imageUrl, localUrl });
+    if (references.length >= maxImages) break;
   }
-  return null;
+  return references;
 }
 
 async function loadOfficialCandidateImages(candidates, assets) {
-  // Fetch the best three catalog reference images concurrently instead of
-  // spending up to eight seconds on each one in sequence.
-  const loaded = await Promise.all(candidates.slice(0, 3).map(async (candidate) => {
-    const reference = await findCachedOfficialImage(candidate.record);
-    if (!reference) return null;
-    let response;
-    if (typeof assets?.fetch === "function") {
-      try {
-        response = await assets.fetch(new URL(reference.localUrl, "https://athara.local").toString());
-      } catch {
-        response = null;
-      }
+  const tasks = [];
+  for (const candidate of candidates.slice(0, 3)) {
+    const references = await findCachedOfficialImages(candidate.record, 3);
+    for (const reference of references) {
+      tasks.push((async () => {
+        let response = null;
+        if (reference.localUrl && typeof assets?.fetch === "function") {
+          try {
+            response = await assets.fetch(new URL(reference.localUrl, "https://athara.local").toString());
+          } catch {
+            response = null;
+          }
+        }
+        if (!response?.ok) {
+          try {
+            response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
+          } catch {
+            response = null;
+          }
+        }
+        if (!response?.ok) return null;
+        const buffer = await response.arrayBuffer();
+        if (!buffer.byteLength || buffer.byteLength > 1_500_000) return null;
+        return {
+          item: candidate.record,
+          imageUrl: reference.imageUrl,
+          imageBytes: Array.from(new Uint8Array(buffer)),
+        };
+      })());
     }
-    if (!response?.ok) {
-      try {
-        response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
-      } catch {
-        response = null;
-      }
+  }
+  const loaded = (await Promise.all(tasks)).filter(Boolean);
+  return loaded.map((candidate, index) => ({ label: `R${index + 1}`, ...candidate }));
+}
+
+async function findExactOfficialImageMatch(imageBytes, candidates) {
+  if (!globalThis.crypto?.subtle || !Array.isArray(candidates) || !candidates.length) return null;
+  const digest = async (bytes) => new Uint8Array(await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new Uint8Array(bytes),
+  ));
+  const sourceHash = await digest(imageBytes);
+  for (const candidate of candidates) {
+    const referenceHash = await digest(candidate.imageBytes);
+    if (sourceHash.length !== referenceHash.length) continue;
+    let equal = true;
+    for (let index = 0; index < sourceHash.length; index += 1) {
+      if (sourceHash[index] !== referenceHash[index]) { equal = false; break; }
     }
-    if (!response?.ok) return null;
-    const buffer = await response.arrayBuffer();
-    if (!buffer.byteLength || buffer.byteLength > 1_500_000) return null;
-    return {
-      item: candidate.record,
-      imageBytes: Array.from(new Uint8Array(buffer)),
+    if (equal) return {
+      item: candidate.item,
+      url: candidate.item.sourceUrl,
+      engine: "Exact official Ministry image fingerprint",
+      similarity: 1,
     };
-  }));
-  return loaded.filter(Boolean).map((candidate, index) => ({
-    label: `R${index + 1}`,
-    ...candidate,
-  }));
+  }
+  return null;
 }
 
 async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, model, threshold) {
@@ -2492,8 +2523,8 @@ async function compareOfficialCatalogPhotosWithGroq(imageBytes, candidates, apiK
     : null;
 }
 
-async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
-  const selected = candidates.slice(0, 3);
+async function compareImageCandidatesWithOpenRouterOnce(imageBytes, candidates, apiKey, model, threshold) {
+  const selected = candidates.slice(0, 6);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
   const content = [
     {
@@ -2570,6 +2601,27 @@ async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiK
       ? { candidate: best.candidate, similarity: best.similarity }
       : null,
   };
+}
+
+async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
+  const models = [...new Set([
+    model,
+    ...OPENROUTER_VISION_MODELS.filter((candidate) => candidate !== model).slice(0, 2),
+  ].filter(Boolean))];
+  let lastError = null;
+  for (const candidateModel of models) {
+    try {
+      const result = await compareImageCandidatesWithOpenRouterOnce(
+        imageBytes, candidates, apiKey, candidateModel, threshold,
+      );
+      if (result?.match) return result;
+      if (result) return result;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  return { ranked: [], match: null };
 }
 
 async function compareOfficialCatalogPhotosWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
