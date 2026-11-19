@@ -259,6 +259,21 @@ function removeRepeatedSentences(content: string): {
   return { content: kept.join("").trim(), repetitionsRemoved };
 }
 
+function isLiveResearchRequest(query: string): boolean {
+  const normalized = query.trim();
+  if (!normalized) return false;
+  const personalOrCasual =
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظرك|ازيك|إزيك|عامل ايه|عاملة ايه|اخبارك|أخبارك)/iu.test(normalized);
+  if (personalOrCasual) return false;
+  const explicitResearch =
+    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(normalized);
+  const factualQuestion =
+    /[؟?]/u.test(normalized) ||
+    /^\s*(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe)\b/iu.test(normalized) ||
+    /^\s*(?:ايه|ما هو|ما هي|من هو|من هي|مين|متى|فين|أين|ليه|لماذا|ازاي|كيف|هل|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن)/u.test(normalized);
+  return explicitResearch || factualQuestion;
+}
+
 function createArabicTourismQuickReply(data: {
   language: string;
   messages: { role: string; content: string }[];
@@ -399,9 +414,7 @@ export async function handleChatPost(
     };
     const primaryModel = readProviderEnv(suppliedEnv, "GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
     const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
-    const requestsLiveResearch =
-      !heritageQuestion &&
-      /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestion);
+    const requestsLiveResearch = !heritageQuestion && isLiveResearchRequest(latestQuestion);
     // GPT-OSS 20B has Groq's built-in browser_search tool. Use it for
     // explicit web research; keep the configured Qwen model as the normal fast path.
     const groqModels = requestsLiveResearch
@@ -543,9 +556,7 @@ export async function handleChatPost(
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "GEMINI_API_KEY")?.trim();
   const latestQuestionForSearch = parsed.data.messages.at(-1)?.content ?? "";
-  const geminiLiveSearch =
-    !heritageQuestion &&
-    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestionForSearch);
+  const geminiLiveSearch = !heritageQuestion && isLiveResearchRequest(latestQuestionForSearch);
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
