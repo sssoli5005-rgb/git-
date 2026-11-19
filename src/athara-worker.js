@@ -3649,6 +3649,23 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       } catch {
         // Keep the official built-in catalog if the optional environment catalog is invalid.
       }
+      if (assetsFetch) {
+        try {
+          const curatedUrl = new URL("/egypt-monuments-curated.json", "https://athara.local").toString();
+          const curatedResponse = await assetsFetch(curatedUrl);
+          if (curatedResponse.ok) {
+            const curatedData = await curatedResponse.json();
+            const curatedRecords = Array.isArray(curatedData?.records) ? curatedData.records : [];
+            catalog.push(...curatedRecords.filter((record) =>
+              record && typeof record.id === "string" && typeof record.title === "string" &&
+              Array.isArray(record.keywords) && typeof record.sourceTitle === "string" &&
+              typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
+            ));
+          }
+        } catch (error) {
+          console.warn(`[Image scanner] Curated catalogue unavailable: ${String(error?.message || error).slice(0, 160)}`);
+        }
+      }
 
       const visionPrompt =
         mode === "hieroglyphs"
