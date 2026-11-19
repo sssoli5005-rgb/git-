@@ -202,7 +202,7 @@ const VISION_PROVIDER_RETRIES = 1;
 
 function safeVisionDiagnosticReason(reason, env) {
   let message = String(reason || "").replace(/\s+/g, " ").trim();
-  for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY]) {
+  for (const secret of [env?.GEMINI_API_KEY, env?.GROQ_API_KEY, env?.OPENROUTER_API_KEY, env?.OPENAI_API_KEY, env?.MISTRAL_API_KEY, env?.ANTHROPIC_API_KEY]) {
     if (typeof secret === "string" && secret.length > 6) {
       message = message.split(secret).join("[redacted]");
     }
