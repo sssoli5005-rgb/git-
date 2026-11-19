@@ -27,12 +27,18 @@ const SCANNER_IMAGE_HOSTS = new Set([
   "www.egymonuments.gov.eg",
   "ids.si.edu",
   "media.britishmuseum.org",
+  "penn.museum",
+  "www.penn.museum",
+  "brooklynmuseum.org",
+  "www.brooklynmuseum.org",
+  "collections.mfa.org",
+  "media.mfa.org",
 ]);
 const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
   "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
   "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org",
-  "si.edu", "europeana.eu", "artic.edu",
+  "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org",
 ];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
@@ -2029,6 +2035,7 @@ function scannerSpecificCataloguePage(url) {
     (host.endsWith("si.edu") && /\/object\//.test(path)) ||
     (host.endsWith("penn.museum") && /\/collections\/object\//.test(path)) ||
     (host.endsWith("brooklynmuseum.org") && /\/opencollection\/objects\//.test(path)) ||
+    (host.endsWith("mfa.org") && /\/objects\/\d+/.test(path)) ||
     (host.endsWith("louvre.fr") && /\/oeuvres\//.test(path)) ||
     (host.endsWith("europeana.eu") && /\/item\//.test(path))
   );
