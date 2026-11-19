@@ -3596,7 +3596,23 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
     if (url.pathname === "/api/scan" && request.method === "POST") {
       const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
       const groqVisionConfigured = typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim());
+      const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
+      const openAiVisionKey = typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY.trim() : "";
+      const mistralVisionKey = typeof env.MISTRAL_API_KEY === "string" ? env.MISTRAL_API_KEY.trim() : "";
+      const anthropicVisionKey = typeof env.ANTHROPIC_API_KEY === "string" ? env.ANTHROPIC_API_KEY.trim() : "";
+      const openAiVisionConfigured = Boolean(openAiVisionKey);
+      const mistralVisionConfigured = Boolean(mistralVisionKey);
+      const anthropicVisionConfigured = Boolean(anthropicVisionKey);
       const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const configuredVisionProviderCount = [
+        typeof env.AI?.run === "function" || localOllama,
+        geminiConfigured,
+        groqVisionConfigured,
+        openRouterConfigured,
+        openAiVisionConfigured,
+        mistralVisionConfigured,
+        anthropicVisionConfigured,
+      ].filter(Boolean).length;
       const visionProviderOrder = resolveVisionProviderOrder(env);
       let body;
       try {
@@ -3610,11 +3626,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
-      const openAiVisionConfigured = Boolean(openAiVisionKey);
-      const mistralVisionConfigured = Boolean(mistralVisionKey);
-      const anthropicVisionConfigured = Boolean(anthropicVisionKey);
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
@@ -3898,19 +3910,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const visionAttempts = [];
       const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
       const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
-      const openRouterVisionKey = typeof env.OPENROUTER_API_KEY === "string" ? env.OPENROUTER_API_KEY.trim() : "";
-      const openAiVisionKey = typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY.trim() : "";
-      const mistralVisionKey = typeof env.MISTRAL_API_KEY === "string" ? env.MISTRAL_API_KEY.trim() : "";
-      const anthropicVisionKey = typeof env.ANTHROPIC_API_KEY === "string" ? env.ANTHROPIC_API_KEY.trim() : "";
-      const configuredVisionProviderCount = [
-        typeof env.AI?.run === "function" || localOllama,
-        Boolean(geminiVisionKey),
-        Boolean(groqVisionKey),
-        Boolean(openRouterVisionKey),
-        Boolean(openAiVisionKey),
-        Boolean(mistralVisionKey),
-        Boolean(anthropicVisionKey),
-      ].filter(Boolean).length;
+      const openRouterVisionKey = openRouterConfigured ? env.OPENROUTER_API_KEY.trim() : "";
       try {
         let rawVisual = "";
         let visionUsed = "";
@@ -3987,7 +3987,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   role: "user",
                   content: [
                     { type: "text", text: "حلّل الصورة بصريًا وأخرج JSON فقط بالمفاتيح المطلوبة. اقترح أقرب هوية كاحتمال، ولا تخترع مكانًا أو اسمًا مؤكدًا." },
-                    { type: "image_url", image_url: { url: imageDataUrl } },
+                    { type: "image_url", image_url: imageDataUrl },
                   ],
                 }],
                 temperature: 0.1,
@@ -4230,7 +4230,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   role: "user",
                   content: [
                     { type: "text", text: prompt + "\n\nافحص الصورة باستقلال عن المحركات السابقة، وأخرج JSON فقط." },
-                    { type: "image_url", image_url: { url: imageDataUrl } },
+                    { type: "image_url", image_url: imageDataUrl },
                   ],
                 }],
               }),
@@ -4374,7 +4374,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ? rankOfficialTextCandidates(catalog, observation)
           : [];
         let matchThreshold = DEFAULT_SCANNER_MATCH_THRESHOLD;
-        if (mode === "objects" && (geminiConfigured || groqVisionConfigured || openRouterConfigured)) {
+        if (mode === "objects" && (geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured)) {
           try {
             matchThreshold = scannerMatchThreshold(env);
           } catch (error) {
@@ -4390,7 +4390,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         let openScannerSourceCandidates = [];
         let openScannerDiscoveredCandidates = [];
         let openScannerWebSources = [];
-        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured || openRouterConfigured)) {
+        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured)) {
           const candidates = rankOfficialCatalogCandidates(catalog, observation);
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
@@ -4526,16 +4526,16 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             if (!search.candidates.length) {
               openScannerSearchStatus = search.availableSources === 0
                 ? "failed"
-                : geminiConfigured || groqVisionConfigured
+                : geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured
                   ? "no_match"
                   : "unavailable";
             } else if (!candidateImages.length) {
               openScannerSearchStatus = search.availableSources === 0
                 ? "failed"
-                : geminiConfigured || groqVisionConfigured
+                : geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured
                   ? "no_match"
                   : "unavailable";
-            } else if (!geminiConfigured && !groqVisionConfigured) {
+            } else if (!(geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured)) {
               openScannerRankedCandidates = openScannerSourceCandidates.map((candidate) => ({
                 ...candidate,
                 similarity: null,
