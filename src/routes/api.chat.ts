@@ -342,6 +342,88 @@ function trustedSourcesFromOpenRouter(message: {
   });
 }
 
+type GroqSearchCitation = {
+  title?: string;
+  url?: string;
+  evidence?: string;
+};
+
+function parseGroqSearchCitations(content: string): {
+  answer: string;
+  citations: GroqSearchCitation[];
+} {
+  const match = content.match(/<ATHARA_SOURCES>([\s\S]*?)<\/ATHARA_SOURCES>/iu);
+  if (!match) return { answer: content.trim(), citations: [] };
+  let citations: GroqSearchCitation[] = [];
+  try {
+    const parsed: unknown = JSON.parse(match[1] ?? "[]");
+    if (Array.isArray(parsed)) {
+      citations = parsed.flatMap((item): GroqSearchCitation[] => {
+        if (!item || typeof item !== "object") return [];
+        const value = item as Record<string, unknown>;
+        if (typeof value.url !== "string" || typeof value.title !== "string" ||
+            typeof value.evidence !== "string") return [];
+        return [{ title: value.title.slice(0, 180), url: value.url, evidence: value.evidence.slice(0, 500) }];
+      });
+    }
+  } catch {
+    citations = [];
+  }
+  return { answer: content.replace(match[0], "").trim(), citations };
+}
+
+function normalizeEvidenceText(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFKC")
+    .replace(/&nbsp;|&#160;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&#39;|&apos;/giu, "'")
+    .replace(/&quot;/giu, '"')
+    .replace(/&#x([0-9a-f]{1,6});/giu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#([0-9]{1,7});/gu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/<[^>]*>/gu, " ")
+    .replace(/[’‘]/gu, "'")
+    .replace(/[“”]/gu, '"')
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+async function verifyGroqSearchCitations(
+  citations: GroqSearchCitation[],
+  fetcher: typeof fetch,
+  requestSignal: AbortSignal,
+): Promise<Array<{ title: string; organization: string; url: string }>> {
+  const verified = await Promise.all(citations.slice(0, 5).map(async (citation) => {
+    const requestedUrl = isTrustedResearchUrl(citation.url);
+    const normalizedEvidence = normalizeEvidenceText(citation.evidence || "");
+    if (!requestedUrl || normalizedEvidence.length < 40) return null;
+    try {
+      const timeout = AbortSignal.timeout(8_000);
+      const response = await fetcher(requestedUrl.href, {
+        method: "GET",
+        headers: { accept: "text/html,application/xhtml+xml" },
+        redirect: "follow",
+        signal: AbortSignal.any([requestSignal, timeout]),
+      });
+      const finalUrl = isTrustedResearchUrl(response.url || requestedUrl.href);
+      const contentType = response.headers.get("content-type") || "";
+      if (!response.ok || !finalUrl || !/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
+      const html = (await response.text()).slice(0, 900_000);
+      const readable = normalizeEvidenceText(
+        html.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/giu, " ")
+          .replace(/<[^>]*>/gu, " "),
+      );
+      if (!readable.includes(normalizedEvidence)) return null;
+      return sourceFromTrustedUrl(finalUrl, citation.title);
+    } catch {
+      return null;
+    }
+  }));
+  return verified.filter((source): source is { title: string; organization: string; url: string } => source !== null);
+}
+
 function mergeResearchSources(
   current: Array<{ title: string; organization: string; url: string }>,
   incoming: Array<{ title: string; organization: string; url: string }>,
@@ -560,7 +642,16 @@ export async function handleChatPost(
           signal: providerSignal,
           body: JSON.stringify({
             model,
-            messages: localPayload.messages,
+            messages: requestsLiveResearch
+              ? [
+                  ...localPayload.messages,
+                  {
+                    role: "user",
+                    content:
+                      "Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{\"title\":\"page title\",\"url\":\"https://full-source-url\",\"evidence\":\"one exact sentence copied verbatim from that page\"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.",
+                  },
+                ]
+              : localPayload.messages,
             max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
             ...(requestsLiveResearch
@@ -591,7 +682,9 @@ export async function handleChatPost(
             }>;
           } | null;
           const choice = groqPayload?.choices?.[0];
-          const answer = choice?.message?.content?.trim();
+          const rawAnswer = choice?.message?.content?.trim() ?? "";
+          const parsedGroqAnswer = parseGroqSearchCitations(rawAnswer);
+          let answer = parsedGroqAnswer.answer;
           const groqBrowserResults = (choice?.message?.executed_tools ?? [])
             .flatMap((tool) => tool.browser_results ?? [])
             .filter((result) => {
@@ -603,10 +696,14 @@ export async function handleChatPost(
                 return false;
               }
             });
-          const groqSearchSources = groqBrowserResults.flatMap((result) => {
+          const groqBrowserSources = groqBrowserResults.flatMap((result) => {
             const url = isTrustedResearchUrl(result.url);
             return url ? [sourceFromTrustedUrl(url, result.title)] : [];
           });
+          const verifiedContentCitations = requestsLiveResearch
+            ? await verifyGroqSearchCitations(parsedGroqAnswer.citations, fetcher, request.signal)
+            : [];
+          const groqSearchSources = mergeResearchSources(groqBrowserSources, verifiedContentCitations);
           const hasGroqSearchEvidence = groqSearchSources.length > 0;
           if (requestsLiveResearch && hasGroqSearchEvidence) {
             verifiedTurnSources = mergeResearchSources(verifiedTurnSources, groqSearchSources);
