@@ -3236,6 +3236,9 @@ async function searchOfficialMonumentsArchive(query) {
   // The Ministry serves current catalogue pages at the language-neutral root
   // (e.g. /collections/statue-of-nephthys-6/) as well as older /ar and /en paths.
   const pageUrls = [
+    `https://egymonuments.gov.eg/en/mpSearchResult?q=${encodeURIComponent(query)}`,
+    `https://egymonuments.gov.eg/ar/mpSearchResult?q=${encodeURIComponent(query)}`,
+    `https://egymonuments.gov.eg/mpSearchResult?q=${encodeURIComponent(query)}`,
     "https://egymonuments.gov.eg/monuments",
     "https://egymonuments.gov.eg/archaeological-sites",
     "https://egymonuments.gov.eg/museums",
@@ -3284,6 +3287,9 @@ async function searchOfficialMonumentsArchive(query) {
       try {
         const nextUrl = new URL(resolvedUrl);
         if (!/egymonuments\.gov\.eg$/i.test(nextUrl.hostname) && !nextUrl.hostname.endsWith(".egymonuments.gov.eg")) continue;
+        // Only individual object/place records are candidates; period, event,
+        // news and general landing pages must never become an artifact identity.
+        if (!scannerSpecificCataloguePage(nextUrl)) continue;
         const normalizedLabel = normalizeSearchTerms(label).join(" ");
         const labelMatches = terms.filter((term) => normalizedLabel.includes(term));
         if (!labelMatches.length && !terms.some((term) => nextUrl.pathname.toLowerCase().includes(term))) continue;
