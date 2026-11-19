@@ -1166,16 +1166,17 @@ async function loadOfficialCandidateImages(candidates, assets) {
     for (const reference of references) {
       tasks.push((async () => {
         let response = null;
-        if (reference.localUrl && typeof assets?.fetch === "function") {
+        // The official URL is the source of truth for exact SHA-256 matching.
+        // Cached local images may be resized/recompressed derivatives, so only
+        // use them as a fallback when the original museum image is unavailable.
+        try {
+          response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
+        } catch {
+          response = null;
+        }
+        if (!response?.ok && reference.localUrl && typeof assets?.fetch === "function") {
           try {
             response = await assets.fetch(new URL(reference.localUrl, "https://athara.local").toString());
-          } catch {
-            response = null;
-          }
-        }
-        if (!response?.ok) {
-          try {
-            response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
           } catch {
             response = null;
           }
