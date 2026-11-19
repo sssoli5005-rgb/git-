@@ -627,7 +627,7 @@ export function isEgyptianHeritageQuery(
   const normalizedLatest = normalizeSearchText(latestUserMessage);
   const isContextualFollowUp =
     isSourceRequest(latestUserMessage) ||
-    /^(?:طب|طيب|و|وكمان|كمان|بس|ليه|لماذا|ازاي|كيف|امتى|متى|فين|اين|مين|من|هل|وماذا|ماذا عن|what about|and what|who|why|how|when|where)(?:\\s|$)/u.test(
+    /^(?:طب|طيب|و|وكمان|كمان|بس|ليه|لماذا|ازاي|كيف|امتى|متى|فين|اين|مين|من|هل|وماذا|ماذا عن|what about|and what|who|why|how|when|where)(?:\s|$)/u.test(
       normalizedLatest,
     );
   if (!isContextualFollowUp) return false;
