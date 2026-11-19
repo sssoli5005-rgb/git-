@@ -30,6 +30,7 @@ jobs:
           # during migration; set separate CHAT_* and SCANNER_* keys to isolate provider quotas.
           CHAT_GEMINI_API_KEY: ${{ secrets.CHAT_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
           CHAT_GROQ_API_KEY: ${{ secrets.CHAT_GROQ_API_KEY || secrets.GROQ_API_KEY }}
+          CHAT_OPENROUTER_API_KEY: ${{ secrets.CHAT_OPENROUTER_API_KEY }}
           SCANNER_GEMINI_API_KEY: ${{ secrets.SCANNER_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
           SCANNER_GROQ_API_KEY: ${{ secrets.SCANNER_GROQ_API_KEY || secrets.GROQ_API_KEY }}
           SCANNER_OPENROUTER_API_KEY: ${{ secrets.SCANNER_OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY }}
@@ -40,7 +41,7 @@ jobs:
             echo "cloudflare_ready=false" >> "$GITHUB_OUTPUT"
             echo "Cloudflare deployment credentials are not configured."
           fi
-          for name in CHAT_GEMINI CHAT_GROQ SCANNER_GEMINI SCANNER_GROQ SCANNER_OPENROUTER; do
+          for name in CHAT_GEMINI CHAT_GROQ CHAT_OPENROUTER SCANNER_GEMINI SCANNER_GROQ SCANNER_OPENROUTER; do
             value_name="${name}_API_KEY"
             if [ -n "${!value_name:-}" ]; then
               echo "${name,,}_ready=true" >> "$GITHUB_OUTPUT"
@@ -89,6 +90,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CHAT_GROQ_API_KEY: ${{ secrets.CHAT_GROQ_API_KEY || secrets.GROQ_API_KEY }}
         run: printf '%s' "$CHAT_GROQ_API_KEY" | bunx wrangler@4.141.0 secret put CHAT_GROQ_API_KEY --name ektaberha500-current
+
+      - name: Configure chat OpenRouter secret
+        if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.chat_openrouter_ready == 'true'
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CHAT_OPENROUTER_API_KEY: ${{ secrets.CHAT_OPENROUTER_API_KEY }}
+        run: printf '%s' "$CHAT_OPENROUTER_API_KEY" | bunx wrangler@4.141.0 secret put CHAT_OPENROUTER_API_KEY --name ektaberha500-current
 
       - name: Configure scanner Gemini secret
         if: github.event_name != 'pull_request' && steps.credentials.outputs.cloudflare_ready == 'true' && steps.credentials.outputs.scanner_gemini_ready == 'true'
