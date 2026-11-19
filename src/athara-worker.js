@@ -3984,7 +3984,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   geminiVisionModels[0],
                   matchThreshold,
                 );
-                openScannerComparisonSucceeded = Boolean(officialVisualMatch);
+                openScannerComparisonSucceeded = true;
               } catch (error) {
                 geminiCatalogComparisonFailed = true;
                 visionAttempts.push({
@@ -3993,7 +3993,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 });
               }
             }
-            if (!officialVisualMatch && !openScannerComparisonSucceeded && groqVisionConfigured) {
+            if (!officialVisualMatch && groqVisionConfigured) {
               try {
                 officialVisualMatch = await compareOfficialCatalogPhotosWithGroq(
                   referenceImage,
@@ -4006,8 +4006,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                       : "qwen/qwen3.8-27b",
                   matchThreshold,
                 );
-                groqCatalogComparisonSucceeded = Boolean(officialVisualMatch);
-                openScannerComparisonSucceeded = Boolean(officialVisualMatch);
+                groqCatalogComparisonSucceeded = true;
+                openScannerComparisonSucceeded = true;
               } catch (error) {
                 visionAttempts.push({
                   model: "Groq official catalog comparison",
@@ -4015,7 +4015,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 });
               }
             }
-            if (!officialVisualMatch && !openScannerComparisonSucceeded && openRouterConfigured) {
+            if (!officialVisualMatch && openRouterConfigured) {
               try {
                 officialVisualMatch = await compareOfficialCatalogPhotosWithOpenRouter(
                   referenceImage,
@@ -4024,7 +4024,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   OPENROUTER_VISION_MODELS[0],
                   matchThreshold,
                 );
-                openScannerComparisonSucceeded = Boolean(officialVisualMatch);
+                openScannerComparisonSucceeded = true;
               } catch (error) {
                 visionAttempts.push({
                   model: "OpenRouter official catalog comparison",
@@ -4165,7 +4165,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                     geminiVisionModels[0],
                     matchThreshold,
                   );
-                  openScannerComparisonSucceeded = Boolean(comparison?.match);
+                  openScannerComparisonSucceeded = true;
                 } catch (error) {
                   geminiCatalogComparisonFailed = true;
                   visionAttempts.push({
@@ -4195,8 +4195,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                           .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
                           .slice(0, 6),
                       };
-                  groqCatalogComparisonSucceeded = Boolean(groqComparison);
-                  openScannerComparisonSucceeded = Boolean(comparison?.match);
+                  groqCatalogComparisonSucceeded = true;
+                  openScannerComparisonSucceeded = true;
                 } catch (error) {
                   visionAttempts.push({
                     model: "Groq open-catalog comparison",
@@ -4221,7 +4221,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                           .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
                           .slice(0, 6),
                       };
-                  openScannerComparisonSucceeded = Boolean(comparison?.match);
+                  openScannerComparisonSucceeded = true;
                 } catch (error) {
                   visionAttempts.push({
                     model: "OpenRouter open-catalog comparison",
