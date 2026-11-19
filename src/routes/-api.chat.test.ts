@@ -222,6 +222,8 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("الأسلوب الفني");
     expect(body).toContain("عصر العمارنة");
     expect(body).toContain("أشعة تنتهي بأيدٍ");
+    expect(body).toContain("اختلاف تصوير الإله المصري بين عصرين");
+    expect(body).not.toContain("ماقدرتش أتحقق");
     expect(body).not.toContain("المصادر:");
     expect(body).not.toContain("كان آمون يُصوّر برأس ثور");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
@@ -372,9 +374,10 @@ describe("handleChatPost hosted Groq provider", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("الارتباط بالعقيدة يظهر في سياق النقوش الجنائزية");
+    expect(body).toContain("اختلاف تصوير الإله المصري بين عصرين");
+    expect(body).toContain("عصر العمارنة");
+    expect(body).not.toContain("الارتباط بالعقيدة يظهر في سياق النقوش الجنائزية");
     expect(body).not.toContain("المصادر:");
-    expect(body).not.toContain("الديموطيقية");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
   });
 
@@ -408,34 +411,46 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).not.toContain("المصادر:");
     expect(
       fetcher.mock.calls.filter(([input]) => String(input).includes("api.groq.com")),
-    ).toHaveLength(4);
+    ).toHaveLength(1);
   });
 
-  it("asks the hosted model to answer cautiously when early-state sources are unavailable", async () => {
+  it("withholds an Egyptian factual answer when search providers return no trusted evidence", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
-      if (url.hostname.endsWith("ucl.ac.uk"))
-        return new Response("temporarily blocked", { status: 403 });
-      if (url.hostname.endsWith("wikipedia.org")) {
-        return Response.json({ query: { search: [] } });
-      }
+      if (url.hostname.endsWith("ucl.ac.uk")) return new Response("temporarily blocked", { status: 403 });
+      if (url.hostname.endsWith("wikipedia.org")) return Response.json({ query: { search: [] } });
       if (url.hostname === "api.groq.com") {
         const payload = JSON.parse(String(init?.body)) as {
+          tools?: Array<{ type?: string }>;
           messages: { role: string; content: string }[];
         };
-        expect(payload.messages[0]?.content).toContain("LIVE SEARCH LIMITATION");
-        expect(payload.messages[0]?.content).toContain("الأسماء والألقاب");
+        expect(payload.messages[0]?.content).toContain("MANDATORY THREE-STAGE VERIFIED RESEARCH");
+        expect(payload.tools).toEqual([{ type: "browser_search" }]);
         return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content:
-                  "الكتابة ساعدت في تسجيل الأسماء والألقاب والإمدادات، وده سهّل متابعة موارد البلاط. لكن تفاصيل إدارة كل إقليم مش واضحة بما يكفي للجزم.",
-              },
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content: "الكتابة ساعدت في تسجيل الأسماء والألقاب والإمدادات.",
+              executed_tools: [{ browser_results: [{
+                title: "Generic ancient history article",
+                url: "https://example.com/ancient-egypt",
+                content: "An unverified general article about ancient Egypt that is not an approved institutional source.",
+              }] }],
             },
-          ],
+          }],
+        });
+      }
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        return Response.json({
+          candidates: [{
+            content: { parts: [{ text: "رد غير موثق من Gemini." }] },
+            groundingMetadata: { groundingChunks: [{ web: {
+              uri: "https://example.com/egypt",
+              title: "Unverified general article",
+            } }] },
+          }],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
@@ -450,9 +465,12 @@ describe("handleChatPost hosted Groq provider", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).not.toContain("المصادر:");
-    expect(body).toContain("الكتابة ساعدت في تسجيل الأسماء والألقاب والإمدادات");
+    expect(body).toContain("ماقدرتش أتحقق من الإجابة");
+    expect(body).not.toContain("الكتابة ساعدت في تسجيل الأسماء والألقاب");
+    expect(body).not.toContain("رد غير موثق من Gemini");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
   it("does not show source links for English heritage answers unless requested", async () => {
@@ -471,10 +489,18 @@ describe("handleChatPost hosted Groq provider", () => {
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
-      if (url.hostname.endsWith("wikipedia.org")) {
-        return Response.json({ query: { search: [] } });
+      if (url.hostname.endsWith("wikipedia.org")) return Response.json({ query: { search: [] } });
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: "A guess without evidence.", executed_tools: [] } }],
+        });
       }
-      throw new Error(`An AI provider must not be called without evidence: ${url.hostname}.`);
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        return Response.json({
+          candidates: [{ content: { parts: [{ text: "A guess without evidence." }] }, groundingMetadata: { groundingChunks: [] } }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
     });
 
     const response = await handleChatPost(
@@ -484,8 +510,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("I couldn't verify this answer");
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(false);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
@@ -1233,7 +1259,7 @@ describe("handleChatPost Ollama stream handling", () => {
     );
     expect(
       fetcher.mock.calls.some(([input]) => new URL(String(input)).hostname === "localhost"),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it.each([
