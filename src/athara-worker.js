@@ -1974,6 +1974,11 @@ function scannerMeta(html, key) {
   return "";
 }
 
+function officialMonumentPathSegments(path) {
+  const segments = String(path || "").toLowerCase().split("/").filter(Boolean);
+  return ["ar", "en"].includes(segments[0]) ? segments.slice(1) : segments;
+}
+
 function scannerSpecificCataloguePage(url) {
   const host = url.hostname.toLowerCase();
   const path = url.pathname.toLowerCase().replace(/\/+$/, "");
@@ -1981,10 +1986,9 @@ function scannerSpecificCataloguePage(url) {
     return false;
   }
   if (host === "egymonuments.gov.eg" || host.endsWith(".egymonuments.gov.eg")) {
-    const segments = path.split("/").filter(Boolean);
-    return segments.length >= 3 &&
-      ["ar", "en"].includes(segments[0]) &&
-      ["monuments", "archaeological-sites", "collections", "museums"].includes(segments[1]);
+    const segments = officialMonumentPathSegments(path);
+    return segments.length >= 2 &&
+      ["monuments", "archaeological-sites", "collections", "museums"].includes(segments[0]);
   }
   return (
     (host.endsWith("metmuseum.org") && /\/art\/collection\/search\/\d+/.test(path)) ||
@@ -1997,6 +2001,20 @@ function scannerSpecificCataloguePage(url) {
     (host.endsWith("louvre.fr") && /\/oeuvres\//.test(path)) ||
     (host.endsWith("europeana.eu") && /\/item\//.test(path))
   );
+}
+
+function extractOfficialMuseumLocation(text) {
+  const value = String(text || "");
+  const knownMuseums = [
+    [/\bMummification Museum\b|متحف التحنيط/i, "Mummification Museum"],
+    [/\bLuxor Museum\b|متحف الأقصر/i, "Luxor Museum"],
+    [/\bEgyptian Museum in Cairo\b|\bEgyptian Museum\b|المتحف المصري(?: بالتحرير)?/i, "Egyptian Museum, Cairo"],
+    [/\bNational Museum of Egyptian Civilization\b|متحف الحضارة/i, "National Museum of Egyptian Civilization, Cairo"],
+    [/\bNubia Museum\b|متحف النوبة/i, "Nubia Museum, Aswan"],
+    [/\bGreco-Roman Museum\b|متحف الآثار اليوناني الروماني/i, "Greco-Roman Museum, Alexandria"],
+    [/\bCoptic Museum\b|المتحف القبطي/i, "Coptic Museum, Cairo"],
+  ];
+  return knownMuseums.find(([pattern]) => pattern.test(value))?.[1] || "";
 }
 
 async function readGroundedScannerSource(entry, observation) {
@@ -2050,8 +2068,13 @@ async function readGroundedScannerSource(entry, observation) {
       const permittedImageHost =
         SCANNER_IMAGE_HOSTS.has(imageUrl.hostname) || imageUrl.hostname === finalUrl.hostname;
       if (imageUrl.protocol === "https:" && permittedImageHost) {
+        const museumLocation = finalUrl.hostname.endsWith("egymonuments.gov.eg")
+          ? extractOfficialMuseumLocation(source.snippet)
+          : "";
         candidate = makeScannerCandidate({
           name: title,
+          museum: museumLocation,
+          currentLocation: museumLocation,
           url: finalUrl.href,
           imageUrl: imageUrl.href,
           source: url.hostname,
@@ -3114,9 +3137,9 @@ function scannerSourceSupportsCandidate(source, observation) {
     const path = sourceUrl.pathname.toLowerCase().replace(/\/+$/, "") || "/";
     if (/(?:^|\/)(?:faqs?|terms(?:-and-conditions)?|privacy(?:-policy)?|historical-periods|events|children|about|news)(?:\/|$)/.test(path)) return false;
     if (sourceUrl.hostname === "egymonuments.gov.eg" || sourceUrl.hostname.endsWith(".egymonuments.gov.eg")) {
-      const segments = path.split("/").filter(Boolean);
-      if (segments.length < 3 || !["ar", "en"].includes(segments[0]) ||
-          !["monuments", "archaeological-sites", "collections", "museums"].includes(segments[1])) return false;
+      const segments = officialMonumentPathSegments(path);
+      if (segments.length < 2 ||
+          !["monuments", "archaeological-sites", "collections", "museums"].includes(segments[0])) return false;
     }
   } catch {
     return false;
@@ -3149,11 +3172,20 @@ async function searchOfficialMonumentsArchive(query) {
     headers: { accept: "text/html,application/xhtml+xml", "user-agent": "ATHARA-Heritage-Guide/1.0" },
     signal: AbortSignal.timeout(6000),
   };
+  // The Ministry serves current catalogue pages at the language-neutral root
+  // (e.g. /collections/statue-of-nephthys-6/) as well as older /ar and /en paths.
   const pageUrls = [
+    "https://egymonuments.gov.eg/monuments",
+    "https://egymonuments.gov.eg/archaeological-sites",
+    "https://egymonuments.gov.eg/museums",
+    "https://egymonuments.gov.eg/collections",
     "https://egymonuments.gov.eg/ar/monuments",
     "https://egymonuments.gov.eg/ar/archaeological-sites",
     "https://egymonuments.gov.eg/ar/museums",
     "https://egymonuments.gov.eg/ar/collections",
+    "https://egymonuments.gov.eg/en/monuments",
+    "https://egymonuments.gov.eg/en/archaeological-sites",
+    "https://egymonuments.gov.eg/en/museums",
     "https://egymonuments.gov.eg/en/collections",
   ];
   const results = new Map();
