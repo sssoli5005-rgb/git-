@@ -1664,8 +1664,11 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(body.sourceStory).toBe(
         "معبد أبو سمبل الكبير المنحوت في الصخر، وتزين واجهته تماثيل رمسيس الثاني الأربعة.",
       );
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      const comparisonBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+      const geminiCalls = fetchMock.mock.calls.filter(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
+      );
+      expect(geminiCalls).toHaveLength(2);
+      const comparisonBody = JSON.parse(String(geminiCalls[1][1]?.body));
       expect(comparisonBody.contents[0].parts.filter((part: { inlineData?: unknown }) => part.inlineData)).toHaveLength(2);
     } finally {
       vi.unstubAllGlobals();
