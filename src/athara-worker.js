@@ -2187,13 +2187,13 @@ async function readGroundedScannerSource(entry, observation) {
     const finalUrl = new URL(response.url || url.href);
     if (!response.ok || !scannerInstitutionalSourceUrlAllowed(finalUrl.href)) return null;
     const contentType = response.headers.get("content-type") || "";
-    if (!/text\\/html|application\\/xhtml\\+xml/i.test(contentType)) return null;
+    if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
 
     const html = await readLimitedHtml(response, 600_000);
-    const title = stripHtml(html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1] || "") || String(entry.title || finalUrl.hostname);
-    const main = html.match(/<main\\b[\\s\\S]*?<\\/main>/i)?.[0] ||
-      html.match(/<article\\b[\\s\\S]*?<\\/article>/i)?.[0] || html;
-    const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\\b[\\s\\S]*?<\\/\\1>/gi, " ")
+    const title = stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "") || String(entry.title || finalUrl.hostname);
+    const main = html.match(/<main\b[\s\S]*?<\/main>/i)?.[0] ||
+      html.match(/<article\b[\s\S]*?<\/article>/i)?.[0] || html;
+    const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
       .replace(/<[^>]*>/g, " ")).slice(0, 6000);
 
     // A result title/snippet alone is not verified evidence. Require readable
@@ -2237,7 +2237,6 @@ async function readGroundedScannerSource(entry, observation) {
   }
 }
 
-async function searchArtifactGroundedSources(
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
   const providers = [];
