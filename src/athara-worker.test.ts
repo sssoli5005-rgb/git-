@@ -279,7 +279,7 @@ describe("ATHARA Cloudflare Worker", () => {
         return new Response(
           '<html><head><title>Wooden Statue of Nephthys</title>' +
           '<meta property="og:image" content="https://egymonuments.gov.eg/media/nephthys-reference.jpg"></head>' +
-          '<body><main><p>A wooden statue of Nephthys displayed at the Luxor Mummification Museum.</p></main></body></html>',
+          '<body><main><p>A wooden statue of Nephthys displayed at the Luxor Mummification Museum. The official catalogue entry identifies the figure as a wooden statue of the goddess Nephthys and records the object as part of the Egyptian antiquities collection. The page documents the museum location and provides the historical context and description of the object. These details are published by the Egyptian Ministry of Tourism and Antiquities in its official monument catalogue.</p></main></body></html>',
           { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
         );
       }
@@ -1001,7 +1001,7 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
-  it("uses Groq multimodal comparison when Gemini image matching is unavailable", async () => {
+  it("does not confirm a Commons-only image lead without an institutional catalogue match", async () => {
     const candidateUrl = "https://commons.wikimedia.org/wiki/File:Abu_Simbel_temple.jpg";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestUrl = String(input instanceof Request ? input.url : input);
@@ -1070,17 +1070,14 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
 
-      expect(body.identificationStatus).toBe("confirmed");
-      expect(body.resultType).toBe("reference_match");
-      expect(body.matchedArtifact).toEqual(expect.objectContaining({
-        name: "Abu Simbel temple",
-        similarity: 0.93,
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.resultType).toBe("unverified");
+      expect(body.matchedArtifact).toBeUndefined();
+      expect(body.reverseImageSearchStatus).not.toBe("match");
+      expect(body.sources ?? []).not.toContainEqual(expect.objectContaining({
+        url: expect.stringContaining("commons.wikimedia.org"),
+        trusted: true,
       }));
-      expect(body.visualMatchMethod).toContain("Groq Qwen Vision");
-      expect(body.reverseImageSearchStatus).toBe("match");
-      expect(fetchMock.mock.calls.some(([input]) =>
-        String(input) === "https://api.groq.com/openai/v1/chat/completions",
-      )).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
