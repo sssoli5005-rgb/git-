@@ -276,7 +276,7 @@ function isLiveResearchRequest(query: string): boolean {
   if (!normalized) return false;
 
   const personalOrCreative =
-    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية)/u.test(normalized);
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact)/u.test(normalized);
   if (personalOrCreative) return false;
 
   const explicitResearch =
@@ -501,10 +501,10 @@ export async function handleChatPost(
     // Factual questions must use the search-capable model; never fall back to
     // an ungrounded fast chat model on the same turn.
     const groqModels = requestsLiveResearch
-      ? ["groq/compound-mini"]
+      ? ["openai/gpt-oss-20b"]
       : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "groq/compound-mini" ? 25_000 : 8_000);
+      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 25_000 : 8_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -519,7 +519,13 @@ export async function handleChatPost(
             max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
             ...(requestsLiveResearch
-              ? { citation_options: "enabled", temperature: 0.2 }
+              ? {
+                  tools: [{ type: "browser_search" }],
+                  tool_choice: "required",
+                  citation_options: "enabled",
+                  temperature: 1,
+                  reasoning_effort: "low",
+                }
               : { reasoning_effort: "medium", reasoning_format: "hidden" }),
           }),
         });
@@ -530,33 +536,29 @@ export async function handleChatPost(
               message?: {
                 content?: string | null;
                 executed_tools?: Array<{
-                  search_results?: {
-                    results?: Array<{
-                      title?: string;
-                      url?: string;
-                      content?: string;
-                      score?: number;
-                    }>;
-                  };
+                  browser_results?: Array<{
+                    title?: string;
+                    url?: string;
+                    content?: string;
+                  }>;
                 }>;
               };
             }>;
           } | null;
           const choice = groqPayload?.choices?.[0];
           const answer = choice?.message?.content?.trim();
-          const groqSearchResults = (choice?.message?.executed_tools ?? [])
-            .flatMap((tool) => tool.search_results?.results ?? [])
+          const groqBrowserResults = (choice?.message?.executed_tools ?? [])
+            .flatMap((tool) => tool.browser_results ?? [])
             .filter((result) => {
               if (typeof result.url !== "string" || typeof result.title !== "string") return false;
               if (typeof result.content !== "string" || result.content.trim().length < 40) return false;
-              if (typeof result.score === "number" && result.score < 0.2) return false;
               try {
                 return new URL(result.url).protocol === "https:";
               } catch {
                 return false;
               }
             });
-          const groqSearchSources = groqSearchResults.flatMap((result) => {
+          const groqSearchSources = groqBrowserResults.flatMap((result) => {
             try {
               const url = new URL(result.url!);
               return [{
@@ -568,7 +570,7 @@ export async function handleChatPost(
               return [];
             }
           });
-          const hasGroqSearchEvidence = groqSearchResults.length > 0;
+          const hasGroqSearchEvidence = groqBrowserResults.length > 0;
           const canUseGroqResearchAnswer = !requestsLiveResearch || hasGroqSearchEvidence;
           if (requestsLiveResearch && hasGroqSearchEvidence && wantsSources) {
             responseSources = mergeResearchSources(responseSources, groqSearchSources);
