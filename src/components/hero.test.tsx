@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LanguageProvider } from "@/i18n/language";
@@ -429,10 +429,10 @@ describe("ChatWorkspace response completion", () => {
 
       expect(screen.getByRole("log")).toHaveTextContent("رد سابق محفوظ.");
       if (_caseName === "connection failure") {
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 400));
-        });
-        expect(screen.getByRole("log")).toHaveTextContent("رد ناجح بعد التعافي.");
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 2_000 });
+        await waitFor(() =>
+          expect(screen.getByRole("log")).toHaveTextContent("رد ناجح بعد التعافي."),
+        );
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
         expect(onMessagesChange).toHaveBeenCalledOnce();
         expect(fetchMock).toHaveBeenCalledTimes(2);
