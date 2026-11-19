@@ -313,7 +313,7 @@ function cleanVisionObservation(value) {
 
 function resolveVisionProviderOrder(env) {
   const order = [...DEFAULT_VISION_PROVIDER_ORDER];
-  if (typeof env?.OPENROUTER_API_KEY === "string" && env.SCANNER_OPENROUTER_API_KEY.trim()) {
+  if (typeof env?.SCANNER_OPENROUTER_API_KEY === "string" && env.SCANNER_OPENROUTER_API_KEY.trim()) {
     order.push("OpenRouter");
   }
   return order;
