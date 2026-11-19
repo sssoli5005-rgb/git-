@@ -1512,14 +1512,12 @@ describe("general web research across non-Egypt topics", () => {
           message: {
             content: "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗.",
             executed_tools: [{
-              search_results: {
-                results: [{
+              browser_results: [{
                   title: "NASA — James Webb Space Telescope",
                   url: "https://science.nasa.gov/mission/webb/",
                   content: "NASA describes the James Webb Space Telescope and its infrared observations.",
                   score: 0.94
                 }]
-              }
             }]
           },
         }],
@@ -1590,14 +1588,12 @@ describe("general web research across non-Egypt topics", () => {
           message: {
             content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي 〖1†L1-L3〗.",
             executed_tools: [{
-              search_results: {
-                results: [{
+              browser_results: [{
                   title: "NASA — Earth's Atmosphere",
                   url: "https://science.nasa.gov/earth/",
                   content: "The Earth's atmosphere scatters shorter blue wavelengths of sunlight more than longer red wavelengths.",
                   score: 0.89
                 }]
-              }
             }]
           },
         }],
@@ -1632,8 +1628,7 @@ describe("general web research across non-Egypt topics", () => {
             content:
               "بحسب سفر التكوين 50:25-26، مات يوسف في مصر وعمره 110 سنوات وحُنّط ووُضع في تابوت. ويذكر الخروج 13:19 أن موسى أخذ عظامه معه. ويحدد يشوع 24:32 شكيم مكانًا لدفن عظامه. أما ربط الموقع التقليدي المعروف بقبر يوسف به فلا يثبت هوية الرفات أثريًا بمفرده.",
             executed_tools: [{
-              search_results: {
-                results: [
+              browser_results: [
                   {
                     title: "Genesis 50:25-26; Exodus 13:19; Joshua 24:32 — NRSVUE",
                     url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A25-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NRSVUE",
@@ -1649,7 +1644,6 @@ describe("general web research across non-Egypt topics", () => {
                     score: 0.74
                   }
                 ]
-              }
             }]
           }
         }]
@@ -1687,14 +1681,12 @@ describe("general web research across non-Egypt topics", () => {
           message: {
             content: "بحسب يشوع 24:32 دُفنت عظام يوسف في شكيم.",
             executed_tools: [{
-              search_results: {
-                results: [{
+              browser_results: [{
                   title: "Joshua 24:32 — NRSVUE",
                   url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
                   content: "The bones of Joseph were buried at Shechem.",
                   score: 0.97
                 }]
-              }
             }]
           }
         }]
