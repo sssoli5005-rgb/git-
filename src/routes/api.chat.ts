@@ -608,7 +608,7 @@ export async function handleChatPost(
                   if (parsedUrl.protocol !== "https:") return [];
                   return [{
                     title: (chunk.web?.title || parsedUrl.hostname).slice(0, 180),
-                    organization: parsedUrl.hostname.replace(/^www\\./u, ""),
+                    organization: parsedUrl.hostname.replace(/^www\./u, ""),
                     url: parsedUrl.href,
                   }];
                 } catch {
