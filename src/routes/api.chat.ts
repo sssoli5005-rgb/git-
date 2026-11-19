@@ -262,7 +262,7 @@ function isLiveResearchRequest(query: string): boolean {
   const needsImageClarification =
     /(?:ايه|ما هي|ما هذا|ما هذه).{0,30}(?:قطعة|قطعه|اثر|صورة|صوره)/u.test(normalized);
   const needsConversationClarification =
-    /^(?:ممكن\\s+)?(?:تشرحلي|تشرح\\s+لي|تشرح|وضحلي|وضح\\s+لي|افهم|اكمل|تكمل|تكمللي|تكمل\\s+لي|كملي|كمل|كمّل)(?:\\s+(?:الفكرة|الموضوع|ده|دي|المقصود|السؤال|بقى|باقي))?\\s*[؟?]?$/u.test(normalized);
+    /^(?:ممكن\s+)?(?:تشرحلي|تشرح\s+لي|تشرح|وضحلي|وضح\s+لي|افهم|اكمل|تكمل|تكمللي|تكمل\s+لي|كملي|كمل|كمّل)(?:\s+(?:الفكرة|الموضوع|ده|دي|المقصود|السؤال|بقى|باقي))?\s*[؟?]?$/u.test(normalized);
   if (needsImageClarification || needsConversationClarification) return false;
 
   const personalOrCreative =
@@ -270,7 +270,7 @@ function isLiveResearchRequest(query: string): boolean {
   if (personalOrCreative) return false;
 
   const ordinaryQuestion = /[؟?]/u.test(query) ||
-    /^(?:ما معنى|معنى|تعريف|معلومات عن|تاريخ|أسباب|سبب|نتائج|نتيجة|متى|اين|فين|كيف|لماذا|ليه|من هو|من هي|من هم|ما هو|ما هي|هل|كم|ما اسم|اسم)\\b/u.test(normalized);
+    /^(?:ما معنى|معنى|تعريف|معلومات عن|تاريخ|أسباب|سبب|نتائج|نتيجة|متى|اين|فين|كيف|لماذا|ليه|من هو|من هي|من هم|ما هو|ما هي|هل|كم|ما اسم|اسم)\b/u.test(normalized);
 
   const explicitResearch =
     /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مصدر|المراجع|مرجع|موثق|موثوق|دليل|اتأكد|تحقق|دورلي|شوفلي|اخر اخبار|آخر أخبار|حديث|حاليا|النهارده|اليوم|امبارح|الأسبوع)/u.test(normalized);
@@ -795,8 +795,6 @@ export async function handleChatPost(
             if (geminiGroundedSources.length) {
               verifiedTurnSources = mergeResearchSources(verifiedTurnSources, geminiGroundedSources);
               if (wantsSources) responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
-            }            if (wantsSources) {
-              responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
             }
             if (!geminiGroundedSources.length) {
               console.warn("[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer", { model });
