@@ -3625,6 +3625,26 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         return json({ error: "ملف الصورة تالف أو غير صالح." }, 400);
       }
       if (!imageBytes.length) return json({ error: "الصورة فاضية." }, 400);
+      // Preserve the original uploaded file separately from the resized/compressed
+      // canvas image used by vision providers. Exact catalogue fingerprints must
+      // be checked against the original bytes, not a lossy derivative.
+      let exactMatchImageBytes = imageBytes;
+      const originalImage = body?.originalImage;
+      if (originalImage !== undefined) {
+        if (typeof originalImage !== "string" || originalImage.length > 700_000) {
+          return json({ error: "الصورة الأصلية للمطابقة غير صالحة أو كبيرة." }, 400);
+        }
+        const originalImageMatch = /^data:image\\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(originalImage);
+        if (!originalImageMatch) return json({ error: "صيغة الصورة الأصلية غير مدعومة." }, 400);
+        try {
+          exactMatchImageBytes = Array.from(atob(originalImageMatch[2]), (character) => character.charCodeAt(0));
+        } catch {
+          return json({ error: "الصورة الأصلية للمطابقة تالفة." }, 400);
+        }
+        if (!exactMatchImageBytes.length || exactMatchImageBytes.length > MAX_COMPARISON_IMAGE_BYTES) {
+          return json({ error: "الصورة الأصلية للمطابقة يجب ألا تتجاوز 500 كيلوبايت." }, 413);
+        }
+      }
       let scannerIndexResult = null;
       if (mode === "objects" && env.SCANNER_INDEX_URL) {
         scannerIndexResult = await searchScannerIndex(env, imageBytes);
@@ -4123,7 +4143,15 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
             const referenceImage = comparisonImageBytes || imageBytes;
-            officialVisualMatch = await findExactOfficialImageMatch(referenceImage, candidateImages);
+            // First compare the untouched upload. Browser canvas rendering and JPEG
+            // recompression alter bytes even when the photographed object is identical.
+            officialVisualMatch = await findExactOfficialImageMatch(exactMatchImageBytes, candidateImages);
+            if (!officialVisualMatch && imageBytes !== exactMatchImageBytes) {
+              officialVisualMatch = await findExactOfficialImageMatch(imageBytes, candidateImages);
+            }
+            if (!officialVisualMatch && referenceImage !== imageBytes && referenceImage !== exactMatchImageBytes) {
+              officialVisualMatch = await findExactOfficialImageMatch(referenceImage, candidateImages);
+            }
             if (!officialVisualMatch && geminiConfigured) {
               try {
                 officialVisualMatch = await compareWithOfficialCatalogPhotos(
@@ -4224,7 +4252,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
               url: officialVisualMatch.url,
               similarity: Math.round(officialVisualMatch.similarity * 1000) / 1000,
             },
-            visualMatchMethod: "Gemini multimodal comparison; not CLIP",
+            visualMatchMethod: officialVisualMatch.engine || "Multimodal official catalogue comparison",
             model: "ATHARA Official Visual Search",
           });
         }
