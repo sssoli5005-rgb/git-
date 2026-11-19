@@ -715,8 +715,12 @@ describe("ATHARA Cloudflare Worker", () => {
         });
       }
       if (url.startsWith("https://api.groq.com/")) {
-        searchOrder.push("Groq");
-        return Response.json({ choices: [{ message: { content: "This should not be reached." } }] });
+        const groqBody = JSON.parse(String(init?.body));
+        if (groqBody.tools?.some((tool: { type?: string }) => tool.type === "browser_search")) {
+          searchOrder.push("Groq");
+          return Response.json({ choices: [{ message: { content: "This should not be reached." } }] });
+        }
+        return Response.json({ choices: [{ message: { content: JSON.stringify({ rankedMatches: [] }) } }] });
       }
       return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
     });
