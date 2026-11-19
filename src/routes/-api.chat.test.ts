@@ -1501,6 +1501,8 @@ describe("general web research across non-Egypt topics", () => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
         citation_options?: string;
+        tools?: Array<{ type: string }>;
+        tool_choice?: string;
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
       expect(payload.citation_options).toBe("enabled");
@@ -1577,6 +1579,8 @@ describe("general web research across non-Egypt topics", () => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
         citation_options?: string;
+        tools?: Array<{ type: string }>;
+        tool_choice?: string;
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
       expect(payload.citation_options).toBe("enabled");
@@ -1612,6 +1616,8 @@ describe("general web research across non-Egypt topics", () => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
         citation_options?: string;
+        tools?: Array<{ type: string }>;
+        tool_choice?: string;
         messages: { role: string; content: string }[];
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
