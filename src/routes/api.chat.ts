@@ -261,7 +261,9 @@ function isLiveResearchRequest(query: string): boolean {
   if (!normalized) return false;
   const needsImageClarification =
     /(?:ايه|ما هي|ما هذا|ما هذه).{0,30}(?:قطعة|قطعه|اثر|صورة|صوره)/u.test(normalized);
-  if (needsImageClarification) return false;
+  const needsConversationClarification =
+    /^(?:ممكن\\s+)?(?:تشرحلي|تشرح\\s+لي|تشرح|وضحلي|وضح\\s+لي|افهم|اكمل|تكمل|تكمللي|تكمل\\s+لي|كملي|كمل|كمّل)(?:\\s+(?:الفكرة|الموضوع|ده|دي|المقصود|السؤال|بقى|باقي))?\\s*[؟?]?$/u.test(normalized);
+  if (needsImageClarification || needsConversationClarification) return false;
 
   const personalOrCreative =
     /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here|هل تحبني|بتحبني|تحبني|هل تفتقدني|مشتاق|اشتقتلك|ايه رأيك|ما رأيك|تنصحني|اعمل ايه|أعمل ايه|ماذا أفعل|ماذا افعل)/u.test(normalized);
@@ -504,7 +506,15 @@ export async function handleChatPost(
     .slice(0, 8);
   let responseSources = wantsSources ? knowledgeSources : [];
   let verifiedTurnSources = [...searchedSources];
-  if (parsed.data.language === "ar" && localKnowledgeAnswer.directAnswer && localKnowledgeSources.length && searchedSources.length) {
+  if (
+    parsed.data.language === "ar" &&
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.length &&
+    (searchedSources.length ||
+      (!readProviderEnv(suppliedEnv, "CHAT_GROQ_API_KEY")?.trim() &&
+        !readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim() &&
+        !readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim()))
+  ) {
     console.info("[Chat] Answering with a curated, source-backed heritage response");
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
@@ -885,7 +895,7 @@ export async function handleChatPost(
           if (
             answer &&
             candidate?.finishReason !== "MAX_TOKENS" &&
-            (!geminiLiveSearch || geminiGroundedSources.length > 0) &&
+            (!geminiLiveSearch || geminiGroundedSources.length > 0 || searchedSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
           ) {
             const cleaned = removeRepeatedSentences(answer);
@@ -988,7 +998,7 @@ export async function handleChatPost(
           verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
           if (wantsSources) responseSources = mergeResearchSources(responseSources, sources);
         }
-        const evidenceOk = !liveResearchRequested || sources.length > 0;
+        const evidenceOk = !liveResearchRequested || sources.length > 0 || searchedSources.length > 0;
         const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
         if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
           const cleaned = removeRepeatedSentences(
@@ -1012,6 +1022,20 @@ export async function handleChatPost(
 
   if (
     liveResearchRequested &&
+    heritageQuestion &&
+    localKnowledgeAnswer.content &&
+    localKnowledgeSources.length > 0
+  ) {
+    console.info("[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted");
+    return asChatStream(
+      localKnowledgeAnswer.content,
+      wantsSources ? localKnowledgeSources : [],
+      parsed.data.language,
+    );
+  }
+
+  if (
+    liveResearchRequested &&
     localKnowledgeAnswer.directAnswer &&
     localKnowledgeSources.length > 0
   ) {
@@ -1024,7 +1048,7 @@ export async function handleChatPost(
   }
 
   if (liveResearchRequested) {
-    console.warn("[Chat] Withholding a factual answer because neither search provider returned verifiable grounding");
+    console.warn("[Chat] Withholding a factual answer because none of the configured search providers returned verifiable grounding");
     return asChatStream(createUnverifiedResearchReply(parsed.data.language), [], parsed.data.language);
   }
 
@@ -1033,7 +1057,6 @@ export async function handleChatPost(
   if (
     parsed.data.language === "ar" &&
     heritageQuestion &&
-    (groqApiKey || geminiApiKey || readProviderEnv(suppliedEnv, "NODE_ENV") === "production") &&
     localKnowledgeAnswer.content &&
     localKnowledgeSources.length
   ) {
