@@ -285,11 +285,18 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             searchScale *= 0.75;
           }
           if (searchImage && searchImage.length > 640_000) searchImage = undefined;
+          // Keep small, supported original uploads intact for exact museum-image
+          // fingerprint checks; the canvas copies below remain optimized for AI.
+          const originalImage = captured && captured.length <= 666_000 &&
+            /^data:image\/(jpeg|png|webp);base64,/i.test(captured)
+            ? captured
+            : undefined;
           const response = await fetch("/api/scan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               image,
+              ...(originalImage ? { originalImage } : {}),
               ...(searchImage ? { searchImage } : {}),
               enhancedImage,
               ...(documentImage ? { documentImage } : {}),
