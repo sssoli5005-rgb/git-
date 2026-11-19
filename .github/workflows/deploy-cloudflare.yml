@@ -150,7 +150,7 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
-          const pageUrl = "https://egymonuments.gov.eg/ar/collections/statue-of-nephthys-6";
+          const pageUrl = "https://egymonuments.gov.eg/collections/statue-of-nephthys-6/";
           const imageUrl = "https://egymonuments.gov.eg/media/4666/dsc_0802.jpg?anchor=center&height=423&mode=crop&rnd=132581519580000000&width=645";
           const imageResponse = await fetch(imageUrl, {
             headers: { "user-agent": "ATHARA-Live-Recognition-Test/1.0" },
@@ -179,7 +179,7 @@ jobs:
             process.exit(1);
           }
           const officialSource = (result.sources || []).some((source) =>
-            typeof source.url === "string" && source.url.includes("/ar/collections/statue-of-nephthys-6")
+            typeof source.url === "string" && source.url.includes("/collections/statue-of-nephthys-6")
           );
           const identityText = [
             result.analysis,
@@ -189,7 +189,7 @@ jobs:
           ].filter(Boolean).join(" ");
           const nephthysNamed = /نفتيس|nephthys|nebthet/i.test(identityText);
           const visuallyMatched =
-            result.identificationStatus === "probable" &&
+            ["confirmed", "probable"].includes(result.identificationStatus) &&
             result.reverseImageSearchStatus === "match";
           const recognitionPassed = nephthysNamed && officialSource && visuallyMatched;
           const diagnosticDescription = [

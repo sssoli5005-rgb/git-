@@ -233,7 +233,7 @@ describe("ATHARA Cloudflare Worker", () => {
   });
 
   it("uses Groq catalogue search when Gemini is unavailable and compares official ministry-hosted reference photos", async () => {
-    const catalogueUrl = "https://egymonuments.gov.eg/ar/collections/wooden-statue-of-nephthys";
+    const catalogueUrl = "https://egymonuments.gov.eg/collections/wooden-statue-of-nephthys-6/";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url === "https://api.groq.com/openai/v1/chat/completions") {
@@ -243,9 +243,16 @@ describe("ATHARA Cloudflare Worker", () => {
           expect(body.messages[0].content).toContain("wooden statue");
           return Response.json({
             choices: [{ message: { content:
-              "[Wooden Statue of Nephthys](https://egymonuments.gov.eg/ar/collections/wooden-statue-of-nephthys)" } }],
+              "[Wooden Statue of Nephthys](https://egymonuments.gov.eg/collections/wooden-statue-of-nephthys-6/)" } }],
           });
         }
+        return Response.json({
+          choices: [{ message: { content: JSON.stringify({ rankedMatches: [] }) } }],
+        });
+      }
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        const body = JSON.parse(String(init?.body));
+        expect(body.model).toBe("inclusionai/ling-3.2-flash:free");
         return Response.json({
           choices: [{ message: { content: JSON.stringify({
             rankedMatches: [{
@@ -291,6 +298,7 @@ describe("ATHARA Cloudflare Worker", () => {
         {
           AI: { run: aiRun },
           GROQ_API_KEY: "groq-test-key",
+          OPENROUTER_API_KEY: "openrouter-test-key",
           SCANNER_MATCH_THRESHOLD: "0.80",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
@@ -302,7 +310,12 @@ describe("ATHARA Cloudflare Worker", () => {
         resultType: "reference_match",
         identificationStatus: "confirmed",
         reverseImageSearchStatus: "match",
-        matchedArtifact: { name: "Wooden Statue of Nephthys", similarity: 0.94 },
+        matchedArtifact: {
+          name: "Wooden Statue of Nephthys",
+          museum: "Mummification Museum",
+          location: "Mummification Museum",
+          similarity: 0.94,
+        },
       });
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input) === "https://egymonuments.gov.eg/media/nephthys-reference.jpg",
