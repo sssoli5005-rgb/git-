@@ -352,7 +352,7 @@ describe("ATHARA Cloudflare Worker", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
-      if (url === referenceUrl) {
+      if (url.startsWith("https://egymonuments.gov.eg/media/4666/dsc_0802.jpg")) {
         return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
       }
       return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: [] });
@@ -400,6 +400,8 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
       expect(response.status).toBe(200);
+      // This direct fingerprint match must complete before any quota-limited model is called.
+      expect(aiRun).not.toHaveBeenCalled();
       expect(body).toMatchObject({
         ok: true,
         resultType: "reference_match",
@@ -416,7 +418,9 @@ describe("ATHARA Cloudflare Worker", () => {
         url: catalogueUrl,
         trusted: true,
       }));
-      expect(fetchMock).toHaveBeenCalledWith(referenceUrl, expect.anything());
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).startsWith(referenceUrl),
+      )).toBe(true);
       expect(assetsFetch.mock.calls.some(([input]) =>
         String(input).endsWith("/cached-nephthys-derivative.jpg"),
       )).toBe(false);

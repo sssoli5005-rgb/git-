@@ -1182,7 +1182,12 @@ async function loadOfficialCandidateImages(candidates, assets) {
           }
         }
         if (!response?.ok) return null;
-        const buffer = await response.arrayBuffer();
+        let buffer;
+        try {
+          buffer = await response.arrayBuffer();
+        } catch {
+          return null;
+        }
         if (!buffer.byteLength || buffer.byteLength > 1_500_000) return null;
         return {
           item: candidate.record,
@@ -1218,6 +1223,51 @@ async function findExactOfficialImageMatch(imageBytes, candidates) {
     };
   }
   return null;
+}
+
+function officialVisualMatchResponse(officialVisualMatch, observation = null) {
+  const item = officialVisualMatch.item;
+  const sourceStory = String(item.description || "").trim();
+  const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
+  const sources = [{
+    title: item.sourceTitle,
+    url: item.sourceUrl,
+    snippet: item.description || "",
+    source: item.sourceTitle,
+    trusted: true,
+  }];
+  const exactOfficialFingerprint = officialVisualMatch.engine === "Exact official Ministry image fingerprint";
+  return {
+    ok: true,
+    analysis: sourceStory || item.description || "",
+    sourceStory,
+    sources,
+    trustedSourcesAvailable: true,
+    wikipediaAvailable: null,
+    resultType: "reference_match",
+    identificationStatus: "confirmed",
+    reverseImageSearchStatus: "match",
+    confidence: exactOfficialFingerprint ? "high" : "medium",
+    confidenceByField: {
+      identity: exactOfficialFingerprint ? "high" : "medium",
+      place: catalogArtifact.location ? "medium" : "low",
+      period: item.period ? "medium" : "low",
+    },
+    referenceId: item.id,
+    referenceImages: Array.isArray(item.localImageUrls) ? item.localImageUrls : [],
+    matchedOfficialUrl: officialVisualMatch.url,
+    visualDescription: observation ? scannerVisualDescription(observation) : "",
+    matchedArtifact: {
+      name: catalogArtifact.name || item.title,
+      museum: catalogArtifact.museum || item.museum || "",
+      location: catalogArtifact.location || item.location || item.currentLocation || "",
+      objectNumber: catalogArtifact.objectNumber || item.objectNumber || item.id,
+      url: officialVisualMatch.url,
+      similarity: Math.round(officialVisualMatch.similarity * 1000) / 1000,
+    },
+    visualMatchMethod: officialVisualMatch.engine || "Multimodal official catalog comparison",
+    model: "ATHARA Official Visual Search",
+  };
 }
 
 async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, model, threshold) {
@@ -3692,6 +3742,38 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           return json({ error: "نسخة المقارنة البصرية يجب ألا تتجاوز 500 كيلوبايت." }, 413);
         }
       }
+      // Run deterministic official-image matching before any quota-limited vision call.
+      // This allows exact official catalogue images to resolve even when every AI
+      // provider is exhausted. The original upload is checked before transformed copies.
+      if (mode === "objects" && body?.originalImage !== undefined &&
+          Array.isArray(EMBEDDED_CURATED_RECORDS) && EMBEDDED_CURATED_RECORDS.length) {
+        try {
+          const directRecords = EMBEDDED_CURATED_RECORDS.filter((record) =>
+            record && (record.mode === "objects" || record.mode === "both") &&
+            Array.isArray(record.imageUrls) && record.imageUrls.length > 0 &&
+            typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
+          );
+          const directImages = await loadOfficialCandidateImages(
+            directRecords.map((record) => ({ record, curatedFallback: true })),
+            env.ASSETS,
+          );
+          const variants = [exactMatchImageBytes, imageBytes, comparisonImageBytes]
+            .filter((bytes, index, all) =>
+              Array.isArray(bytes) && bytes.length > 0 &&
+              all.findIndex((candidate) => candidate === bytes) === index,
+            );
+          for (const variant of variants) {
+            const exactMatch = await findExactOfficialImageMatch(variant, directImages);
+            if (exactMatch) {
+              console.info("[Image scanner] Early quota-independent official image match:", exactMatch.item.id);
+              return json(officialVisualMatchResponse(exactMatch));
+            }
+          }
+        } catch (error) {
+          console.warn("[Image scanner] Early official image fingerprint pass unavailable:", String(error?.message || error).slice(0, 180));
+        }
+      }
+
       const photoGps = readExifGps(imageBytes);
 
       // قاعدة المراجع اختيارية: تُحمّل كسجلات JSON موثقة في متغير ATHARA_CATALOG_JSON.
@@ -3766,6 +3848,43 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       }
       const existingCatalogIds = new Set(catalog.map((record) => record?.id).filter(Boolean));
       catalog.push(...[...curatedRecordsById.values()].filter((record) => !existingCatalogIds.has(record.id)));
+
+      // Deterministic official-image pass: this does not consume any model quota.
+      // It runs before AI so exact Ministry catalogue uploads still identify when
+      // every hosted vision provider is rate-limited or out of daily allocation.
+      if (mode === "objects" && curatedRecordsById.size > 0) {
+        try {
+          const directOfficialCandidates = [...curatedRecordsById.values()]
+            .filter((record) =>
+              (record.mode === "objects" || record.mode === "both") &&
+              Array.isArray(record.imageUrls) && record.imageUrls.length > 0,
+            )
+            .map((record) => ({ record, curatedFallback: true }));
+          const directOfficialImages = await loadOfficialCandidateImages(directOfficialCandidates, env.ASSETS);
+          const directImageVariants = [
+            exactMatchImageBytes,
+            imageBytes,
+            comparisonImageBytes,
+          ].filter((bytes, index, all) =>
+            Array.isArray(bytes) && bytes.length > 0 &&
+            all.findIndex((candidate) => candidate === bytes) === index,
+          );
+          let directOfficialMatch = null;
+          for (const imageVariant of directImageVariants) {
+            directOfficialMatch = await findExactOfficialImageMatch(imageVariant, directOfficialImages);
+            if (directOfficialMatch) break;
+          }
+          if (directOfficialMatch) {
+            console.info("[Image scanner] Quota-independent official image fingerprint matched:", {
+              artifact: directOfficialMatch.item.title,
+              source: directOfficialMatch.item.sourceUrl,
+            });
+            return json(officialVisualMatchResponse(directOfficialMatch));
+          }
+        } catch (error) {
+          console.warn("[Image scanner] Quota-independent official image fingerprint lookup unavailable:", String(error?.message || error).slice(0, 180));
+        }
+      }
 
       const visionPrompt =
         mode === "hieroglyphs"
@@ -4213,49 +4332,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
         if (officialVisualMatch) {
-          const item = officialVisualMatch.item;
-          // The official record already contains the historical description.
-          // Re-summarizing it through another provider delays a verified result.
-          const sourceStory = String(item.description || "").trim();
-          const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
-          const sources = [{
-            title: item.sourceTitle,
-            url: item.sourceUrl,
-            snippet: item.description || "",
-            source: item.sourceTitle,
-            trusted: true,
-          }];
-          return json({
-            ok: true,
-            analysis: sourceStory || item.description || "",
-            sourceStory,
-            sources,
-            trustedSourcesAvailable: true,
-            wikipediaAvailable: null,
-            resultType: "reference_match",
-            identificationStatus: "confirmed",
-            reverseImageSearchStatus: "match",
-            confidence: "medium",
-            confidenceByField: {
-              identity: "medium",
-              place: catalogArtifact.location ? "medium" : "low",
-              period: item.period ? "medium" : "low",
-            },
-            referenceId: item.id,
-            referenceImages: Array.isArray(item.localImageUrls) ? item.localImageUrls : [],
-            matchedOfficialUrl: officialVisualMatch.url,
-            visualDescription: scannerVisualDescription(observation),
-            matchedArtifact: {
-              name: catalogArtifact.name || item.title,
-              museum: catalogArtifact.museum || item.museum || "",
-              location: catalogArtifact.location || item.location || item.currentLocation || "",
-              objectNumber: catalogArtifact.objectNumber || item.objectNumber || item.id,
-              url: officialVisualMatch.url,
-              similarity: Math.round(officialVisualMatch.similarity * 1000) / 1000,
-            },
-            visualMatchMethod: officialVisualMatch.engine || "Multimodal official catalogue comparison",
-            model: "ATHARA Official Visual Search",
-          });
+          return json(officialVisualMatchResponse(officialVisualMatch, observation));
         }
 
         if (mode === "objects" && !officialVisualMatch && reverseImageSearchConfigured) {
