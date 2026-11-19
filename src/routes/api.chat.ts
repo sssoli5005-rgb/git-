@@ -945,7 +945,22 @@ export async function handleChatPost(
           messages: localPayload.messages,
           max_tokens: 4096,
           ...(liveResearchRequested ? {
-            tools: [{ type: "openrouter:web_search" }],
+            tools: [{
+              type: "openrouter:web_search",
+              parameters: {
+                engine: "exa",
+                max_results: 5,
+                max_total_results: 10,
+                allowed_domains: [
+                  "egymonuments.gov.eg", "whc.unesco.org", "metmuseum.org",
+                  "britishmuseum.org", "penn.museum", "si.edu", "louvre.fr",
+                  "ees.ac.uk", "ucl.ac.uk", "biblegateway.com", "bible.com",
+                  "britannica.com", "ox.ac.uk", "cam.ac.uk", "harvard.edu",
+                  "who.int", "un.org", "nasa.gov", "noaa.gov", "nature.com",
+                  "science.org", "pubmed.ncbi.nlm.nih.gov",
+                ],
+              },
+            }],
             tool_choice: "required",
           } : {}),
         }),
@@ -971,7 +986,7 @@ export async function handleChatPost(
           verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
           if (wantsSources) responseSources = mergeResearchSources(responseSources, sources);
         }
-        const evidenceOk = !liveResearchRequested || verifiedTurnSources.length > 0;
+        const evidenceOk = !liveResearchRequested || sources.length > 0;
         const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
         if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
           const cleaned = removeRepeatedSentences(
