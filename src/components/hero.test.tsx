@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LanguageProvider } from "@/i18n/language";
@@ -427,9 +427,22 @@ describe("ChatWorkspace response completion", () => {
         await Promise.resolve();
       });
 
+      expect(screen.getByRole("log")).toHaveTextContent("رد سابق محفوظ.");
+      if (_caseName === "connection failure") {
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 2_000 });
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        expect(onMessagesChange).toHaveBeenCalledOnce();
+        expect(onMessagesChange.mock.calls[0]?.[1]).toEqual([
+          ...priorMessages,
+          { role: "user", content: "رسالة فشلت" },
+          { role: "assistant", content: "رد ناجح بعد التعافي." },
+        ]);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        return;
+      }
+
       expect(screen.getByRole("status")).toHaveTextContent(error);
       expect(screen.getByRole("status")).not.toHaveClass("text-destructive");
-      expect(screen.getByRole("log")).toHaveTextContent("رد سابق محفوظ.");
       if (error.includes("مربع الرسالة")) {
         expect(screen.getByText("جزء ناقص")).toBeInTheDocument();
       } else {

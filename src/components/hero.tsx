@@ -439,12 +439,55 @@ function ChatConversation({
     setStatus("");
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({ language: lang, messages: requestMessages }),
-      });
+      let response: Response | undefined;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const candidate = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ language: lang, messages: requestMessages }),
+          });
+          if (
+            attempt === 0 &&
+            [502, 503, 504].includes(candidate.status) &&
+            !controller.signal.aborted
+          ) {
+            await candidate.body?.cancel().catch(() => undefined);
+            await new Promise<void>((resolve) => {
+              const retryDelay = setTimeout(resolve, 350);
+              controller.signal.addEventListener(
+                "abort",
+                () => {
+                  clearTimeout(retryDelay);
+                  resolve();
+                },
+                { once: true },
+              );
+            });
+            if (controller.signal.aborted) break;
+            continue;
+          }
+          response = candidate;
+          break;
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          if (attempt === 1) throw error;
+          await new Promise<void>((resolve) => {
+            const retryDelay = setTimeout(resolve, 350);
+            controller.signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(retryDelay);
+                resolve();
+              },
+              { once: true },
+            );
+          });
+          if (controller.signal.aborted) throw error;
+        }
+      }
+      if (!response) throw new ChatRequestError("unavailable");
 
       if (!response.ok) {
         const error = (await response.json().catch(() => null)) as { code?: unknown } | null;

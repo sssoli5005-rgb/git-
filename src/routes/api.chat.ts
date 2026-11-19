@@ -259,6 +259,20 @@ function removeRepeatedSentences(content: string): {
   return { content: kept.join("").trim(), repetitionsRemoved };
 }
 
+function isLiveResearchRequest(query: string): boolean {
+  const normalized = query.trim();
+  if (!normalized) return false;
+  const personalOrCasual =
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظرك|ازيك|إزيك|عامل ايه|عاملة ايه|اخبارك|أخبارك)/iu.test(normalized);
+  if (personalOrCasual) return false;
+  const explicitResearch =
+    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(normalized);
+  const factualQuestion =
+    /^\s*(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe)\b/iu.test(normalized) ||
+    /^\s*(?:ايه|ما هو|ما هي|من هو|من هي|مين|متى|فين|أين|ليه|لماذا|ازاي|كيف|هل|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن)/u.test(normalized);
+  return explicitResearch || factualQuestion;
+}
+
 function createArabicTourismQuickReply(data: {
   language: string;
   messages: { role: string; content: string }[];
@@ -323,7 +337,8 @@ export async function handleChatPost(
   const heritageQuestion = isEgyptianHeritageQuery(parsed.data.messages);
 
   if (heritageQuestion) {
-    const searchTimeout = AbortSignal.timeout(4_000);
+    // Give trusted museum/university sources time to respond before falling back.
+    const searchTimeout = AbortSignal.timeout(10_000);
     const searchSignal = AbortSignal.any([request.signal, searchTimeout]);
     try {
       const results = await searchTrustedEgyptianHeritage(
@@ -374,7 +389,7 @@ export async function handleChatPost(
         sources.findIndex((candidate) => candidate.url === source.url) === index,
     )
     .slice(0, 8);
-  const responseSources = heritageQuestion && wantsSources ? knowledgeSources : [];
+  let responseSources = heritageQuestion && wantsSources ? knowledgeSources : [];
   if (parsed.data.language === "ar" && localKnowledgeAnswer.directAnswer) {
     console.info("[Chat] Answering with a curated, source-backed heritage response");
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
@@ -397,9 +412,15 @@ export async function handleChatPost(
       messages: { role: string; content: string }[];
     };
     const primaryModel = readProviderEnv(suppliedEnv, "GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
-    const groqModels = [...new Set([primaryModel, "openai/gpt-oss-20b"])];
+    const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
+    const requestsLiveResearch = !heritageQuestion && isLiveResearchRequest(latestQuestion);
+    // GPT-OSS 20B has Groq's built-in browser_search tool. Use it for
+    // explicit web research; keep the configured Qwen model as the normal fast path.
+    const groqModels = requestsLiveResearch
+      ? ["openai/gpt-oss-20b", primaryModel].filter((model, index, all) => all.indexOf(model) === index)
+      : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(8_000);
+      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 20_000 : 8_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -413,8 +434,11 @@ export async function handleChatPost(
             messages: localPayload.messages,
             max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
-            reasoning_effort: "medium",
+            reasoning_effort: model === "openai/gpt-oss-20b" && requestsLiveResearch ? "low" : "medium",
             reasoning_format: "hidden",
+            ...(model === "openai/gpt-oss-20b" && requestsLiveResearch
+              ? { tools: [{ type: "browser_search" }], tool_choice: "required", temperature: 1 }
+              : {}),
           }),
         });
         if (groqResponse.ok) {
@@ -530,6 +554,8 @@ export async function handleChatPost(
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "GEMINI_API_KEY")?.trim();
+  const latestQuestionForSearch = parsed.data.messages.at(-1)?.content ?? "";
+  const geminiLiveSearch = !heritageQuestion && isLiveResearchRequest(latestQuestionForSearch);
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
@@ -547,7 +573,7 @@ export async function handleChatPost(
     const primaryModel = readProviderEnv(suppliedEnv, "GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
     const geminiModels = [...new Set([primaryModel, "gemini-3.6-flash"])];
     for (const [index, model] of geminiModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(12_000);
+      const providerTimeout = AbortSignal.timeout(geminiLiveSearch ? 25_000 : 12_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const geminiResponse = await fetcher(
@@ -566,6 +592,7 @@ export async function handleChatPost(
                 maxOutputTokens: 4096,
                 ...(heritageQuestion ? { temperature: 0.2 } : {}),
               },
+              ...(geminiLiveSearch ? { tools: [{ google_search: {} }] } : {}),
             }),
           },
         );
@@ -575,9 +602,34 @@ export async function handleChatPost(
             candidates?: Array<{
               finishReason?: string;
               content?: { parts?: Array<{ text?: string }> };
+              groundingMetadata?: {
+                groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+              };
             }>;
           } | null;
           const candidate = geminiPayload?.candidates?.[0];
+          if (geminiLiveSearch) {
+            const groundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
+              .flatMap((chunk) => {
+                const uri = chunk.web?.uri;
+                if (typeof uri !== "string") return [];
+                try {
+                  const parsedUrl = new URL(uri);
+                  if (parsedUrl.protocol !== "https:") return [];
+                  return [{
+                    title: (chunk.web?.title || parsedUrl.hostname).slice(0, 180),
+                    organization: parsedUrl.hostname.replace(/^www\./u, ""),
+                    url: parsedUrl.href,
+                  }];
+                } catch {
+                  return [];
+                }
+              });
+            responseSources = [
+              ...responseSources,
+              ...groundedSources.filter((source) => !responseSources.some((existing) => existing.url === source.url)),
+            ].slice(0, 8);
+          }
           const answer = candidate?.content?.parts
             ?.map((part) => part.text ?? "")
             .join("")
