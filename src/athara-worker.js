@@ -1220,6 +1220,51 @@ async function findExactOfficialImageMatch(imageBytes, candidates) {
   return null;
 }
 
+function officialVisualMatchResponse(officialVisualMatch, observation = null) {
+  const item = officialVisualMatch.item;
+  const sourceStory = String(item.description || "").trim();
+  const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
+  const sources = [{
+    title: item.sourceTitle,
+    url: item.sourceUrl,
+    snippet: item.description || "",
+    source: item.sourceTitle,
+    trusted: true,
+  }];
+  const exactOfficialFingerprint = officialVisualMatch.engine === "Exact official Ministry image fingerprint";
+  return {
+    ok: true,
+    analysis: sourceStory || item.description || "",
+    sourceStory,
+    sources,
+    trustedSourcesAvailable: true,
+    wikipediaAvailable: null,
+    resultType: "reference_match",
+    identificationStatus: "confirmed",
+    reverseImageSearchStatus: "match",
+    confidence: exactOfficialFingerprint ? "high" : "medium",
+    confidenceByField: {
+      identity: exactOfficialFingerprint ? "high" : "medium",
+      place: catalogArtifact.location ? "medium" : "low",
+      period: item.period ? "medium" : "low",
+    },
+    referenceId: item.id,
+    referenceImages: Array.isArray(item.localImageUrls) ? item.localImageUrls : [],
+    matchedOfficialUrl: officialVisualMatch.url,
+    visualDescription: observation ? scannerVisualDescription(observation) : "",
+    matchedArtifact: {
+      name: catalogArtifact.name || item.title,
+      museum: catalogArtifact.museum || item.museum || "",
+      location: catalogArtifact.location || item.location || item.currentLocation || "",
+      objectNumber: catalogArtifact.objectNumber || item.objectNumber || item.id,
+      url: officialVisualMatch.url,
+      similarity: Math.round(officialVisualMatch.similarity * 1000) / 1000,
+    },
+    visualMatchMethod: officialVisualMatch.engine || "Multimodal official catalog comparison",
+    model: "ATHARA Official Visual Search",
+  };
+}
+
 async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, model, threshold) {
   if (!apiKey || !candidates.length || imageBytes.length > 2_000_000) return null;
   const parts = [
@@ -3767,6 +3812,43 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const existingCatalogIds = new Set(catalog.map((record) => record?.id).filter(Boolean));
       catalog.push(...[...curatedRecordsById.values()].filter((record) => !existingCatalogIds.has(record.id)));
 
+      // Deterministic official-image pass: this does not consume any model quota.
+      // It runs before AI so exact Ministry catalogue uploads still identify when
+      // every hosted vision provider is rate-limited or out of daily allocation.
+      if (mode === "objects" && curatedRecordsById.size > 0) {
+        try {
+          const directOfficialCandidates = [...curatedRecordsById.values()]
+            .filter((record) =>
+              (record.mode === "objects" || record.mode === "both") &&
+              Array.isArray(record.imageUrls) && record.imageUrls.length > 0,
+            )
+            .map((record) => ({ record, curatedFallback: true }));
+          const directOfficialImages = await loadOfficialCandidateImages(directOfficialCandidates, env.ASSETS);
+          const directImageVariants = [
+            exactMatchImageBytes,
+            imageBytes,
+            comparisonImageBytes,
+          ].filter((bytes, index, all) =>
+            Array.isArray(bytes) && bytes.length > 0 &&
+            all.findIndex((candidate) => candidate === bytes) === index,
+          );
+          let directOfficialMatch = null;
+          for (const imageVariant of directImageVariants) {
+            directOfficialMatch = await findExactOfficialImageMatch(imageVariant, directOfficialImages);
+            if (directOfficialMatch) break;
+          }
+          if (directOfficialMatch) {
+            console.info("[Image scanner] Quota-independent official image fingerprint matched:", {
+              artifact: directOfficialMatch.item.title,
+              source: directOfficialMatch.item.sourceUrl,
+            });
+            return json(officialVisualMatchResponse(directOfficialMatch));
+          }
+        } catch (error) {
+          console.warn("[Image scanner] Quota-independent official image fingerprint lookup unavailable:", String(error?.message || error).slice(0, 180));
+        }
+      }
+
       const visionPrompt =
         mode === "hieroglyphs"
           ? `أنت محلل متخصص في الكتابات والآثار المصرية القديمة؛ استفد من معرفتك الداخلية والتاريخية، حتى لو لم تتوفر مراجع على الإنترنت. اتبع هذا الترتيب: (1) حدّد هل الصورة كتابة مصرية فعلًا أم لغة/خط آخر، وميّز الهيروغليفية عن الهيراطيقية والديموطيقية واليونانية والقبطية إن أمكن؛ لا تسمّ كل كتابة قديمة هيروغليفية. (2) صف العلامات واتجاه القراءة، واقرأ فقط ما يظهر بوضوح، ثم قدّم نقلًا صوتيًا وترجمة حرفية ومعنى النص عند توافر القرائن، واذكر هل يبدو النص دينيًا أو ملكيًا أو جنائزيًا أو إداريًا أو غير ذلك ولماذا. (3) رشّح أقرب نص أو أثر معروف فقط كاحتمال مع قرينة محددة؛ لا تدّعِ تطابقًا بصريًا. (4) لا تذكر اسم موقع محدد إلا إذا كانت هناك قرينة فريدة ومقروءة في الصورة؛ الرمز الشائع أو الأسلوب الفني أو نتيجة البحث النصي لا يثبت الموقع. وإلا اترك place فارغًا واكتفِ بنوع عام مثل معبد أو مقبرة أو لوحة، مع التنبيه أن الموقع غير مؤكد. لا تخلط مكان التصوير أو العثور بمكان العرض. (5) افصل النص الظاهر عن التحقق التاريخي المستقل؛ انقل العنوان المطبوع حرفيًا في printedLabels وترجم معناه بدقة في printedTextTranslation، ولا تعتبر تاريخًا أو ملكًا مدونًا في الصورة نهائيًا قبل مقارنته بالدراسات الحديثة. افحص أسماء الملوك والأسر والمواقع من المصادر المتخصصة؛ لا تصف جبانة بأنها مدينة. اشرح وظيفة المنظر والنقش وسياقه بدقة. عند تعارض المراجع اذكر الاختلاف دون تحيز. لا تخترع قراءة أو اسمًا أو تاريخًا أو مكانًا. أنشئ searchTerms قصيرة ودقيقة، وقدّم تهجئة عربية ولاتينية للاسم فقط إذا ظهرت قرينة واضحة. أخرج JSON فقط بالشكل: {"visualDescription":"وصف ما يظهر","scriptType":"نوع اللغة أو الخط، أو غير محسوم","visibleText":"العلامات المقروءة فقط أو فارغ","printedLabels":"العنوان أو بيانات القطعة المطبوعة حرفيًا، أو فارغ","printedTextTranslation":"ترجمة دقيقة للنص الظاهر أو فارغ","transliteration":"النقل الصوتي أو فارغ","translation":"الترجمة الحرفية أو فارغ","interpretation":"المعنى والسياق المقترح أو فارغ","objectOrTextPurpose":"الغرض الوظيفي والسياق المقيد بالأدلة أو غير محسوم","identity":"أقرب نص أو أثر معروف، أو فارغ","identityEvidence":"قرينة الترشيح أو سبب تعذر المطابقة","historicalVerification":"ما ثبت تاريخيًا من المصادر المستقلة وما يُفصل عن النص الظاهر","sourceConflicts":"اختلاف موثق بين المصادر أو فارغ","place":"الموقع المحدد أو فارغ","placeType":"نوع المكان العام، لا اسم موقع، أو غير محسوم","placeEvidence":"قرينة مرئية محددة أو سبب عدم كفايتها","period":"الفترة المحتملة أو فارغ","contextualStory":"سياق تاريخي عام لا ينسب النقش إلى موقع غير مؤكد","writingHistory":"تاريخ الخط واستخداماته","siteHistory":"تاريخ نوع المكان فقط، دون ادعاء تاريخ موقع محدد غير مثبت","searchTerms":["مصطلحات قصيرة ومميزة للبحث"],"confidence":"high أو medium أو low","confidenceByField":{"inscription":"high أو medium أو low","translation":"high أو medium أو low","place":"high أو medium أو low"},"keywords":["موضوعات ظاهرة"],"periodClues":[]}. لا تدّع إجراء بحث خارجي أو ترجمة أكاديمية مؤكدة.`
@@ -4213,49 +4295,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
         if (officialVisualMatch) {
-          const item = officialVisualMatch.item;
-          // The official record already contains the historical description.
-          // Re-summarizing it through another provider delays a verified result.
-          const sourceStory = String(item.description || "").trim();
-          const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
-          const sources = [{
-            title: item.sourceTitle,
-            url: item.sourceUrl,
-            snippet: item.description || "",
-            source: item.sourceTitle,
-            trusted: true,
-          }];
-          return json({
-            ok: true,
-            analysis: sourceStory || item.description || "",
-            sourceStory,
-            sources,
-            trustedSourcesAvailable: true,
-            wikipediaAvailable: null,
-            resultType: "reference_match",
-            identificationStatus: "confirmed",
-            reverseImageSearchStatus: "match",
-            confidence: "medium",
-            confidenceByField: {
-              identity: "medium",
-              place: catalogArtifact.location ? "medium" : "low",
-              period: item.period ? "medium" : "low",
-            },
-            referenceId: item.id,
-            referenceImages: Array.isArray(item.localImageUrls) ? item.localImageUrls : [],
-            matchedOfficialUrl: officialVisualMatch.url,
-            visualDescription: scannerVisualDescription(observation),
-            matchedArtifact: {
-              name: catalogArtifact.name || item.title,
-              museum: catalogArtifact.museum || item.museum || "",
-              location: catalogArtifact.location || item.location || item.currentLocation || "",
-              objectNumber: catalogArtifact.objectNumber || item.objectNumber || item.id,
-              url: officialVisualMatch.url,
-              similarity: Math.round(officialVisualMatch.similarity * 1000) / 1000,
-            },
-            visualMatchMethod: officialVisualMatch.engine || "Multimodal official catalogue comparison",
-            model: "ATHARA Official Visual Search",
-          });
+          return json(officialVisualMatchResponse(officialVisualMatch, observation));
         }
 
         if (mode === "objects" && !officialVisualMatch && reverseImageSearchConfigured) {
