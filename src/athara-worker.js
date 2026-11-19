@@ -313,7 +313,7 @@ function cleanVisionObservation(value) {
 
 function resolveVisionProviderOrder(env) {
   const order = [...DEFAULT_VISION_PROVIDER_ORDER];
-  if (typeof env?.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim()) {
+  if (typeof env?.OPENROUTER_API_KEY === "string" && env.SCANNER_OPENROUTER_API_KEY.trim()) {
     order.push("OpenRouter");
   }
   return order;
@@ -1489,14 +1489,14 @@ function openScannerCandidateArtifact(candidate) {
 
 async function summarizeTrustedSourceText(env, sourceText, language) {
   const text = String(sourceText || "").trim().slice(0, 6000);
-  const key = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+  const key = typeof env.SCANNER_GROQ_API_KEY === "string" ? env.SCANNER_GROQ_API_KEY.trim() : "";
   if (!text || !key) return "";
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim() ? env.GROQ_MODEL.trim() : "qwen/qwen3.8-27b",
+        model: typeof env.SCANNER_GROQ_MODEL === "string" && env.SCANNER_GROQ_MODEL.trim() ? env.SCANNER_GROQ_MODEL.trim() : "qwen/qwen3.8-27b",
         temperature: 0.1,
         max_tokens: 300,
         messages: [{ role: "user", content: `لخّص النص المرجعي التالي بلغة ${LANGUAGES[language]} فقط. لا تضف أي معلومة من معرفتك، ولا تخترع مكانًا أو تاريخًا أو قصة. أعد الملخص فقط.\n\n${text}` }],
@@ -1513,8 +1513,8 @@ async function summarizeTrustedSourceText(env, sourceText, language) {
 }
 
 function configuredGeminiVisionModel(env) {
-  return typeof env.GEMINI_VISION_MODEL === "string" && env.GEMINI_VISION_MODEL.trim()
-    ? env.GEMINI_VISION_MODEL.trim()
+  return typeof env.SCANNER_GEMINI_VISION_MODEL === "string" && env.SCANNER_GEMINI_VISION_MODEL.trim()
+    ? env.SCANNER_GEMINI_VISION_MODEL.trim()
     : "gemini-3.8-flash";
 }
 
@@ -2233,12 +2233,12 @@ async function readGroundedScannerSource(entry, observation) {
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
   const providers = [];
-  const geminiKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
-  const groqKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+  const geminiKey = typeof env.SCANNER_GEMINI_API_KEY === "string" ? env.SCANNER_GEMINI_API_KEY.trim() : "";
+  const groqKey = typeof env.SCANNER_GROQ_API_KEY === "string" ? env.SCANNER_GROQ_API_KEY.trim() : "";
   if (geminiKey) providers.push({ name: "Gemini Google Search", run: () =>
     searchWithGeminiGrounding(query, geminiKey, configuredGeminiVisionModel(env)) });
   if (groqKey) providers.push({ name: "Groq browser search", run: () =>
-    searchWithGroqBrowser(query, groqKey, env.GROQ_WEB_SEARCH_MODEL || "openai/gpt-oss-20b") });
+    searchWithGroqBrowser(query, groqKey, env.SCANNER_GROQ_WEB_SEARCH_MODEL || "openai/gpt-oss-20b") });
   if (typeof env.AI?.websearch === "function") providers.push({ name: "Cloudflare Web Search", run: () =>
     searchWithCloudflareWebSearch(env, query) });
   // Independent search engines run concurrently. A quota error or timeout in one
@@ -3474,8 +3474,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/health" && request.method === "GET") {
-      const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
-      const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const geminiConfigured = typeof env.SCANNER_GEMINI_API_KEY === "string" && Boolean(env.SCANNER_GEMINI_API_KEY.trim());
+      const localOllama = !geminiConfigured && !env.AI && typeof env.SCANNER_OLLAMA_BASE_URL === "string";
       const visionProviderOrder = resolveVisionProviderOrder(env);
       const visionFallbackOrder = visionProviderOrder.slice(1);
       return json({
@@ -3485,11 +3485,11 @@ export default {
         guideModel: TEXT_MODEL,
         visionEngines: [
           { name: "Gemini", configured: geminiConfigured, model: configuredGeminiVisionModel(env) },
-          { name: "Groq", configured: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()), model: env.GROQ_VISION_MODEL || env.GROQ_MODEL || "qwen/qwen3.8-27b" },
+          { name: "Groq", configured: typeof env.SCANNER_GROQ_API_KEY === "string" && Boolean(env.SCANNER_GROQ_API_KEY.trim()), model: env.SCANNER_GROQ_VISION_MODEL || env.SCANNER_GROQ_MODEL || "qwen/qwen3.8-27b" },
           { name: "Cloudflare Workers AI", configured: typeof env.AI?.run === "function", model: VISION_MODEL, fallbackModels: FALLBACK_VISION_MODELS },
           {
             name: "OpenRouter (free vision models)",
-            configured: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+            configured: typeof env.SCANNER_OPENROUTER_API_KEY === "string" && Boolean(env.SCANNER_OPENROUTER_API_KEY.trim()),
             models: OPENROUTER_VISION_MODELS,
           },
         ],
@@ -3497,16 +3497,16 @@ export default {
           openMuseumCatalogs: geminiConfigured,
           officialCatalogGemini: geminiConfigured,
           geminiGoogleSearch: geminiConfigured,
-          groqBrowserSearch: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()),
+          groqBrowserSearch: typeof env.SCANNER_GROQ_API_KEY === "string" && Boolean(env.SCANNER_GROQ_API_KEY.trim()),
           cloudflareWebSearch: typeof env.AI?.websearch === "function",
-          openRouterVision: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+          openRouterVision: typeof env.SCANNER_OPENROUTER_API_KEY === "string" && Boolean(env.SCANNER_OPENROUTER_API_KEY.trim()),
         },
         visionProviderOrder,
         visionFallbackOrder,
         visionModel: geminiConfigured
           ? configuredGeminiVisionModel(env)
           : localOllama
-            ? env.OLLAMA_VISION_MODEL
+            ? env.SCANNER_OLLAMA_VISION_MODEL
             : VISION_MODEL,
         visionFallbackModel: localOllama ? null : FALLBACK_VISION_MODEL,
         visionFallbackModels: localOllama ? [] : FALLBACK_VISION_MODELS,
@@ -3593,9 +3593,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
     }
 
     if (url.pathname === "/api/scan" && request.method === "POST") {
-      const geminiConfigured = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
-      const groqVisionConfigured = typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim());
-      const localOllama = !geminiConfigured && !env.AI && typeof env.OLLAMA_BASE_URL === "string";
+      const geminiConfigured = typeof env.SCANNER_GEMINI_API_KEY === "string" && Boolean(env.SCANNER_GEMINI_API_KEY.trim());
+      const groqVisionConfigured = typeof env.SCANNER_GROQ_API_KEY === "string" && Boolean(env.SCANNER_GROQ_API_KEY.trim());
+      const localOllama = !geminiConfigured && !env.AI && typeof env.SCANNER_OLLAMA_BASE_URL === "string";
       const visionProviderOrder = resolveVisionProviderOrder(env);
       let body;
       try {
@@ -3609,7 +3609,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
+      const openRouterConfigured = typeof env.SCANNER_OPENROUTER_API_KEY === "string" && Boolean(env.SCANNER_OPENROUTER_API_KEY.trim());
       const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
@@ -3892,8 +3892,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           : `حلل الصورة باعتبارها أثرًا مصريًا قديمًا أو صورة له من كتاب أو شاشة. ابدأ بأقرب اسم معروف يمكن أن يفسر السمات المميزة، لا بمجرد وصف عام؛ اذكره كاحتمال إذا لم توجد علامة فريدة، واتركه فارغًا فقط إذا تعذر اقتراح احتمال مفيد. حدّد نوع الأثر وخامته والرموز أو النقوش والحقبة والموقع المحتمل، واذكر القرينة التي جعلتك تقترح الاسم. افصل التعليقات المطبوعة عن الأثر نفسه. لا تخترع اسمًا أو قصة أو تاريخًا أو مكانًا. يمكن اقتراح اسم ومكان محتملين بصريًا للبحث، لكن لا تصفهما بالمؤكدين إلا بعد دعم صفحة متحف/آثار موثوقة أو مطابقة صورة مرجعية. عند توفر مصدر موثوق في السياق، لخّص منه قصة الأثر ومكان عرضه، ولا تنسب للمصدر معلومات لا يقولها. اترك حقائق القصة والمكان فارغة إذا لم يوجد سند. أخرج JSON فقط بالشكل: {"identity":"أقرب اسم محتمل، أو فارغ إذا تعذر","identityEvidence":"السمات الفارقة التي تدعم الاحتمال أو سبب تعذر التحديد","visualDescription":"وصف مختصر للسمات المرئية","objectType":"نوع الأثر","material":"الخامة المحتملة أو غير متأكد","symbols":["رموز أو نقوش ظاهرة"],"style":"الأسلوب أو غير متأكد","possibleLocation":"المتحف أو الموقع المحتمل أو غير متأكد","country":"الدولة المحتملة أو غير متأكد","city":"المدينة المحتملة أو غير متأكد","place":"المتحف أو الموقع المحتمل أو غير متأكد","period":"العصر المحتمل أو غير متأكد","contextualStory":"القصة/الوظيفة المحتملة فقط إن كنت تعرفها، وإلا فارغ","significance":"الأهمية المحتملة أو فارغ","keyFeatures":"تفاصيل فارقة تساعد في التحقق","searchTerms":["اسم أو كلمات بحث قصيرة بالعربية والإنجليزية"],"keywords":["كلمات دقيقة للبحث"],"possibilities":["حتى 3 أسماء محتملة مع قرينة قصيرة لكل منها"],"confidence":"high أو medium أو low","confidenceByField":{"identity":"high أو medium أو low","place":"high أو medium أو low","period":"high أو medium أو low"}}. لا تدّع أن الاحتمال حقيقة، ولا تدّع إجراء بحث لم يُجرَ.`;
       const visualOnlyPrompt = visionPrompt;
       const visionAttempts = [];
-      const geminiVisionKey = typeof env.GEMINI_API_KEY === "string" ? env.GEMINI_API_KEY.trim() : "";
-      const groqVisionKey = typeof env.GROQ_API_KEY === "string" ? env.GROQ_API_KEY.trim() : "";
+      const geminiVisionKey = typeof env.SCANNER_GEMINI_API_KEY === "string" ? env.SCANNER_GEMINI_API_KEY.trim() : "";
+      const groqVisionKey = typeof env.SCANNER_GROQ_API_KEY === "string" ? env.SCANNER_GROQ_API_KEY.trim() : "";
       try {
         let rawVisual = "";
         let visionUsed = "";
@@ -3908,7 +3908,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           LANGUAGES[language];
         const imageForAnalysis = documentImageBytes || enhancedImageBytes || imageBytes;
         const ollamaModel =
-          typeof env.OLLAMA_VISION_MODEL === "string" ? env.OLLAMA_VISION_MODEL : "gemma3:4b";
+          typeof env.SCANNER_OLLAMA_VISION_MODEL === "string" ? env.SCANNER_OLLAMA_VISION_MODEL : "gemma3:4b";
         const visionModels = localOllama ? [ollamaModel] : [VISION_MODEL];
         const geminiVisionModels = [configuredGeminiVisionModel(env)];
         const independentObservations = [];
@@ -4035,10 +4035,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         }
 
         const groqVisionModel =
-          typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
-            ? env.GROQ_VISION_MODEL.trim()
-            : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
-              ? env.GROQ_MODEL.trim()
+          typeof env.SCANNER_GROQ_VISION_MODEL === "string" && env.SCANNER_GROQ_VISION_MODEL.trim()
+            ? env.SCANNER_GROQ_VISION_MODEL.trim()
+            : typeof env.SCANNER_GROQ_MODEL === "string" && env.SCANNER_GROQ_MODEL.trim()
+              ? env.SCANNER_GROQ_MODEL.trim()
               : "qwen/qwen3.8-27b";
         if (groqVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
           try {
@@ -4089,8 +4089,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        const openRouterVisionKey = typeof env.OPENROUTER_API_KEY === "string"
-          ? env.OPENROUTER_API_KEY.trim()
+        const openRouterVisionKey = typeof env.SCANNER_OPENROUTER_API_KEY === "string"
+          ? env.SCANNER_OPENROUTER_API_KEY.trim()
           : "";
         if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
           for (const openRouterModel of OPENROUTER_VISION_MODELS) {
@@ -4164,20 +4164,20 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           }
         }
 
-        if (localOllama && typeof env.OLLAMA_BASE_URL === "string" && env.OLLAMA_BASE_URL.trim()) {
+        if (localOllama && typeof env.SCANNER_OLLAMA_BASE_URL === "string" && env.SCANNER_OLLAMA_BASE_URL.trim()) {
           const ollamaModels = [
-            ["Qwen2.5-VL", typeof env.QWEN_VISION_MODEL === "string" && env.QWEN_VISION_MODEL.trim()
-              ? env.QWEN_VISION_MODEL.trim() : "qwen2.5vl:7b"],
-            ["InternVL3", typeof env.INTERNVL_VISION_MODEL === "string" && env.INTERNVL_VISION_MODEL.trim()
-              ? env.INTERNVL_VISION_MODEL.trim() : "internvl3:8b"],
+            ["Qwen2.5-VL", typeof env.SCANNER_QWEN_VISION_MODEL === "string" && env.SCANNER_QWEN_VISION_MODEL.trim()
+              ? env.SCANNER_QWEN_VISION_MODEL.trim() : "qwen2.5vl:7b"],
+            ["InternVL3", typeof env.SCANNER_INTERNVL_VISION_MODEL === "string" && env.SCANNER_INTERNVL_VISION_MODEL.trim()
+              ? env.SCANNER_INTERNVL_VISION_MODEL.trim() : "internvl3:8b"],
           ];
-          if (typeof env.INTERNVL_VISION_MODEL !== "string" && typeof env.OLLAMA_VISION_MODEL === "string") {
-            ollamaModels[0][1] = env.OLLAMA_VISION_MODEL.trim();
+          if (typeof env.SCANNER_INTERNVL_VISION_MODEL !== "string" && typeof env.SCANNER_OLLAMA_VISION_MODEL === "string") {
+            ollamaModels[0][1] = env.SCANNER_OLLAMA_VISION_MODEL.trim();
             ollamaModels.splice(1, 1);
           }
           for (const [engine, model] of ollamaModels) {
             try {
-              const ollamaResponse = await fetch(new URL("/api/generate", env.OLLAMA_BASE_URL), {
+              const ollamaResponse = await fetch(new URL("/api/generate", env.SCANNER_OLLAMA_BASE_URL), {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
@@ -4277,7 +4277,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 officialVisualMatch = await compareWithOfficialCatalogPhotos(
                   referenceImage,
                   candidateImages,
-                  env.GEMINI_API_KEY.trim(),
+                  env.SCANNER_GEMINI_API_KEY.trim(),
                   geminiVisionModels[0],
                   matchThreshold,
                 );
@@ -4295,11 +4295,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 officialVisualMatch = await compareOfficialCatalogPhotosWithGroq(
                   referenceImage,
                   candidateImages,
-                  env.GROQ_API_KEY.trim(),
-                  typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
-                    ? env.GROQ_VISION_MODEL.trim()
-                    : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
-                      ? env.GROQ_MODEL.trim()
+                  env.SCANNER_GROQ_API_KEY.trim(),
+                  typeof env.SCANNER_GROQ_VISION_MODEL === "string" && env.SCANNER_GROQ_VISION_MODEL.trim()
+                    ? env.SCANNER_GROQ_VISION_MODEL.trim()
+                    : typeof env.SCANNER_GROQ_MODEL === "string" && env.SCANNER_GROQ_MODEL.trim()
+                      ? env.SCANNER_GROQ_MODEL.trim()
                       : "qwen/qwen3.8-27b",
                   matchThreshold,
                 );
@@ -4317,7 +4317,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 officialVisualMatch = await compareOfficialCatalogPhotosWithOpenRouter(
                   referenceImage,
                   candidateImages,
-                  env.OPENROUTER_API_KEY.trim(),
+                  env.SCANNER_OPENROUTER_API_KEY.trim(),
                   OPENROUTER_VISION_MODELS[0],
                   matchThreshold,
                 );
@@ -4416,7 +4416,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   comparison = await compareOpenScannerCandidates(
                     comparisonImageBytes || imageBytes,
                     candidateImages.slice(0, 5),
-                    env.GEMINI_API_KEY.trim(),
+                    env.SCANNER_GEMINI_API_KEY.trim(),
                     geminiVisionModels[0],
                     matchThreshold,
                   );
@@ -4434,11 +4434,11 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   const groqComparison = await compareOpenScannerCandidatesWithGroq(
                     comparisonImageBytes || imageBytes,
                     candidateImages.slice(0, 5),
-                    env.GROQ_API_KEY.trim(),
-                    typeof env.GROQ_VISION_MODEL === "string" && env.GROQ_VISION_MODEL.trim()
-                      ? env.GROQ_VISION_MODEL.trim()
-                      : typeof env.GROQ_MODEL === "string" && env.GROQ_MODEL.trim()
-                        ? env.GROQ_MODEL.trim()
+                    env.SCANNER_GROQ_API_KEY.trim(),
+                    typeof env.SCANNER_GROQ_VISION_MODEL === "string" && env.SCANNER_GROQ_VISION_MODEL.trim()
+                      ? env.SCANNER_GROQ_VISION_MODEL.trim()
+                      : typeof env.SCANNER_GROQ_MODEL === "string" && env.SCANNER_GROQ_MODEL.trim()
+                        ? env.SCANNER_GROQ_MODEL.trim()
                         : "qwen/qwen3.8-27b",
                     matchThreshold,
                   );
@@ -4464,7 +4464,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   const openRouterComparison = await compareImageCandidatesWithOpenRouter(
                     comparisonImageBytes || imageBytes,
                     candidateImages.slice(0, 5),
-                    env.OPENROUTER_API_KEY.trim(),
+                    env.SCANNER_OPENROUTER_API_KEY.trim(),
                     OPENROUTER_VISION_MODELS[0],
                     matchThreshold,
                   );
@@ -4914,7 +4914,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           model: independentObservations.length > 1
             ? `Free visual consensus (${independentObservations.length} engines)`
             : localOllama
-              ? `Ollama - ${visionUsed || env.OLLAMA_VISION_MODEL || ollamaModel}`
+              ? `Ollama - ${visionUsed || env.SCANNER_OLLAMA_VISION_MODEL || ollamaModel}`
               : visionUsed === VISION_MODEL
                 ? "Cloudflare Workers AI - Moondream 3.1"
                 : visionUsed === "@cf/mistralai/mistral-small-3.1-24b-instruct"
@@ -4962,7 +4962,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 Cloudflare: typeof env.AI?.run === "function",
                 Gemini: Boolean(geminiVisionKey),
                 Groq: Boolean(groqVisionKey),
-                OpenRouter: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+                OpenRouter: typeof env.SCANNER_OPENROUTER_API_KEY === "string" && Boolean(env.SCANNER_OPENROUTER_API_KEY.trim()),
               },
               cloudflareFallbackModels: typeof env.AI?.run === "function" ? FALLBACK_VISION_MODELS : [],
               failedAttempts: visionAttempts.map((attempt) => ({
