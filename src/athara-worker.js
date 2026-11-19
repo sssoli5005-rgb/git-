@@ -3737,6 +3737,37 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           return json({ error: "نسخة المقارنة البصرية يجب ألا تتجاوز 500 كيلوبايت." }, 413);
         }
       }
+      // Run deterministic official-image matching before any quota-limited vision call.
+      // This allows exact official catalogue images to resolve even when every AI
+      // provider is exhausted. The original upload is checked before transformed copies.
+      if (mode === "objects" && Array.isArray(EMBEDDED_CURATED_RECORDS) && EMBEDDED_CURATED_RECORDS.length) {
+        try {
+          const directRecords = EMBEDDED_CURATED_RECORDS.filter((record) =>
+            record && (record.mode === "objects" || record.mode === "both") &&
+            Array.isArray(record.imageUrls) && record.imageUrls.length > 0 &&
+            typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
+          );
+          const directImages = await loadOfficialCandidateImages(
+            directRecords.map((record) => ({ record, curatedFallback: true })),
+            env.ASSETS,
+          );
+          const variants = [exactMatchImageBytes, imageBytes, comparisonImageBytes]
+            .filter((bytes, index, all) =>
+              Array.isArray(bytes) && bytes.length > 0 &&
+              all.findIndex((candidate) => candidate === bytes) === index,
+            );
+          for (const variant of variants) {
+            const exactMatch = await findExactOfficialImageMatch(variant, directImages);
+            if (exactMatch) {
+              console.info("[Image scanner] Early quota-independent official image match:", exactMatch.item.id);
+              return json(officialVisualMatchResponse(exactMatch));
+            }
+          }
+        } catch (error) {
+          console.warn("[Image scanner] Early official image fingerprint pass unavailable:", String(error?.message || error).slice(0, 180));
+        }
+      }
+
       const photoGps = readExifGps(imageBytes);
 
       // قاعدة المراجع اختيارية: تُحمّل كسجلات JSON موثقة في متغير ATHARA_CATALOG_JSON.
