@@ -1604,12 +1604,16 @@ describe("ATHARA Cloudflare Worker", () => {
         }) }] } }],
       },
     ];
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("gemini-test-key");
-      return new Response(JSON.stringify(geminiPayloads.shift()), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl = String(input instanceof Request ? input.url : input);
+      if (requestUrl.includes("generativelanguage.googleapis.com")) {
+        expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("gemini-test-key");
+        return new Response(JSON.stringify(geminiPayloads.shift()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return Response.json({ error: { message: "Groq fallback intentionally unavailable in this test" } }, { status: 503 });
     });
     vi.stubGlobal("fetch", fetchMock);
     const assetFetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -1618,7 +1622,7 @@ describe("ATHARA Cloudflare Worker", () => {
         return new Response(JSON.stringify({
           records: [{
             id: "abu-simbel-record",
-            title: "أبو سمبل",
+            title: "أبو سمبل - إكتشف الآثار المصرية",
             mode: "objects",
             keywords: ["واجهة", "تماثيل"],
             description: "معبد أبو سمبل الكبير المنحوت في الصخر، وتزين واجهته تماثيل رمسيس الثاني الأربعة.",
@@ -1638,23 +1642,33 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-test-key", ASSETS: { fetch: assetFetch } },
+        { GEMINI_API_KEY: "gemini-test-key", GROQ_API_KEY: "groq-test-key", ASSETS: { fetch: assetFetch } },
       );
       const body = await response.json();
 
       expect(response.status).toBe(200);
       expect(assetFetch).toHaveBeenCalledTimes(2);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls.filter(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
+      )).toHaveLength(2);
       expect(body.resultType, JSON.stringify(body)).toBe("reference_match");
       expect(body.analysis).toContain("أبو سمبل");
       expect(body.analysis).toContain("معبد أبو سمبل الكبير المنحوت في الصخر");
       expect(body.sources).toContainEqual(expect.objectContaining({ url: catalogUrl, trusted: true }));
       expect(body.matchedArtifact).toMatchObject({
         name: "أبو سمبل",
+        location: "أبو سمبل",
+        museum: "",
         similarity: 0.92,
       });
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      const comparisonBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+      expect(body.sourceStory).toBe(
+        "معبد أبو سمبل الكبير المنحوت في الصخر، وتزين واجهته تماثيل رمسيس الثاني الأربعة.",
+      );
+      const geminiCalls = fetchMock.mock.calls.filter(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
+      );
+      expect(geminiCalls).toHaveLength(2);
+      const comparisonBody = JSON.parse(String(geminiCalls[1][1]?.body));
       expect(comparisonBody.contents[0].parts.filter((part: { inlineData?: unknown }) => part.inlineData)).toHaveLength(2);
     } finally {
       vi.unstubAllGlobals();

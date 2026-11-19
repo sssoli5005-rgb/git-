@@ -3280,7 +3280,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           if (decision === "confirmed") {
             const result = scannerIndexArtifactResult(best);
             if (result) {
-              result.sourceStory = await summarizeTrustedSourceText(env, best.metadata.description, language);
+              // The indexed record is already the trusted source; a second LLM
+              // summary request only adds latency and can fail on provider quotas.
+              result.sourceStory = String(best.metadata.description || "").trim();
               if (result.sourceStory) result.analysis = result.sourceStory;
               return json(result);
             }
@@ -3777,7 +3779,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         }
         if (officialVisualMatch) {
           const item = officialVisualMatch.item;
-          const sourceStory = await summarizeTrustedSourceText(env, item.description || "", language);
+          // The official record already contains the historical description.
+          // Re-summarizing it through another provider delays a verified result.
+          const sourceStory = String(item.description || "").trim();
+          const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
           const sources = [{
             title: item.sourceTitle,
             url: item.sourceUrl,
@@ -3798,7 +3803,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             confidence: "medium",
             confidenceByField: {
               identity: "medium",
-              place: "low",
+              place: catalogArtifact.location ? "medium" : "low",
               period: item.period ? "medium" : "low",
             },
             referenceId: item.id,
@@ -3806,9 +3811,10 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
             matchedOfficialUrl: officialVisualMatch.url,
             visualDescription: scannerVisualDescription(observation),
             matchedArtifact: {
-              name: item.title,
-              museum: item.museum || item.sourceTitle,
-              objectNumber: item.objectNumber || item.id,
+              name: catalogArtifact.name || item.title,
+              museum: catalogArtifact.museum || item.museum || "",
+              location: catalogArtifact.location || item.location || item.currentLocation || "",
+              objectNumber: catalogArtifact.objectNumber || item.objectNumber || item.id,
               url: officialVisualMatch.url,
               similarity: Math.round(officialVisualMatch.similarity * 1000) / 1000,
             },
