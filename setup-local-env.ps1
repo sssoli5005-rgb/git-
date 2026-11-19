@@ -56,6 +56,7 @@ $chatGroqKey = Read-ExistingSetting "CHAT_GROQ_API_KEY"
 if (-not $chatGroqKey) { $chatGroqKey = Read-ExistingSetting "GROQ_API_KEY" }
 $chatGeminiKey = Read-ExistingSetting "CHAT_GEMINI_API_KEY"
 if (-not $chatGeminiKey) { $chatGeminiKey = Read-ExistingSetting "GEMINI_API_KEY" }
+$chatOpenRouterKey = Read-ExistingSetting "CHAT_OPENROUTER_API_KEY"
 if ($SetProviderKeys) {
     $groqSecure = Read-Host "Enter CHAT_GROQ_API_KEY (chat only)" -AsSecureString
     $groqPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($groqSecure)
@@ -63,6 +64,9 @@ if ($SetProviderKeys) {
     $geminiSecure = Read-Host "Enter CHAT_GEMINI_API_KEY (chat only)" -AsSecureString
     $geminiPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($geminiSecure)
     try { $chatGeminiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($geminiPtr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($geminiPtr) }
+    $chatOpenRouterSecure = Read-Host "Enter CHAT_OPENROUTER_API_KEY (chat only, optional third search provider)" -AsSecureString
+    $chatOpenRouterPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($chatOpenRouterSecure)
+    try { $chatOpenRouterKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($chatOpenRouterPtr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($chatOpenRouterPtr) }
 }
 # Keep legacy local keys working for scanning until dedicated scanner keys are entered.
 $scannerGroqKey = Read-ExistingSetting "SCANNER_GROQ_API_KEY"
@@ -95,6 +99,8 @@ $content = @(
     "CHAT_GROQ_MODEL=$chatGroqModel"
     "CHAT_GEMINI_API_KEY=$chatGeminiKey"
     "CHAT_GEMINI_MODEL=$chatGeminiModel"
+    "CHAT_OPENROUTER_API_KEY=$chatOpenRouterKey"
+    "CHAT_OPENROUTER_MODEL=openai/gpt-oss-20b"
     "CHAT_OLLAMA_BASE_URL=http://127.0.0.1:11434"
     "CHAT_OLLAMA_MODEL=qwen2.5:14b"
     "SCANNER_GROQ_API_KEY=$scannerGroqKey"

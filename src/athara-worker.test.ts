@@ -55,7 +55,10 @@ describe("ATHARA Cloudflare Worker", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
-      if (url === catalogueUrl) return new Response("catalogue temporarily unavailable", { status: 503 });
+      if (url === catalogueUrl) return new Response(
+        "<html><head><title>Painted wooden Egyptian figure — official collection</title></head><body><main>Official collection record. This painted wooden Egyptian figure is catalogued by the Egyptian Ministry of Tourism and Antiquities. The record documents the object material, cultural context, collection history, and archaeological significance. This readable institutional page confirms the catalogue entry and provides details that can be checked against the photograph.</main></body></html>",
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
       if (url.includes("egymonuments.gov.eg") && !url.includes("/ar/collections/")) {
         return new Response("<html><body><a href='/ar/'>Home</a></body></html>", {
           status: 200, headers: { "content-type": "text/html" },
@@ -120,7 +123,10 @@ describe("ATHARA Cloudflare Worker", () => {
         });
       }
       if (url === catalogueUrl) {
-        return new Response("temporarily unavailable", { status: 503 });
+        return new Response(
+          "<html><head><title>Ancient Egyptian wooden figure</title></head><body><main>Metropolitan Museum collection record. This ancient Egyptian painted wooden figure is part of the museum's permanent collection. The catalogue record provides the documented title, material, object history, date attribution, and collection provenance. This page is maintained by the museum and contains information suitable for checking the object's identity.</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
       }
       return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
     });
@@ -191,7 +197,10 @@ describe("ATHARA Cloudflare Worker", () => {
         });
       }
       if (url === catalogueUrl) {
-        return new Response("temporarily unavailable", { status: 503 });
+        return new Response(
+          "<html><head><title>Wooden Egyptian Statue — Ministry collection</title><meta property='og:image' content='https://egymonuments.gov.eg/assets/wooden-statue.jpg'></head><body><main>Egyptian Ministry of Tourism and Antiquities object catalogue. This wooden statue of Nephthys is documented in the official Egyptian antiquities collection. The institutional record describes the figure, its documented material, its archaeological provenance, its historical period, and the context in which it was recorded. This source page is maintained by the national antiquities authority.</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
       }
       return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
     });
@@ -270,7 +279,7 @@ describe("ATHARA Cloudflare Worker", () => {
         return new Response(
           '<html><head><title>Wooden Statue of Nephthys</title>' +
           '<meta property="og:image" content="https://egymonuments.gov.eg/media/nephthys-reference.jpg"></head>' +
-          '<body><main><p>A wooden statue of Nephthys displayed at the Luxor Mummification Museum.</p></main></body></html>',
+          '<body><main><p>A wooden statue of Nephthys displayed at the Luxor Mummification Museum. The official catalogue entry identifies the figure as a wooden statue of the goddess Nephthys and records the object as part of the Egyptian antiquities collection. The page documents the museum location and provides the historical context and description of the object. These details are published by the Egyptian Ministry of Tourism and Antiquities in its official monument catalogue.</p></main></body></html>',
           { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
         );
       }
@@ -662,6 +671,11 @@ describe("ATHARA Cloudflare Worker", () => {
       groqBrowserSearch: true,
       cloudflareWebSearch: true,
     });
+    expect(body.searchProviderOrder).toEqual([
+      "Cloudflare Web Search",
+      "Gemini Google Search",
+      "Groq browser search",
+    ]);
   });
 
   it("does not claim Cloudflare Web Search is configured when the binding lacks websearch", async () => {
@@ -672,6 +686,82 @@ describe("ATHARA Cloudflare Worker", () => {
     const body = await response.json();
 
     expect(body.reverseImageSearch.cloudflareWebSearch).toBe(false);
+  });
+
+  it("runs scanner searches sequentially and falls back from Cloudflare to Gemini after the first result is unreadable", async () => {
+    const cloudflareUrl = "https://www.metmuseum.org/art/collection/search/500001";
+    const geminiUrl = "https://www.metmuseum.org/art/collection/search/500002";
+    const searchOrder: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === cloudflareUrl) return new Response("temporarily unavailable", { status: 503 });
+      if (url === geminiUrl) {
+        return new Response(
+          "<html><head><title>Ancient Egyptian painted figure — Met collection</title></head><body><main>Official museum collection record. The Metropolitan Museum of Art catalogues this ancient Egyptian painted figure and documents the material, collection context, acquisition information, and historical period. This readable museum page provides institutional information that can be checked independently and used as evidence for the catalogue entry.</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      if (url === "https://generativelanguage.googleapis.com/v1beta/interactions") {
+        searchOrder.push("Gemini");
+        return Response.json({
+          steps: [
+            { type: "google_search_result", result: [{
+              title: "Ancient Egyptian painted figure",
+              url: geminiUrl,
+              snippet: "An ancient Egyptian figure in the museum collection.",
+            }] },
+            { type: "model_output", content: [{ type: "text", text: "Museum record found." }] },
+          ],
+        });
+      }
+      if (url.startsWith("https://api.groq.com/")) {
+        const groqBody = JSON.parse(String(init?.body));
+        if (groqBody.tools?.some((tool: { type?: string }) => tool.type === "browser_search")) {
+          searchOrder.push("Groq");
+          return Response.json({ choices: [{ message: { content: "This should not be reached." } }] });
+        }
+        return Response.json({ choices: [{ message: { content: JSON.stringify({ rankedMatches: [] }) } }] });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const websearch = vi.fn(async () => {
+      searchOrder.push("Cloudflare");
+      return Response.json({ items: [{
+        title: "Unreachable museum record",
+        url: cloudflareUrl,
+        description: "Search result that cannot be opened.",
+      }] });
+    });
+    const run = vi.fn(async () => ({ response: JSON.stringify({
+      visualDescription: "A painted ancient Egyptian wooden figure",
+      objectType: "wooden figure",
+      material: "wood",
+      keywords: ["wooden figure"],
+      searchTerms: ["painted wooden figure"],
+    }) }));
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run, websearch },
+          SCANNER_GEMINI_API_KEY: "gemini-test-key",
+          SCANNER_GROQ_API_KEY: "groq-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(searchOrder).toEqual(["Cloudflare", "Gemini"]);
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        url: geminiUrl,
+        trusted: true,
+        searchProvider: "Gemini Google Search",
+      }));
+      expect(body.sources).not.toContainEqual(expect.objectContaining({ url: cloudflareUrl }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("reports the configured scanner failover order", async () => {
@@ -687,6 +777,8 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(response.status).toBe(200);
     expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
     expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
+    expect(body.searchProviderOrder).toEqual(["Gemini Google Search", "Groq browser search"]);
+    expect(body.searchFallbackOrder).toEqual(["Groq browser search"]);
   });
 
   it("falls through Gemini and Groq failures to Cloudflare, and stops at the first usable result", async () => {
@@ -909,7 +1001,7 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
-  it("uses Groq multimodal comparison when Gemini image matching is unavailable", async () => {
+  it("does not confirm a Commons-only image lead without an institutional catalogue match", async () => {
     const candidateUrl = "https://commons.wikimedia.org/wiki/File:Abu_Simbel_temple.jpg";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestUrl = String(input instanceof Request ? input.url : input);
@@ -978,17 +1070,14 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
 
-      expect(body.identificationStatus).toBe("confirmed");
-      expect(body.resultType).toBe("reference_match");
-      expect(body.matchedArtifact).toEqual(expect.objectContaining({
-        name: "Abu Simbel temple",
-        similarity: 0.93,
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.resultType).toBe("unverified");
+      expect(body.matchedArtifact).toBeUndefined();
+      expect(body.reverseImageSearchStatus).not.toBe("match");
+      expect(body.sources ?? []).not.toContainEqual(expect.objectContaining({
+        url: expect.stringContaining("commons.wikimedia.org"),
+        trusted: true,
       }));
-      expect(body.visualMatchMethod).toContain("Groq Qwen Vision");
-      expect(body.reverseImageSearchStatus).toBe("match");
-      expect(fetchMock.mock.calls.some(([input]) =>
-        String(input) === "https://api.groq.com/openai/v1/chat/completions",
-      )).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }

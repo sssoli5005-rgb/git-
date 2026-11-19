@@ -59,7 +59,7 @@ The repository includes a GitHub Actions workflow named **Deploy to Cloudflare W
    - `APP_USERNAME`
    - `APP_PASSWORD_HASH` or `ADMIN_PASSWORD`
    - `APP_SESSION_SECRET`
-   - Chat-only secrets: `CHAT_GROQ_API_KEY` and `CHAT_GEMINI_API_KEY`
+   - Chat-only secrets: `CHAT_GROQ_API_KEY`, `CHAT_GEMINI_API_KEY`, and `CHAT_OPENROUTER_API_KEY` (third research provider)
    - Scanner-only secrets: `SCANNER_GEMINI_API_KEY`, `SCANNER_GROQ_API_KEY`, and optional `SCANNER_OPENROUTER_API_KEY`
    - Optional chat model overrides: `CHAT_GROQ_MODEL` and `CHAT_GEMINI_MODEL`
    - Optional scanner model overrides: `SCANNER_GEMINI_VISION_MODEL`, `SCANNER_GROQ_VISION_MODEL`, and related `SCANNER_*` settings
@@ -72,9 +72,9 @@ The Cloudflare Workers Free plan has a daily request allowance. AI providers als
 
 ## AI provider configuration
 
-ATHARA now has two independent AI pipelines. The chat uses only `CHAT_GROQ_API_KEY` and `CHAT_GEMINI_API_KEY`: Groq is tried first (with its search-capable model on factual questions), then Gemini with Google Search grounding. Each provider also has its own alternate model. If a search-backed factual answer cannot be verified, the chat withholds the factual claim instead of asking the scanner or its vision models to answer. Chat does not call the scanner's Cloudflare Workers AI binding.
+ATHARA now has two independent AI pipelines. The chat uses only `CHAT_GROQ_API_KEY`, `CHAT_GEMINI_API_KEY`, and `CHAT_OPENROUTER_API_KEY`: Groq browser search is attempted first, Gemini Google Search grounding second, and OpenRouter web search third. Providers run sequentially, and only a response with grounded results from an approved institution can answer a factual question. Set the dedicated chat OpenRouter secret to activate stage three; it does not borrow the scanner key. Each provider also has its own alternate model. If a search-backed factual answer cannot be verified, the chat withholds the factual claim instead of asking the scanner or its vision models to answer. Chat does not call the scanner's Cloudflare Workers AI binding.
 
-The image scanner has its own image/vision and research chain: Cloudflare Workers AI vision, Gemini Vision, Groq Vision, and optional OpenRouter vision models. Its independent search stage uses Gemini Google Search, Groq browser search, and Cloudflare web search when each capability is configured. It uses only `SCANNER_GEMINI_API_KEY`, `SCANNER_GROQ_API_KEY`, `SCANNER_OPENROUTER_API_KEY`, and `SCANNER_*` model/index settings. Scanner failures never route a request to the chat endpoint or chat models. The two routes and settings are kept separate; one pipeline's prompts, image inputs, and provider selection do not enter the other.
+The image scanner has its own image/vision and research chain: Cloudflare Workers AI vision, Gemini Vision, Groq Vision, and optional OpenRouter vision models. Its trusted-source search attempts Cloudflare Web Search first, Gemini Google Search second, and Groq browser search third. Each provider is skipped on errors, limits, or if it cannot lead to a readable allowlisted institutional page. A title or snippet alone is never returned as confirmed evidence. It uses only `SCANNER_GEMINI_API_KEY`, `SCANNER_GROQ_API_KEY`, `SCANNER_OPENROUTER_API_KEY`, and `SCANNER_*` model/index settings. Scanner failures never route a request to the chat endpoint or chat models. The two routes and settings are kept separate; one pipeline's prompts, image inputs, and provider selection do not enter the other.
 
 For genuinely separate provider quotas, configure different API keys under the `CHAT_*` and `SCANNER_*` names. Old `GROQ_API_KEY` and `GEMINI_API_KEY` GitHub secrets remain as a migration fallback, but using them for both paths means the provider account's quota is still shared even though the app pipelines are isolated. A provider fallback can reduce interruptions, but it cannot bypass account-wide limits or provider outages. Keep all keys server-side only. Local Ollama settings are split into `CHAT_OLLAMA_*` and `SCANNER_OLLAMA_*`; deployed Workers cannot call Ollama at `localhost` on your personal computer.
 

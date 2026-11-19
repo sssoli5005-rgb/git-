@@ -261,11 +261,16 @@ function isLiveResearchRequest(query: string): boolean {
   if (!normalized) return false;
   const needsImageClarification =
     /(?:ايه|ما هي|ما هذا|ما هذه).{0,30}(?:قطعة|قطعه|اثر|صورة|صوره)/u.test(normalized);
-  if (needsImageClarification) return false;
+  const needsConversationClarification =
+    /^(?:ممكن\s+)?(?:تشرحلي|تشرح\s+لي|تشرح|وضحلي|وضح\s+لي|افهم|اكمل|تكمل|تكمللي|تكمل\s+لي|كملي|كمل|كمّل)(?:\s+(?:الفكرة|الموضوع|ده|دي|المقصود|السؤال|بقى|باقي))?\s*[؟?]?$/u.test(normalized);
+  if (needsImageClarification || needsConversationClarification) return false;
 
   const personalOrCreative =
-    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here)/u.test(normalized);
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here|هل تحبني|بتحبني|تحبني|هل تفتقدني|مشتاق|اشتقتلك|ايه رأيك|ما رأيك|تنصحني|اعمل ايه|أعمل ايه|ماذا أفعل|ماذا افعل)/u.test(normalized);
   if (personalOrCreative) return false;
+
+  const ordinaryQuestion = /[؟?]/u.test(query) ||
+    /^(?:ما معنى|معنى|تعريف|معلومات عن|تاريخ|أسباب|سبب|نتائج|نتيجة|متى|اين|فين|كيف|لماذا|ليه|من هو|من هي|من هم|ما هو|ما هي|هل|كم|ما اسم|اسم)\b/u.test(normalized);
 
   const explicitResearch =
     /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مصدر|المراجع|مرجع|موثق|موثوق|دليل|اتأكد|تحقق|دورلي|شوفلي|اخر اخبار|آخر أخبار|حديث|حاليا|النهارده|اليوم|امبارح|الأسبوع)/u.test(normalized);
@@ -274,16 +279,67 @@ function isLiveResearchRequest(query: string): boolean {
     /^(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe|according to)\b/u.test(normalized);
 
   const arabicQuestionLead =
-    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن|معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|where|who|when|what|why|how)\b/u.test(normalized);
+    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|احكي|عرفني|كلمني عن|اتكلم عن|اتكلمي عن|معلومات عن|ممكن معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|اكتبلي عن|اكتب لي عن|where|who|when|what|why|how)\b/u.test(normalized);
   const arabicQuestionInside =
-    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|ممكن اعرف|ممكن تشرح|اشرح لي|احكي عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(normalized);
+    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|عاوز اعرف|عاوزة اعرف|عايزين نعرف|ممكن اعرف|ممكن تشرح|ممكن تقولي عن|محتاج اعرف|محتاجة اعرف|اشرح لي|احكي عن|احكيلي عن|اتكلم عن|اتكلمي عن|اعرف عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(normalized);
   const arabicFactualQuestion = arabicQuestionLead || arabicQuestionInside;
 
-  return explicitResearch || englishFactualQuestion || arabicFactualQuestion;
+  return explicitResearch || ordinaryQuestion || englishFactualQuestion || arabicFactualQuestion;
 }
 
 function removeInlineResearchCitations(content: string): string {
   return content.replace(/\s*〖\s*\d+†L\d+(?:-L\d+)?\s*〗/gu, "").trim();
+}
+
+const TRUSTED_RESEARCH_HOSTS = [
+  "egymonuments.gov.eg", "whc.unesco.org", "unesco.org", "ucl.ac.uk",
+  "metmuseum.org", "britishmuseum.org", "penn.museum", "amnh.org", "si.edu",
+  "mfa.org", "brooklynmuseum.org", "louvre.fr", "ees.ac.uk", "pcma.uw.edu.pl",
+  "saqqara.uw.edu.pl", "aeraweb.org", "isac.uchicago.edu", "oi.uchicago.edu",
+  "thebanmappingproject.com", "artic.edu", "clevelandart.org", "biblegateway.com",
+  "bible.com", "britannica.com", "oxfordreference.com", "webbtelescope.org", "who.int", "un.org",
+  "nasa.gov", "noaa.gov", "nps.gov", "loc.gov", "archives.gov", "europa.eu",
+  "nature.com", "science.org", "pubmed.ncbi.nlm.nih.gov", "ox.ac.uk", "cam.ac.uk",
+  "harvard.edu", "stanford.edu", "mit.edu",
+] as const;
+
+function isTrustedResearchUrl(value: unknown): URL | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return undefined;
+    const host = url.hostname.toLowerCase();
+    const allowlisted = TRUSTED_RESEARCH_HOSTS.some((domain) =>
+      host === domain || host.endsWith("." + domain),
+    );
+    const publicInstitution = host.endsWith(".gov") || host.endsWith(".edu") ||
+      host.includes(".gov.") || host.includes(".edu.") || host.includes(".ac.") ||
+      host.endsWith(".int");
+    return allowlisted || publicInstitution ? url : undefined;
+  } catch { return undefined; }
+}
+
+function sourceFromTrustedUrl(url: URL, title?: string) {
+  return {
+    title: (title || url.hostname).slice(0, 180),
+    organization: url.hostname.replace(/^www\\./u, ""),
+    url: url.href,
+  };
+}
+
+function trustedSourcesFromOpenRouter(message: {
+  annotations?: Array<{
+    type?: string;
+    url_citation?: { url?: string; title?: string; content?: string };
+  }>;
+}) {
+  return (message.annotations ?? []).flatMap((annotation) => {
+    if (annotation.type !== "url_citation") return [];
+    const citation = annotation.url_citation;
+    const url = isTrustedResearchUrl(citation?.url);
+    if (!url || typeof citation?.content !== "string" || citation.content.trim().length < 40) return [];
+    return [sourceFromTrustedUrl(url, citation.title)];
+  });
 }
 
 function mergeResearchSources(
@@ -387,11 +443,11 @@ export async function handleChatPost(
   let liveSearchUnavailable = false;
   const heritageQuestion = isEgyptianHeritageQuery(parsed.data.messages);
   const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
-  const liveResearchRequested = !heritageQuestion && isLiveResearchRequest(latestQuestion);
+  const liveResearchRequested = heritageQuestion || isLiveResearchRequest(latestQuestion);
   const generalResearchContext = liveResearchRequested
     ? [
         "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
-        "Use Groq Compound web search or Gemini Google Search grounding for this factual question. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
+        "Use Groq browser search first, Gemini Google Search grounding second, and the dedicated OpenRouter web-search provider third. These attempts are sequential, not parallel. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
       ].join("\n")
     : "";
 
@@ -448,8 +504,17 @@ export async function handleChatPost(
         sources.findIndex((candidate) => candidate.url === source.url) === index,
     )
     .slice(0, 8);
-  let responseSources = heritageQuestion && wantsSources ? knowledgeSources : [];
-  if (parsed.data.language === "ar" && localKnowledgeAnswer.directAnswer && localKnowledgeSources.length) {
+  let responseSources = wantsSources ? knowledgeSources : [];
+  let verifiedTurnSources = [...searchedSources];
+  if (
+    parsed.data.language === "ar" &&
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.length &&
+    (searchedSources.length ||
+      (!readProviderEnv(suppliedEnv, "CHAT_GROQ_API_KEY")?.trim() &&
+        !readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim() &&
+        !readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim()))
+  ) {
     console.info("[Chat] Answering with a curated, source-backed heritage response");
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
@@ -461,14 +526,7 @@ export async function handleChatPost(
 
   // A heritage answer without a fetched institutional excerpt or a sourced
   // curated entry must not be generated by an LLM from memory.
-  if (heritageQuestion && liveSearchUnavailable && !hasCuratedReferences) {
-    console.warn("[Chat] Withholding an unverified heritage answer because no approved evidence was retrieved");
-    return asChatStream(
-      createUnverifiedHeritageReply(parsed.data.language),
-      [],
-      parsed.data.language,
-    );
-  }
+  // A failed institutional lookup advances to Groq, Gemini, then OpenRouter.
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
@@ -546,22 +604,15 @@ export async function handleChatPost(
               }
             });
           const groqSearchSources = groqBrowserResults.flatMap((result) => {
-            try {
-              const url = new URL(result.url!);
-              return [{
-                title: result.title!.slice(0, 180),
-                organization: url.hostname.replace(/^www\\./u, ""),
-                url: url.href,
-              }];
-            } catch {
-              return [];
-            }
+            const url = isTrustedResearchUrl(result.url);
+            return url ? [sourceFromTrustedUrl(url, result.title)] : [];
           });
-          const hasGroqSearchEvidence = groqBrowserResults.length > 0;
-          const canUseGroqResearchAnswer = !requestsLiveResearch || hasGroqSearchEvidence;
-          if (requestsLiveResearch && hasGroqSearchEvidence && wantsSources) {
-            responseSources = mergeResearchSources(responseSources, groqSearchSources);
+          const hasGroqSearchEvidence = groqSearchSources.length > 0;
+          if (requestsLiveResearch && hasGroqSearchEvidence) {
+            verifiedTurnSources = mergeResearchSources(verifiedTurnSources, groqSearchSources);
+            if (wantsSources) responseSources = mergeResearchSources(responseSources, groqSearchSources);
           }
+          const canUseGroqResearchAnswer = !requestsLiveResearch || verifiedTurnSources.length > 0;
           if (choice?.finish_reason === "length") {
             providerFailureCode = "incomplete_response";
             console.warn("[Groq] Response reached its generation limit", { model });
@@ -695,7 +746,9 @@ export async function handleChatPost(
         parts: [{ text: message.content }],
       }));
     const primaryModel = readProviderEnv(suppliedEnv, "CHAT_GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
-    const geminiModels = [...new Set([primaryModel, "gemini-3.6-flash"])];
+    const geminiModels = geminiLiveSearch
+      ? [primaryModel]
+      : [...new Set([primaryModel, "gemini-3.6-flash"])];
     for (const [index, model] of geminiModels.entries()) {
       const providerTimeout = AbortSignal.timeout(geminiLiveSearch ? 25_000 : 12_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
@@ -736,22 +789,12 @@ export async function handleChatPost(
           if (geminiLiveSearch) {
             geminiGroundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
               .flatMap((chunk) => {
-                const uri = chunk.web?.uri;
-                if (typeof uri !== "string") return [];
-                try {
-                  const parsedUrl = new URL(uri);
-                  if (parsedUrl.protocol !== "https:") return [];
-                  return [{
-                    title: (chunk.web?.title || parsedUrl.hostname).slice(0, 180),
-                    organization: parsedUrl.hostname.replace(/^www\./u, ""),
-                    url: parsedUrl.href,
-                  }];
-                } catch {
-                  return [];
-                }
+                const url = isTrustedResearchUrl(chunk.web?.uri);
+                return url ? [sourceFromTrustedUrl(url, chunk.web?.title)] : [];
               });
-            if (wantsSources) {
-              responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
+            if (geminiGroundedSources.length) {
+              verifiedTurnSources = mergeResearchSources(verifiedTurnSources, geminiGroundedSources);
+              if (wantsSources) responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
             }
             if (!geminiGroundedSources.length) {
               console.warn("[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer", { model });
@@ -850,7 +893,7 @@ export async function handleChatPost(
           if (
             answer &&
             candidate?.finishReason !== "MAX_TOKENS" &&
-            (!geminiLiveSearch || geminiGroundedSources.length > 0) &&
+            (!geminiLiveSearch || geminiGroundedSources.length > 0 || searchedSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
           ) {
             const cleaned = removeRepeatedSentences(answer);
@@ -891,6 +934,104 @@ export async function handleChatPost(
     }
   }
 
+  // Third independent chat provider: OpenRouter web search (CHAT_* key only).
+  const openRouterApiKey = readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim();
+  if (openRouterApiKey && !request.signal.aborted) {
+    const localPayload = JSON.parse(chatRequest.body) as { messages: { role: string; content: string }[] };
+    const model = readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_MODEL")?.trim() || "openai/gpt-oss-20b";
+    const timeout = AbortSignal.timeout(liveResearchRequested ? 25_000 : 12_000);
+    try {
+      const response = await fetcher("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + openRouterApiKey,
+          "HTTP-Referer": "https://athara-heritage.app",
+          "X-Title": "ATHARA",
+        },
+        signal: AbortSignal.any([request.signal, timeout]),
+        body: JSON.stringify({
+          model,
+          messages: localPayload.messages,
+          max_tokens: 4096,
+          ...(liveResearchRequested ? {
+            tools: [{
+              type: "openrouter:web_search",
+              parameters: {
+                engine: "exa",
+                max_results: 5,
+                max_total_results: 10,
+                allowed_domains: [
+                  "egymonuments.gov.eg", "whc.unesco.org", "metmuseum.org",
+                  "britishmuseum.org", "penn.museum", "si.edu", "louvre.fr",
+                  "ees.ac.uk", "ucl.ac.uk", "biblegateway.com", "bible.com",
+                  "britannica.com", "ox.ac.uk", "cam.ac.uk", "harvard.edu",
+                  "who.int", "un.org", "nasa.gov", "noaa.gov", "nature.com",
+                  "science.org", "pubmed.ncbi.nlm.nih.gov",
+                ],
+              },
+            }],
+            tool_choice: "required",
+          } : {}),
+        }),
+      });
+      if (response.ok) {
+        const payload = await response.json().catch(() => null) as {
+          choices?: Array<{
+            finish_reason?: string;
+            message?: {
+              content?: string | null;
+              annotations?: Array<{
+                type?: string;
+                url_citation?: { url?: string; title?: string; content?: string };
+              }>;
+            };
+          }>;
+        } | null;
+        const choice = payload?.choices?.[0];
+        const message = choice?.message;
+        const answer = typeof message?.content === "string" ? message.content.trim() : "";
+        const sources = trustedSourcesFromOpenRouter(message ?? {});
+        if (liveResearchRequested && sources.length) {
+          verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
+          if (wantsSources) responseSources = mergeResearchSources(responseSources, sources);
+        }
+        const evidenceOk = !liveResearchRequested || sources.length > 0 || searchedSources.length > 0;
+        const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
+        if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
+          const cleaned = removeRepeatedSentences(
+            liveResearchRequested ? removeInlineResearchCitations(answer) : answer,
+          );
+          return asChatStream(cleaned.content, responseSources, parsed.data.language);
+        }
+        console.warn("[OpenRouter] Discarded answer without complete trusted evidence", {
+          hasAnswer: Boolean(answer), languageOk, evidenceOk,
+        });
+      } else {
+        console.error("[OpenRouter] Request failed", { httpStatus: response.status });
+      }
+    } catch (error) {
+      console.error("[OpenRouter] Provider request failed", {
+        timedOut: timeout.aborted,
+        reason: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  }
+
+  if (
+    liveResearchRequested &&
+    heritageQuestion &&
+    localKnowledgeAnswer.content &&
+    localKnowledgeSources.length > 0
+  ) {
+    console.info("[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted");
+    return asChatStream(
+      localKnowledgeAnswer.content,
+      wantsSources ? localKnowledgeSources : [],
+      parsed.data.language,
+    );
+  }
+
   if (
     liveResearchRequested &&
     localKnowledgeAnswer.directAnswer &&
@@ -905,7 +1046,7 @@ export async function handleChatPost(
   }
 
   if (liveResearchRequested) {
-    console.warn("[Chat] Withholding a factual answer because neither search provider returned verifiable grounding");
+    console.warn("[Chat] Withholding a factual answer because none of the configured search providers returned verifiable grounding");
     return asChatStream(createUnverifiedResearchReply(parsed.data.language), [], parsed.data.language);
   }
 
@@ -914,7 +1055,6 @@ export async function handleChatPost(
   if (
     parsed.data.language === "ar" &&
     heritageQuestion &&
-    (groqApiKey || geminiApiKey || readProviderEnv(suppliedEnv, "NODE_ENV") === "production") &&
     localKnowledgeAnswer.content &&
     localKnowledgeSources.length
   ) {
