@@ -4165,7 +4165,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                     geminiVisionModels[0],
                     matchThreshold,
                   );
-                  openScannerComparisonSucceeded = true;
+                  openScannerComparisonSucceeded = Boolean(comparison?.match);
                 } catch (error) {
                   geminiCatalogComparisonFailed = true;
                   visionAttempts.push({
@@ -4174,9 +4174,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   });
                 }
               }
-              if (!comparison && groqVisionConfigured) {
+              if (!comparison?.match && groqVisionConfigured) {
                 try {
-                  comparison = await compareOpenScannerCandidatesWithGroq(
+                  const groqComparison = await compareOpenScannerCandidatesWithGroq(
                     comparisonImageBytes || imageBytes,
                     candidateImages.slice(0, 5),
                     env.GROQ_API_KEY.trim(),
@@ -4187,11 +4187,44 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                         : "qwen/qwen3.8-27b",
                     matchThreshold,
                   );
-                  groqCatalogComparisonSucceeded = true;
-                  openScannerComparisonSucceeded = true;
+                  comparison = groqComparison?.match || !comparison
+                    ? groqComparison
+                    : {
+                        ...comparison,
+                        ranked: [...(comparison.ranked || []), ...(groqComparison?.ranked || [])]
+                          .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
+                          .slice(0, 6),
+                      };
+                  groqCatalogComparisonSucceeded = Boolean(groqComparison);
+                  openScannerComparisonSucceeded = Boolean(comparison?.match);
                 } catch (error) {
                   visionAttempts.push({
                     model: "Groq open-catalog comparison",
+                    reason: String(error?.message || error).slice(0, 180),
+                  });
+                }
+              }
+              if (!comparison?.match && openRouterConfigured) {
+                try {
+                  const openRouterComparison = await compareImageCandidatesWithOpenRouter(
+                    comparisonImageBytes || imageBytes,
+                    candidateImages.slice(0, 5),
+                    env.OPENROUTER_API_KEY.trim(),
+                    OPENROUTER_VISION_MODELS[0],
+                    matchThreshold,
+                  );
+                  comparison = openRouterComparison?.match || !comparison
+                    ? openRouterComparison
+                    : {
+                        ...comparison,
+                        ranked: [...(comparison.ranked || []), ...(openRouterComparison?.ranked || [])]
+                          .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
+                          .slice(0, 6),
+                      };
+                  openScannerComparisonSucceeded = Boolean(comparison?.match);
+                } catch (error) {
+                  visionAttempts.push({
+                    model: "OpenRouter open-catalog comparison",
                     reason: String(error?.message || error).slice(0, 180),
                   });
                 }
