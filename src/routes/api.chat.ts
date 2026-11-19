@@ -268,7 +268,6 @@ function isLiveResearchRequest(query: string): boolean {
   const explicitResearch =
     /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(normalized);
   const factualQuestion =
-    /[؟?]/u.test(normalized) ||
     /^\s*(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe)\b/iu.test(normalized) ||
     /^\s*(?:ايه|ما هو|ما هي|من هو|من هي|مين|متى|فين|أين|ليه|لماذا|ازاي|كيف|هل|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن)/u.test(normalized);
   return explicitResearch || factualQuestion;
