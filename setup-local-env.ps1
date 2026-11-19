@@ -64,9 +64,13 @@ if ($SetProviderKeys) {
     $geminiPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($geminiSecure)
     try { $chatGeminiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($geminiPtr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($geminiPtr) }
 }
+# Keep legacy local keys working for scanning until dedicated scanner keys are entered.
 $scannerGroqKey = Read-ExistingSetting "SCANNER_GROQ_API_KEY"
+if (-not $scannerGroqKey) { $scannerGroqKey = Read-ExistingSetting "GROQ_API_KEY" }
 $scannerGeminiKey = Read-ExistingSetting "SCANNER_GEMINI_API_KEY"
+if (-not $scannerGeminiKey) { $scannerGeminiKey = Read-ExistingSetting "GEMINI_API_KEY" }
 $scannerOpenRouterKey = Read-ExistingSetting "SCANNER_OPENROUTER_API_KEY"
+if (-not $scannerOpenRouterKey) { $scannerOpenRouterKey = Read-ExistingSetting "OPENROUTER_API_KEY" }
 if ($SetScannerKeys) {
     $scannerGroqSecure = Read-Host "Enter SCANNER_GROQ_API_KEY (scanner only)" -AsSecureString
     $scannerGroqPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($scannerGroqSecure)
