@@ -22,34 +22,50 @@ export function handleAtharaApiRequest(
   if (!ATHARA_API_PATHS.has(pathname)) return null;
 
   const requestEnv = (request as CloudflareRequest).runtime?.cloudflare?.env;
-  const requestEnvironment = requestEnv && typeof requestEnv === "object" ? requestEnv : null;
-  const suppliedEnvironment = suppliedEnv && typeof suppliedEnv === "object" ? suppliedEnv : {};
-  const env = Object.assign(Object.create(requestEnvironment), suppliedEnvironment) as Record<
-    string,
-    unknown
-  >;
-  for (const key of [
-    "GEMINI_API_KEY",
-    "GEMINI_VISION_MODEL",
-    "GEMINI_VISION_FALLBACK_MODEL",
-    "GROQ_API_KEY",
-    "GROQ_MODEL",
-    "GROQ_VISION_MODEL",
+  const requestEnvironment = requestEnv && typeof requestEnv === "object"
+    ? requestEnv as Record<string, unknown>
+    : {};
+  const suppliedEnvironment = suppliedEnv && typeof suppliedEnv === "object"
+    ? suppliedEnv as Record<string, unknown>
+    : {};
+  const env: Record<string, unknown> = {};
+
+  // The scanner receives only scanner credentials/configuration and its own
+  // Cloudflare resources. Chat credentials are deliberately not forwarded.
+  const scannerKeys = [
+    "SCANNER_GEMINI_API_KEY",
+    "SCANNER_GEMINI_VISION_MODEL",
+    "SCANNER_GEMINI_VISION_FALLBACK_MODEL",
+    "SCANNER_GROQ_API_KEY",
+    "SCANNER_GROQ_VISION_MODEL",
+    "SCANNER_GROQ_WEB_SEARCH_MODEL",
+    "SCANNER_OPENROUTER_API_KEY",
+    "SCANNER_OLLAMA_BASE_URL",
+    "SCANNER_OLLAMA_VISION_MODEL",
+    "SCANNER_QWEN_VISION_MODEL",
+    "SCANNER_INTERNVL_VISION_MODEL",
     "SCANNER_INDEX_URL",
     "SCANNER_INDEX_TIMEOUT_MS",
     "SCANNER_INDEX_MATCH_THRESHOLD",
     "SCANNER_PROBABLE_THRESHOLD",
-    "OLLAMA_BASE_URL",
-    "OLLAMA_VISION_MODEL",
-  ]) {
-    if (!(key in env) && typeof process !== "undefined" && process.env[key]) {
-      env[key] = process.env[key];
-    }
+    "SCANNER_MATCH_THRESHOLD",
+    "SCANNER_FREE_FALLBACK_ENABLED",
+    "ATHARA_CATALOG_JSON",
+    "NODE_ENV",
+  ];
+  for (const key of ["AI", "ASSETS", "SCANNER_CACHE"]) {
+    if (key in suppliedEnvironment) env[key] = suppliedEnvironment[key];
+    else if (key in requestEnvironment) env[key] = requestEnvironment[key];
+  }
+  for (const key of scannerKeys) {
+    if (key in suppliedEnvironment) env[key] = suppliedEnvironment[key];
+    else if (key in requestEnvironment) env[key] = requestEnvironment[key];
+    else if (typeof process !== "undefined" && process.env[key]) env[key] = process.env[key];
   }
 
   if (!env.AI && typeof process !== "undefined" && process.env.NODE_ENV === "development") {
-    env.OLLAMA_BASE_URL ??= "http://127.0.0.1:11434";
-    env.OLLAMA_VISION_MODEL ??= "gemma3:4b";
+    env.SCANNER_OLLAMA_BASE_URL ??= "http://127.0.0.1:11434";
+    env.SCANNER_OLLAMA_VISION_MODEL ??= "gemma3:4b";
   }
 
   return atharaWorker.fetch(request, env as Parameters<typeof atharaWorker.fetch>[1]);
