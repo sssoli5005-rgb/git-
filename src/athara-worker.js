@@ -44,12 +44,13 @@ const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
   "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
   "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org", "egyptianmuseumcairo.eg",
-  "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org",
+  "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org", "arce.org",
 ];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
   "egyptianmuseumcairo.eg",
+  "arce.org",
   "ucl.ac.uk",
   "metmuseum.org",
   "britishmuseum.org",
@@ -70,6 +71,7 @@ const TRUSTED_SOURCE_DOMAINS = [
 const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
   "egyptianmuseumcairo.eg",
+  "arce.org",
   "whc.unesco.org",
   "ucl.ac.uk",
   "metmuseum.org",
