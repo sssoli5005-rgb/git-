@@ -1740,6 +1740,44 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("https://www.britannica.com/place/Paris");
   });
 
+  it("uses trusted live research for a colloquial Arabic question with a spelling mistake", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toContain("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as {
+        tools?: Array<{ type?: string }>;
+        tool_choice?: string;
+        messages: { role: string; content: string }[];
+      };
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
+      expect(payload.messages[0]?.content).toContain("Infer the user's intended meaning");
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "لو تقصدي قصة باريس، فهي العاصمة الفرنسية.",
+            executed_tools: [{ browser_results: [{
+              title: "Paris — Encyclopaedia Britannica",
+              url: "https://www.britannica.com/place/Paris",
+              content: "Paris is the capital and most populous city of France.",
+            }] }],
+          },
+        }],
+      });
+    });
+
+    const response = await handleChatPost(createChatRequest("عايزة اعرف قصت باريس"), fetcher);
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("لو تقصدي قصة باريس");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("britannica.com");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("does not force live research for a personal question phrased with a question mark", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
