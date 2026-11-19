@@ -2155,10 +2155,21 @@ function extractOfficialMuseumLocation(text) {
   return knownMuseums.find(([pattern]) => pattern.test(value))?.[1] || "";
 }
 
+function scannerInstitutionalSourceUrlAllowed(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && TRUSTED_SOURCE_DOMAINS.some((domain) =>
+      url.hostname === domain || url.hostname.endsWith("." + domain),
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function readGroundedScannerSource(entry, observation) {
   let url;
   try { url = new URL(entry.url); } catch { return null; }
-  if (!scannerSourceUrlAllowed(url.href)) return null;
+  if (!scannerInstitutionalSourceUrlAllowed(url.href)) return null;
   const specificCataloguePage = scannerSpecificCataloguePage(url);
   if (!specificCataloguePage && !scannerSourceSupportsCandidate({
     title: String(entry.title || ""),
@@ -2166,48 +2177,46 @@ async function readGroundedScannerSource(entry, observation) {
     snippet: String(entry.snippet || ""),
     trusted: true,
   }, observation)) return null;
-  const initial = {
-    title: String(entry.title || url.hostname),
-    url: url.href,
-    snippet: String(entry.snippet || "").slice(0, 1200),
-    source: url.hostname,
-    trusted: true,
-  };
+
   try {
     const response = await fetch(url.href, {
       headers: { accept: "text/html,application/xhtml+xml", "user-agent": "ATHARA-Heritage-Guide/1.0" },
       redirect: "follow",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(6_000),
     });
     const finalUrl = new URL(response.url || url.href);
-    if (!response.ok || !scannerSourceUrlAllowed(finalUrl.href)) {
-      return specificCataloguePage || scannerSourceSupportsCandidate(initial, observation)
-        ? { source: initial, candidate: null }
-        : null;
-    }
+    if (!response.ok || !scannerInstitutionalSourceUrlAllowed(finalUrl.href)) return null;
+    const contentType = response.headers.get("content-type") || "";
+    if (!/text\\/html|application\\/xhtml\\+xml/i.test(contentType)) return null;
+
     const html = await readLimitedHtml(response, 600_000);
-    const title = stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "") || initial.title;
-    const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
-      html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] || html;
-    const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/gi, " ")
+    const title = stripHtml(html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1] || "") || String(entry.title || finalUrl.hostname);
+    const main = html.match(/<main\\b[\\s\\S]*?<\\/main>/i)?.[0] ||
+      html.match(/<article\\b[\\s\\S]*?<\\/article>/i)?.[0] || html;
+    const snippet = stripHtml(main.replace(/<(script|style|noscript|svg|nav|header|footer|form)\\b[\\s\\S]*?<\\/\\1>/gi, " ")
       .replace(/<[^>]*>/g, " ")).slice(0, 6000);
+
+    // A result title/snippet alone is not verified evidence. Require readable
+    // content from the destination institution itself before accepting it.
+    if (snippet.trim().length < 120) return null;
     const source = {
-      ...initial,
       title,
       url: finalUrl.href,
-      snippet: snippet.length > 50 ? snippet : initial.snippet,
+      snippet,
+      source: finalUrl.hostname,
+      trusted: true,
     };
     const stillSpecificCataloguePage = scannerSpecificCataloguePage(finalUrl);
     if (!scannerSourceSupportsCandidate(source, observation) && !stillSpecificCataloguePage) return null;
+
     const imageRef = scannerMeta(html, "og:image") || scannerMeta(html, "twitter:image");
     let candidate = null;
     if (imageRef) {
       const imageUrl = new URL(imageRef, finalUrl.href);
-      const permittedImageHost =
-        SCANNER_IMAGE_HOSTS.has(imageUrl.hostname) || imageUrl.hostname === finalUrl.hostname;
+      const permittedImageHost = SCANNER_IMAGE_HOSTS.has(imageUrl.hostname) || imageUrl.hostname === finalUrl.hostname;
       if (imageUrl.protocol === "https:" && permittedImageHost) {
         const museumLocation = finalUrl.hostname.endsWith("egymonuments.gov.eg")
-          ? extractOfficialMuseumLocation(source.snippet)
+          ? extractOfficialMuseumLocation(snippet)
           : "";
         candidate = makeScannerCandidate({
           name: title,
@@ -2215,108 +2224,102 @@ async function readGroundedScannerSource(entry, observation) {
           currentLocation: museumLocation,
           url: finalUrl.href,
           imageUrl: imageUrl.href,
-          source: url.hostname,
-          sourceText: source.snippet,
+          source: finalUrl.hostname,
+          sourceText: snippet,
         });
       }
     }
     return { source, candidate };
   } catch (error) {
-    console.warn("[Image scanner] Could not read grounded page:", url.hostname,
+    console.warn("[Image scanner] Could not read institutional page:", url.hostname,
       String(error?.message || error).slice(0, 120));
-    return specificCataloguePage || scannerSourceSupportsCandidate(initial, observation)
-      ? { source: initial, candidate: null }
-      : null;
+    return null;
   }
 }
 
+async function searchArtifactGroundedSources(
 async function searchArtifactGroundedSources(env, observation, language = "en") {
   const query = scannerGroundedResearchQuery(observation, language);
   const providers = [];
   const geminiKey = typeof env.SCANNER_GEMINI_API_KEY === "string" ? env.SCANNER_GEMINI_API_KEY.trim() : "";
   const groqKey = typeof env.SCANNER_GROQ_API_KEY === "string" ? env.SCANNER_GROQ_API_KEY.trim() : "";
-  if (geminiKey) providers.push({ name: "Gemini Google Search", run: () =>
-    searchWithGeminiGrounding(query, geminiKey, configuredGeminiVisionModel(env)) });
-  if (groqKey) providers.push({ name: "Groq browser search", run: () =>
-    searchWithGroqBrowser(query, groqKey, env.SCANNER_GROQ_WEB_SEARCH_MODEL || "openai/gpt-oss-20b") });
-  if (typeof env.AI?.websearch === "function") providers.push({ name: "Cloudflare Web Search", run: () =>
-    searchWithCloudflareWebSearch(env, query) });
-  // Independent search engines run concurrently. A quota error or timeout in one
-  // engine must not delay or cancel results returned by the others.
-  const results = await Promise.allSettled(providers.map((provider) => provider.run()));
+
+  // Strict per-scanner search order: Cloudflare → Gemini → Groq.
+  if (typeof env.AI?.websearch === "function") {
+    providers.push({ name: "Cloudflare Web Search", run: () => searchWithCloudflareWebSearch(env, query) });
+  }
+  if (geminiKey) {
+    providers.push({ name: "Gemini Google Search", run: () =>
+      searchWithGeminiGrounding(query, geminiKey, configuredGeminiVisionModel(env)) });
+  }
+  if (groqKey) {
+    providers.push({ name: "Groq browser search", run: () =>
+      searchWithGroqBrowser(query, groqKey, env.SCANNER_GROQ_WEB_SEARCH_MODEL || "openai/gpt-oss-20b") });
+  }
+
   let failedSources = 0;
-  let successfulProviders = 0;
-  const pageTasks = [];
-  const sourceLeads = [];
-  for (const [index, result] of results.entries()) {
-    const provider = providers[index];
-    if (result.status === "rejected") {
+  const attempted = [];
+  for (const provider of providers) {
+    let result;
+    try {
+      result = await provider.run();
+    } catch (error) {
       failedSources++;
-      console.warn("[Image scanner] Search provider failed; other engines continue:", provider.name,
-        String(result.reason?.message || result.reason).slice(0, 160));
+      attempted.push({ provider: provider.name, status: "failed" });
+      console.warn("[Image scanner] Search provider failed; moving to next:", provider.name,
+        String(error?.message || error).slice(0, 160));
       continue;
     }
-    successfulProviders++;
-    const entries = (result.value.entries || [])
-      .filter((entry) => scannerSourceUrlAllowed(entry.url))
-      .slice(0, 10);
-    for (const entry of entries) {
-      let entryUrl;
-      try { entryUrl = new URL(entry.url); } catch { continue; }
-      // Keep search-engine catalogue evidence even if the institution blocks a
-      // Worker fetch, serves a timeout, or changes its HTML template.
-      if (scannerSpecificCataloguePage(entryUrl) || scannerSourceSupportsCandidate({
-        title: entry.title || "",
-        url: entryUrl.href,
-        snippet: entry.snippet || "",
-        trusted: true,
-      }, observation)) {
-        sourceLeads.push({
-          title: String(entry.title || entryUrl.hostname),
-          url: entryUrl.href,
-          snippet: String(entry.snippet || "").slice(0, 1200),
-          source: entryUrl.hostname,
-          trusted: true,
-          searchProvider: provider.name,
-        });
-      }
-      pageTasks.push(readGroundedScannerSource(entry, observation).then((page) => {
-        if (!page) return null;
-        return { ...page, source: { ...page.source, searchProvider: provider.name } };
-      }).catch((error) => {
-        console.warn("[Image scanner] Catalogue page read failed:", provider.name,
+
+    const entries = (result.entries || [])
+      .filter((entry) => scannerInstitutionalSourceUrlAllowed(entry.url))
+      .slice(0, 8);
+    const pageResults = await Promise.all(entries.map(async (entry) => {
+      try {
+        return await readGroundedScannerSource(entry, observation);
+      } catch (error) {
+        console.warn("[Image scanner] Institutional page validation failed:", provider.name,
           String(error?.message || error).slice(0, 120));
         return null;
-      }));
+      }
+    }));
+    const collected = pageResults.filter(Boolean);
+    if (!collected.length) {
+      failedSources++;
+      attempted.push({ provider: provider.name, status: "no_verified_pages" });
+      console.warn("[Image scanner] Search returned no readable trusted institutional pages; moving to next:", provider.name);
+      continue;
     }
+
+    const unique = [...new Map(collected.map((entry) => [entry.source.url, entry])).values()];
+    unique.sort((left, right) => {
+      const leftPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(left.source.url).hostname.endsWith(domain));
+      const rightPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(right.source.url).hostname.endsWith(domain));
+      return (leftPriority < 0 ? 999 : leftPriority) - (rightPriority < 0 ? 999 : rightPriority) ||
+        Number(Boolean(right.candidate)) - Number(Boolean(left.candidate));
+    });
+    attempted.push({ provider: provider.name, status: "verified_pages", count: unique.length });
+    return {
+      sources: unique.map((entry) => ({ ...entry.source, searchProvider: provider.name })).slice(0, 8),
+      candidates: unique.flatMap((entry) => entry.candidate ? [entry.candidate] : []).slice(0, 12),
+      availableSources: 1,
+      failedSources,
+      provider: provider.name,
+      attempts: attempted,
+    };
   }
-  const collected = (await Promise.all(pageTasks)).filter(Boolean);
-  const pageSources = collected.map((entry) => entry.source);
-  const preservedSources = [...new Map(
-    [...pageSources, ...sourceLeads].map((source) => [source.url, source]),
-  ).values()];
-  const unique = [...new Map(collected.map((entry) => [entry.source.url, entry])).values()];
-  unique.sort((left, right) => {
-    const leftPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(left.source.url).hostname.endsWith(domain));
-    const rightPriority = SOURCE_PRIORITY.findIndex((domain) => new URL(right.source.url).hostname.endsWith(domain));
-    return (leftPriority < 0 ? 999 : leftPriority) - (rightPriority < 0 ? 999 : rightPriority) ||
-      Number(Boolean(right.candidate)) - Number(Boolean(left.candidate));
-  });
-  const sources = [...new Map([
-    ...unique.map((entry) => entry.source),
-    ...preservedSources,
-  ].map((source) => [source.url, source])).values()].slice(0, 8);
-  const candidates = unique.flatMap((entry) => entry.candidate ? [entry.candidate] : []);
+
   return {
-    sources,
-    candidates: candidates.slice(0, 12),
-    availableSources: successfulProviders,
+    sources: [],
+    candidates: [],
+    availableSources: 0,
     failedSources,
-    provider: providers.filter((provider, index) => results[index]?.status === "fulfilled")
-      .map((provider) => provider.name).join(", "),
+    provider: "",
+    attempts: attempted,
   };
 }
 
+async function downloadScannerCandidateImages(
 async function downloadScannerCandidateImages(candidates) {
   const downloads = await Promise.all(candidates.slice(0, 5).map(async (candidate) => {
     try {
