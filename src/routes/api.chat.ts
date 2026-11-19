@@ -279,9 +279,9 @@ function isLiveResearchRequest(query: string): boolean {
     /^(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe|according to)\b/u.test(normalized);
 
   const arabicQuestionLead =
-    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن|معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|where|who|when|what|why|how)\b/u.test(normalized);
+    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\\s+)*(?:ايه|ما(?:هو|هي|\\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|احكي|عرفني|كلمني عن|اتكلم عن|اتكلمي عن|معلومات عن|ممكن معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|اكتبلي عن|اكتب لي عن|where|who|when|what|why|how)\\b/u.test(normalized);
   const arabicQuestionInside =
-    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|ممكن اعرف|ممكن تشرح|اشرح لي|احكي عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(normalized);
+    /(?:^|\\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|عاوز اعرف|عاوزة اعرف|عايزين نعرف|ممكن اعرف|ممكن تشرح|ممكن تقولي عن|محتاج اعرف|محتاجة اعرف|اشرح لي|احكي عن|احكيلي عن|اتكلم عن|اتكلمي عن|اعرف عن|تاريخ|قصه|قصة)(?:\\s|$)/u.test(normalized);
   const arabicFactualQuestion = arabicQuestionLead || arabicQuestionInside;
 
   return explicitResearch || ordinaryQuestion || englishFactualQuestion || arabicFactualQuestion;
