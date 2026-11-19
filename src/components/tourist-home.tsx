@@ -287,7 +287,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           if (searchImage && searchImage.length > 640_000) searchImage = undefined;
           // Keep small, supported original uploads intact for exact museum-image
           // fingerprint checks; the canvas copies below remain optimized for AI.
-          const originalImage = captured && captured.length <= 700_000 &&
+          const originalImage = captured && captured.length <= 666_000 &&
             /^data:image\/(jpeg|png|webp);base64,/i.test(captured)
             ? captured
             : undefined;
