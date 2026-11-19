@@ -181,7 +181,19 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       expect(String(input)).toContain("api.groq.com");
       return Response.json({
-        choices: [{ finish_reason: "stop", message: { content: generatedAnswer } }],
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: generatedAnswer,
+            executed_tools: [{
+              browser_results: [{
+                title: "University research on archaeological animal bones",
+                url: "https://www.ucl.ac.uk/archaeology/",
+                content: "Zooarchaeology studies animal remains recovered from archaeological sites to reconstruct diet, animal use, and past environments."
+              }]
+            }]
+          }
+        }]
       });
     });
 
@@ -711,7 +723,15 @@ describe("handleChatPost hosted Groq provider", () => {
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
-          candidates: [{ content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] } }],
+          candidates: [{
+            content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] },
+            groundingMetadata: {
+              groundingChunks: [
+                { web: { uri: "https://www.britannica.com/biography/Nefertiti", title: "Nefertiti — Encyclopaedia Britannica" } },
+                { web: { uri: "https://www.metmuseum.org/", title: "The Metropolitan Museum of Art" } }
+              ]
+            }
+          }],
         }),
       );
 
@@ -1482,8 +1502,10 @@ describe("general web research across non-Egypt topics", () => {
         model: string;
         citation_options?: string;
       };
-      expect(payload.model).toBe("groq/compound-mini");
+      expect(payload.model).toBe("openai/gpt-oss-20b");
       expect(payload.citation_options).toBe("enabled");
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
       return Response.json({
         choices: [{
           finish_reason: "stop",
@@ -1558,8 +1580,10 @@ describe("general web research across non-Egypt topics", () => {
         model: string;
         citation_options?: string;
       };
-      expect(payload.model).toBe("groq/compound-mini");
+      expect(payload.model).toBe("openai/gpt-oss-20b");
       expect(payload.citation_options).toBe("enabled");
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
       return Response.json({
         choices: [{
           finish_reason: "stop",
@@ -1594,8 +1618,10 @@ describe("general web research across non-Egypt topics", () => {
         citation_options?: string;
         messages: { role: string; content: string }[];
       };
-      expect(payload.model).toBe("groq/compound-mini");
+      expect(payload.model).toBe("openai/gpt-oss-20b");
       expect(payload.citation_options).toBe("enabled");
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
       expect(payload.messages[0]?.content).toContain(
         "For biblical or religious questions, retrieve the exact passage",
       );
@@ -1654,7 +1680,7 @@ describe("general web research across non-Egypt topics", () => {
         model: string;
         messages: { role: string; content: string }[];
       };
-      expect(payload.model).toBe("groq/compound-mini");
+      expect(payload.model).toBe("openai/gpt-oss-20b");
       return Response.json({
         choices: [{
           finish_reason: "stop",
