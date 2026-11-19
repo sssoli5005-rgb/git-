@@ -2436,7 +2436,7 @@ async function searchMuseumImagesWithoutVision(env, imageBytes, language, vision
 }
 
 async function compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
-  const selected = candidates.slice(0, 2);
+  const selected = candidates.slice(0, 6);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
 
   const content = [
