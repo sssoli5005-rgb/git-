@@ -315,9 +315,10 @@ function cleanVisionObservation(value) {
 
 function resolveVisionProviderOrder(env) {
   const order = [...DEFAULT_VISION_PROVIDER_ORDER];
-  if (typeof env?.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim()) {
-    order.push("OpenRouter");
-  }
+  if (typeof env?.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim()) order.push("OpenRouter");
+  if (typeof env?.OPENAI_API_KEY === "string" && env.OPENAI_API_KEY.trim()) order.push("OpenAI");
+  if (typeof env?.MISTRAL_API_KEY === "string" && env.MISTRAL_API_KEY.trim()) order.push("Mistral");
+  if (typeof env?.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.trim()) order.push("Anthropic");
   return order;
 }
 
@@ -1231,12 +1232,20 @@ function officialVisualMatchResponse(officialVisualMatch, observation = null) {
   const sourceStory = String(item.description || "").trim();
   const catalogArtifact = officialTextCandidateArtifact({ record: item }) || {};
   const sources = [{
-    title: item.sourceTitle,
+    title: item.sourceTitle || "Ministry of Tourism and Antiquities, Egypt",
     url: item.sourceUrl,
     snippet: item.description || "",
-    source: item.sourceTitle,
+    source: item.sourceTitle || "Ministry of Tourism and Antiquities, Egypt",
     trusted: true,
-  }];
+  }, ...(Array.isArray(item.additionalSources) ? item.additionalSources : [])
+    .filter((source) => source && scannerSourceUrlAllowed(source.url))
+    .map((source) => ({
+      title: String(source.title || source.sourceTitle || "Institutional catalogue record"),
+      url: source.url,
+      snippet: String(source.description || ""),
+      source: String(source.sourceTitle || source.source || ""),
+      trusted: true,
+    }))];
   const exactOfficialFingerprint = officialVisualMatch.engine === "Exact official Ministry image fingerprint";
   return {
     ok: true,
@@ -3647,6 +3656,9 @@ export default {
         guideModel: TEXT_MODEL,
         visionEngines: [
           { name: "Gemini", configured: geminiConfigured, model: configuredGeminiVisionModel(env) },
+          { name: "OpenAI", configured: typeof env.OPENAI_API_KEY === "string" && Boolean(env.OPENAI_API_KEY.trim()), model: env.OPENAI_VISION_MODEL || "gpt-5.4-mini" },
+          { name: "Mistral", configured: typeof env.MISTRAL_API_KEY === "string" && Boolean(env.MISTRAL_API_KEY.trim()), model: env.MISTRAL_VISION_MODEL || "mistral-small-latest" },
+          { name: "Anthropic", configured: typeof env.ANTHROPIC_API_KEY === "string" && Boolean(env.ANTHROPIC_API_KEY.trim()), model: env.ANTHROPIC_VISION_MODEL || "claude-haiku-5-5" },
           { name: "Groq", configured: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()), model: env.GROQ_VISION_MODEL || env.GROQ_MODEL || "qwen/qwen3.8-27b" },
           { name: "Cloudflare Workers AI", configured: typeof env.AI?.run === "function", model: VISION_MODEL, fallbackModels: FALLBACK_VISION_MODELS },
           {
@@ -3662,6 +3674,9 @@ export default {
           groqBrowserSearch: typeof env.GROQ_API_KEY === "string" && Boolean(env.GROQ_API_KEY.trim()),
           cloudflareWebSearch: typeof env.AI?.websearch === "function",
           openRouterVision: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
+          openAiVision: typeof env.OPENAI_API_KEY === "string" && Boolean(env.OPENAI_API_KEY.trim()),
+          mistralVision: typeof env.MISTRAL_API_KEY === "string" && Boolean(env.MISTRAL_API_KEY.trim()),
+          anthropicVision: typeof env.ANTHROPIC_API_KEY === "string" && Boolean(env.ANTHROPIC_API_KEY.trim()),
         },
         visionProviderOrder,
         visionFallbackOrder,
@@ -3788,7 +3803,9 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
       const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || openAiVisionConfigured || mistralVisionConfigured || anthropicVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
-      if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
+      if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured &&
+          !groqVisionConfigured && !openRouterConfigured && !openAiVisionConfigured &&
+          !mistralVisionConfigured && !anthropicVisionConfigured) {
         return json(
           {
             ok: true,
