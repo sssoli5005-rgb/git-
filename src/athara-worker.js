@@ -4044,7 +4044,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
             const referenceImage = comparisonImageBytes || imageBytes;
-            if (geminiConfigured) {
+            officialVisualMatch = await findExactOfficialImageMatch(referenceImage, candidateImages);
+            if (!officialVisualMatch && geminiConfigured) {
               try {
                 officialVisualMatch = await compareWithOfficialCatalogPhotos(
                   referenceImage,
