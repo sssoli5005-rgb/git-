@@ -65,6 +65,8 @@ const TRUSTED_SOURCE_DOMAINS = [
   "oi.uchicago.edu",
   "thebanmappingproject.com",
   "artic.edu",
+  "clevelandart.org",
+  "giza.fas.harvard.edu",
 ];
 const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
@@ -1571,9 +1573,7 @@ function makeScannerCandidate(candidate) {
     pageUrl.protocol !== "https:" ||
     imageUrl.protocol !== "https:" ||
     !SCANNER_IMAGE_HOSTS.has(imageUrl.hostname) ||
-    !SCANNER_ALLOWED_SOURCE_DOMAINS.some(
-      (domain) => pageUrl.hostname === domain || pageUrl.hostname.endsWith(`.${domain}`),
-    )
+    !scannerInstitutionalSourceUrlAllowed(pageUrl.href)
   ) {
     return null;
   }
@@ -3481,6 +3481,13 @@ export default {
       const localOllama = !geminiConfigured && !env.AI && typeof env.SCANNER_OLLAMA_BASE_URL === "string";
       const visionProviderOrder = resolveVisionProviderOrder(env);
       const visionFallbackOrder = visionProviderOrder.slice(1);
+      const searchProviderOrder = [
+        ...(typeof env.AI?.websearch === "function" ? ["Cloudflare Web Search"] : []),
+        ...(geminiConfigured ? ["Gemini Google Search"] : []),
+        ...(typeof env.SCANNER_GROQ_API_KEY === "string" && env.SCANNER_GROQ_API_KEY.trim()
+          ? ["Groq browser search"] : []),
+      ];
+      const searchFallbackOrder = searchProviderOrder.slice(1);
       return json({
         ok: true,
         service: "ATHARA",
@@ -3506,6 +3513,8 @@ export default {
         },
         visionProviderOrder,
         visionFallbackOrder,
+        searchProviderOrder,
+        searchFallbackOrder,
         visionModel: geminiConfigured
           ? configuredGeminiVisionModel(env)
           : localOllama
