@@ -1493,6 +1493,46 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("verifies Groq browser-search citations against the opened institutional page", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    const pageText = "Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.";
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      if (String(input).includes("api.groq.com")) {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: Array<{ role: string; content: string }>;
+          tools?: Array<{ type: string }>;
+          tool_choice?: string;
+        };
+        expect(payload.tools).toEqual([{ type: "browser_search" }]);
+        expect(payload.tool_choice).toBe("required");
+        expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content: "لو تقصدي يوسف الصديق، يذكر سفر التكوين أنه مات في مصر ودُفن في تابوت. <ATHARA_SOURCES>[{\"title\":\"Genesis 50:26 — Bible Gateway\",\"url\":\"https://www.biblegateway.com/passage/?search=Genesis%2050%3A26\",\"evidence\":\"Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.\"}]</ATHARA_SOURCES>",
+            },
+          }],
+        });
+      }
+      expect(String(input)).toContain("biblegateway.com");
+      return new Response(
+        "<html><body><main>Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.</main></body></html>",
+        { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+      );
+    });
+    const response = await handleChatPost(
+      createChatRequest("اين يوجد جسد يوسق الصديق؟ عايزة المصدر"),
+      fetcher,
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("لو تقصدي يوسف الصديق");
+    expect(body).toContain("biblegateway.com");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
