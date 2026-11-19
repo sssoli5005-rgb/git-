@@ -855,8 +855,9 @@ function rankOfficialCatalogCandidates(catalog, observation) {
   const genericIdentityTerms = new Set([
     "statue", "figure", "bust", "head", "face", "portrait", "profile", "woman", "female",
     "man", "male", "king", "queen", "royal", "pharaoh", "egyptian", "ancient", "new",
-    "kingdom", "period", "green", "orange", "brown", "painted", "wooden", "stone",
+    "kingdom", "period", "dynasty", "era", "green", "orange", "brown", "painted", "wooden", "stone",
     "headdress", "crown", "shoulder", "carved", "goddess", "god", "deity",
+    "new kingdom", "الدولة", "عصر", "حديثة", "الحديثة", "أسرة", "اسرة",
     "تمثال", "تماثيل", "نصفي", "رأس", "راس", "وجه", "امرأة", "انثى", "أنثى", "رجل",
     "ملك", "ملكة", "ملكي", "ملكية", "فرعون", "مصري", "مصرية", "قديم", "قديمة",
     "اخضر", "أخضر", "برتقالي", "بني", "خشبي", "حجري", "غطاء", "رأس", "تاج",
