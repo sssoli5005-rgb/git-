@@ -2608,6 +2608,7 @@ async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiK
     model,
     ...OPENROUTER_VISION_MODELS.filter((candidate) => candidate !== model).slice(0, 2),
   ].filter(Boolean))];
+  const ranked = [];
   let lastError = null;
   for (const candidateModel of models) {
     try {
@@ -2615,10 +2616,18 @@ async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiK
         imageBytes, candidates, apiKey, candidateModel, threshold,
       );
       if (result?.match) return result;
-      if (result) return result;
+      if (Array.isArray(result?.ranked)) ranked.push(...result.ranked);
     } catch (error) {
       lastError = error;
     }
+  }
+  if (ranked.length) {
+    return {
+      ranked: [...new Map(ranked.map((candidate) => [candidate.url + "|" + candidate.name, candidate])).values()]
+        .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
+        .slice(0, 6),
+      match: null,
+    };
   }
   if (lastError) throw lastError;
   return { ranked: [], match: null };
