@@ -1,3 +1,9 @@
+import curatedCatalogData from "./data/egypt-monuments-curated.json";
+
+const EMBEDDED_CURATED_RECORDS = Array.isArray(curatedCatalogData?.records)
+  ? curatedCatalogData.records
+  : [];
+
 const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
 const FALLBACK_VISION_MODELS = [
   "@cf/mistralai/mistral-small-3.1-24b-instruct",
@@ -3671,6 +3677,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       } catch {
         // Keep the official built-in catalog if the optional environment catalog is invalid.
       }
+      const curatedRecordsById = new Map();
+      const isValidCuratedRecord = (record) =>
+        record && typeof record.id === "string" && typeof record.title === "string" &&
+        Array.isArray(record.keywords) && typeof record.sourceTitle === "string" &&
+        typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl);
+      for (const record of EMBEDDED_CURATED_RECORDS) {
+        if (isValidCuratedRecord(record)) curatedRecordsById.set(record.id, record);
+      }
       if (assetsFetch) {
         try {
           const curatedUrl = new URL("/egypt-monuments-curated.json", "https://athara.local").toString();
@@ -3678,16 +3692,18 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           if (curatedResponse.ok) {
             const curatedData = await curatedResponse.json();
             const curatedRecords = Array.isArray(curatedData?.records) ? curatedData.records : [];
-            catalog.push(...curatedRecords.filter((record) =>
-              record && typeof record.id === "string" && typeof record.title === "string" &&
-              Array.isArray(record.keywords) && typeof record.sourceTitle === "string" &&
-              typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
-            ));
+            // Asset records override the bundled copy, which keeps tests and
+            // production able to update curated data without a Worker rebuild.
+            for (const record of curatedRecords) {
+              if (isValidCuratedRecord(record)) curatedRecordsById.set(record.id, record);
+            }
           }
         } catch (error) {
-          console.warn(`[Image scanner] Curated catalogue unavailable: ${String(error?.message || error).slice(0, 160)}`);
+          console.warn(`[Image scanner] Curated catalogue asset unavailable: ${String(error?.message || error).slice(0, 160)}`);
         }
       }
+      const existingCatalogIds = new Set(catalog.map((record) => record?.id).filter(Boolean));
+      catalog.push(...[...curatedRecordsById.values()].filter((record) => !existingCatalogIds.has(record.id)));
 
       const visionPrompt =
         mode === "hieroglyphs"
