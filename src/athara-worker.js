@@ -1309,13 +1309,14 @@ function scannerIndexCandidates(indexResult) {
 function openScannerCandidateArtifact(candidate) {
   if (!candidate || !scannerSourceUrlAllowed(candidate.url)) return null;
   return {
-    name: candidate.name,
+    name: cleanScannerArtifactName(candidate.name),
     museum: candidate.museum || "",
     objectNumber: candidate.objectNumber || "",
-    location: candidate.museum || "",
-    period: "",
+    currentLocation: candidate.currentLocation || "",
+    location: candidate.currentLocation || "",
+    period: candidate.period || "",
     objectType: "",
-    description: candidate.sourceText || "",
+    description: cleanScannerSourceStory(candidate.sourceText || ""),
     source: candidate.source || "",
     similarity: null,
     url: candidate.url,
