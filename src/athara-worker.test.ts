@@ -2744,11 +2744,17 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
       expect(response.status).toBe(200);
+      // First four calls are the visual-description fallback chain. The next
+      // three are an independent official-catalogue comparison pass, which has
+      // its own OpenRouter model chain.
       expect(attemptedModels).toEqual([
         "inclusionai/ling-3.2-flash:free",
         "nvidia/nemotron-3.5-super-vl:free",
         "google/gemma-4-31b-it:free",
         "openrouter/free",
+        "inclusionai/ling-3.2-flash:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "google/gemma-4-31b-it:free",
       ]);
       expect(body.visionDiagnostics).toMatchObject({
         provider: "OpenRouter openrouter/free",
