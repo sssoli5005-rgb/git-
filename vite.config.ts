@@ -19,6 +19,8 @@ export default async (configEnv: ConfigEnv) => {
       "CHAT_GROQ_MODEL",
       "CHAT_GEMINI_API_KEY",
       "CHAT_GEMINI_MODEL",
+      "CHAT_OPENROUTER_API_KEY",
+      "CHAT_OPENROUTER_MODEL",
       "CHAT_OLLAMA_BASE_URL",
       "CHAT_OLLAMA_MODEL",
       "SCANNER_GEMINI_API_KEY",
