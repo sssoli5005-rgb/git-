@@ -288,7 +288,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           // Keep small, supported original uploads intact for exact museum-image
           // fingerprint checks; the canvas copies below remain optimized for AI.
           const originalImage = captured && captured.length <= 700_000 &&
-            /^data:image\\/(jpeg|png|webp);base64,/i.test(captured)
+            /^data:image\/(jpeg|png|webp);base64,/i.test(captured)
             ? captured
             : undefined;
           const response = await fetch("/api/scan", {
