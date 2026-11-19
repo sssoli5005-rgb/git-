@@ -1752,7 +1752,7 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(assetFetch).toHaveBeenCalledTimes(2);
+      expect(assetFetch).toHaveBeenCalledTimes(3);
       expect(fetchMock.mock.calls.filter(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
       )).toHaveLength(2);
