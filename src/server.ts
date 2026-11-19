@@ -49,10 +49,10 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // Handle chat directly at the Worker boundary so the real Cloudflare AI
-    // binding is passed explicitly. TanStack/Nitro may create a different
-    // Request object for route handlers, so mutating request.runtime is not
-    // a reliable way to expose Worker bindings.
+    // Handle chat directly at the Worker boundary and pass only CHAT_* settings.
+    // The scanner's AI binding and SCANNER_* secrets never enter the chat pipeline.
+    // TanStack/Nitro may create a different Request object for route handlers, so
+    // mutating request.runtime is not a reliable way to expose Worker bindings.
     const url = new URL(request.url);
     if (url.pathname === "/api/chat" && request.method === "POST") {
       if (!isValidSession(request.headers.get("cookie"))) {
