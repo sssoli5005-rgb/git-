@@ -1,0 +1,183 @@
+{
+  "source": "https://egymonuments.gov.eg",
+  "note": "Curated official English collection records that are not yet present in the Arabic sitemap import. Each record is linked to its official page and original Ministry image.",
+  "records": [
+    {
+      "id": "mota-nephthys-statue",
+      "title": "Statue of Nephthys",
+      "mode": "objects",
+      "keywords": [
+        "Nephthys",
+        "Nebthet",
+        "Neftis",
+        "نفتيس",
+        "نبت حوت",
+        "female deity",
+        "goddess",
+        "mourning",
+        "kneeling",
+        "funerary",
+        "wooden statue",
+        "profile",
+        "head",
+        "face",
+        "green headdress",
+        "Egyptian goddess",
+        "coffin",
+        "sarcophagus"
+      ],
+      "description": "Nephthys, whose name means Mistress of the House, was an important figure in ancient Egyptian funerary beliefs. She and her sister Isis mourned their brother Osiris and became archetypal mourners for the dead. This figure is shown kneeling in the standard mourning position. Nephthys and Isis were often depicted at either end of a coffin or sarcophagus. The statue is most likely connected with this funerary context.",
+      "location": "Mummification Museum, Luxor",
+      "museum": "Mummification Museum",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/en/collections/statue-of-nephthys-6/",
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/4666/dsc_0802.jpg?anchor=center&height=423&mode=crop&rnd=132581519580000000&width=645"
+      ],
+      "imageUrl": "https://egymonuments.gov.eg/media/4666/dsc_0802.jpg?anchor=center&height=423&mode=crop&rnd=132581519580000000&width=645"
+    },
+    {
+      "id": "mota-osiris-statuette",
+      "title": "Osiris Statuette",
+      "mode": "objects",
+      "keywords": [
+        "Osiris",
+        "أوزير",
+        "اوزير",
+        "statuette",
+        "small statue",
+        "god",
+        "underworld",
+        "vegetation",
+        "weighing of the heart",
+        "tomb",
+        "funerary",
+        "mummification"
+      ],
+      "description": "Osiris was the god of vegetation and the underworld and was associated with the weighing of the heart. Statuettes of Osiris were made to be placed in tombs. His death, mummification and transition to the afterlife were central to funerary beliefs.",
+      "location": "Mummification Museum, Luxor",
+      "museum": "Mummification Museum",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/en/collections/statue-of-osiris-6/",
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/4636/59.jpg?crop=0%2C0%2C0.1909385113268609%2C0.39128816806663191&cropmode=percentage&height=423&rnd=132581519580000000&width=645"
+      ]
+    },
+    {
+      "id": "mota-funerary-boat-model",
+      "title": "A wooden model of a Funerary boat",
+      "mode": "objects",
+      "keywords": [
+        "funerary boat",
+        "wooden boat",
+        "boat model",
+        "model ship",
+        "مركب جنائزي",
+        "مركب خشبي",
+        "قارب",
+        "funeral",
+        "mummy transport",
+        "western bank",
+        "Isis",
+        "Nephthys",
+        "إيزيس",
+        "نفتيس"
+      ],
+      "description": "Boats were used to transport the mummy to the cemetery on the western bank of the Nile. The coffin was accompanied by relatives and funerary priests, including two women representing Isis and Nephthys.",
+      "location": "Mummification Museum, Luxor",
+      "museum": "Mummification Museum",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/en/collections/a-wooden-model-of-a-funerary-boat-4/",
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/1511/80.jpg?crop=0%2C0.104%2C0%2C0.1090232558139534&cropmode=percentage&height=423&rnd=134236657490000000&width=645"
+      ]
+    },
+    {
+      "id": "mota-mummy-masaharti",
+      "title": "The Mummy of Masaharti",
+      "mode": "objects",
+      "keywords": [
+        "Masaharti",
+        "Masa-harti",
+        "مومياء",
+        "مومياء ماساهرتي",
+        "mummy",
+        "high priest of Amun",
+        "general",
+        "Thebes",
+        "Deir el-Bahri",
+        "royal cache",
+        "red ochre",
+        "gold finger cap",
+        "21st Dynasty",
+        "mummification"
+      ],
+      "description": "Masaharti was a general of the army and high priest of Amun at Thebes, and son of King Pinedjem I. His mummy was found in the royal cache at Deir el-Bahri in 1881. It dates to the 21st Dynasty; the face was painted with red ochre and a gold finger cap remains on the middle finger of the right hand.",
+      "location": "Mummification Museum, Luxor",
+      "museum": "Mummification Museum",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/collections/the-mummy-of-masaharti-7/",
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/1480/1.jpg?center=0.6071428571428571%2C0.72619047619047616&height=423&mode=crop&rnd=134236672650000000&width=645"
+      ]
+    },
+    {
+      "id": "mota-cat-statue-mummy",
+      "title": "Statue and mummy of a cat",
+      "mode": "objects",
+      "keywords": [
+        "cat mummy",
+        "mummified cat",
+        "cat statue",
+        "Bastet",
+        "باستت",
+        "قطة",
+        "مومياء قطة",
+        "animal mummy",
+        "sycamore wood",
+        "Late Period",
+        "Tell Basta",
+        "Bubastis",
+        "Gurna"
+      ],
+      "description": "The object combines a statue and mummy of a cat, a sacred animal of the goddess Bastet. The Ministry catalogue notes the importance of Bastet's cult in the Late Period, especially at Tell Basta (Zagazig), and identifies the statue wood as sycamore.",
+      "location": "Mummification Museum, Luxor",
+      "museum": "Mummification Museum",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/en/collections/statue-and-mummy-of-a-cat-7/",
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/1526/4.jpg?center=0.17582417582417584%2C0.44525547445255476&height=423&mode=crop&rnd=134236653180000000&width=645"
+      ]
+    },
+    {
+      "id": "mota-narmer-palette",
+      "title": "Narmer Palette",
+      "mode": "objects",
+      "keywords": [
+        "Narmer Palette",
+        "Narmer",
+        "Palette of Narmer",
+        "صلاية نعرمر",
+        "نعرمر",
+        "palette",
+        "green schist",
+        "Hierakonpolis",
+        "unification of Egypt",
+        "Red Crown",
+        "White Crown",
+        "serpopards",
+        "Early Dynastic Period",
+        "hieroglyphic inscription"
+      ],
+      "description": "The Narmer Palette contains some of the earliest hieroglyphic inscriptions. It is thought to depict the unification of Upper and Lower Egypt under King Narmer. It shows the king wearing the Red Crown and the White Crown, and includes intertwined serpopards. The Ministry catalogue dates it to the Early Dynastic Period, 1st Dynasty, around 3100 BC; its medium is green schist and its provenance is Hierakonpolis.",
+      "period": "Early Dynastic Period, 1st Dynasty, reign of Narmer, c. 3100 BC",
+      "location": "The Egyptian Museum, Cairo",
+      "museum": "The Egyptian Museum",
+      "sourceTitle": "Ministry of Tourism and Antiquities, Egypt",
+      "sourceUrl": "https://egymonuments.gov.eg/en/collections/narmer-palette-1",
+      "imageUrls": [
+        "https://egymonuments.gov.eg/media/2744/palettee.jpg?crop=0.088753275152030964%2C0.098456128338768184%2C0.11470751500736706%2C0.060102966772102334&cropmode=percentage&height=423&rnd=132581519660000000&width=645"
+      ]
+    }
+  ]
+}

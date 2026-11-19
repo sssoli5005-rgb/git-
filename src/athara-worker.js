@@ -27,12 +27,18 @@ const SCANNER_IMAGE_HOSTS = new Set([
   "www.egymonuments.gov.eg",
   "ids.si.edu",
   "media.britishmuseum.org",
+  "penn.museum",
+  "www.penn.museum",
+  "brooklynmuseum.org",
+  "www.brooklynmuseum.org",
+  "collections.mfa.org",
+  "media.mfa.org",
 ]);
 const SCANNER_ALLOWED_SOURCE_DOMAINS = [
   "wikipedia.org", "wikidata.org", "commons.wikimedia.org", "metmuseum.org",
   "clevelandart.org", "britishmuseum.org", "louvre.fr", "egymonuments.gov.eg",
   "thebanmappingproject.com", "giza.fas.harvard.edu", "whc.unesco.org",
-  "si.edu", "europeana.eu", "artic.edu",
+  "si.edu", "europeana.eu", "artic.edu", "penn.museum", "brooklynmuseum.org", "mfa.org",
 ];
 const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
@@ -1075,69 +1081,100 @@ function scannerSourceBackedArtifact(source, observation, candidates, officialTe
   };
 }
 
-async function findCachedOfficialImage(record) {
-  const officialImageUrls = (record.imageUrls || []).filter((imageUrl) => {
+async function findCachedOfficialImages(record, maxImages = 3) {
+  const imageUrls = Array.isArray(record.imageUrls) ? record.imageUrls : [];
+  const officialImageUrls = imageUrls.filter((imageUrl) => {
     const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
     return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
   });
   const localImageUrls = Array.isArray(record.localImageUrls) ? record.localImageUrls : [];
+  const references = [];
   for (const imageUrl of officialImageUrls) {
-    const imageIndex = record.imageUrls.indexOf(imageUrl);
-    if (record.imageUrls.length === localImageUrls.length && localImageUrls[imageIndex]) {
-      return { imageUrl, localUrl: localImageUrls[imageIndex] };
+    const imageIndex = imageUrls.indexOf(imageUrl);
+    let localUrl = "";
+    if (imageUrls.length === localImageUrls.length && localImageUrls[imageIndex]) {
+      localUrl = localImageUrls[imageIndex];
+    } else if (globalThis.crypto?.subtle) {
+      const digest = await globalThis.crypto.subtle.digest(
+        "SHA-1",
+        new TextEncoder().encode(imageUrl),
+      );
+      const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const candidateLocalUrl = `/egypt-monuments-images/${hash}.jpg`;
+      if (localImageUrls.includes(candidateLocalUrl)) localUrl = candidateLocalUrl;
     }
-    if (!globalThis.crypto?.subtle) continue;
-    const digest = await globalThis.crypto.subtle.digest(
-      "SHA-1",
-      new TextEncoder().encode(imageUrl),
-    );
-    const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    const localUrl = `/egypt-monuments-images/${hash}.jpg`;
-    if (localImageUrls.includes(localUrl)) return { imageUrl, localUrl };
+    // Use the official original when no cached derivative exists.
+    references.push({ imageUrl, localUrl });
+    if (references.length >= maxImages) break;
   }
-  return null;
+  return references;
 }
 
 async function loadOfficialCandidateImages(candidates, assets) {
-  // Fetch the best three catalog reference images concurrently instead of
-  // spending up to eight seconds on each one in sequence.
-  const loaded = await Promise.all(candidates.slice(0, 3).map(async (candidate) => {
-    const reference = await findCachedOfficialImage(candidate.record);
-    if (!reference) return null;
-    let response;
-    if (typeof assets?.fetch === "function") {
-      try {
-        response = await assets.fetch(new URL(reference.localUrl, "https://athara.local").toString());
-      } catch {
-        response = null;
-      }
+  const tasks = [];
+  for (const candidate of candidates.slice(0, 3)) {
+    const references = await findCachedOfficialImages(candidate.record, 3);
+    for (const reference of references) {
+      tasks.push((async () => {
+        let response = null;
+        if (reference.localUrl && typeof assets?.fetch === "function") {
+          try {
+            response = await assets.fetch(new URL(reference.localUrl, "https://athara.local").toString());
+          } catch {
+            response = null;
+          }
+        }
+        if (!response?.ok) {
+          try {
+            response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
+          } catch {
+            response = null;
+          }
+        }
+        if (!response?.ok) return null;
+        const buffer = await response.arrayBuffer();
+        if (!buffer.byteLength || buffer.byteLength > 1_500_000) return null;
+        return {
+          item: candidate.record,
+          imageUrl: reference.imageUrl,
+          imageBytes: Array.from(new Uint8Array(buffer)),
+        };
+      })());
     }
-    if (!response?.ok) {
-      try {
-        response = await fetch(reference.imageUrl, { signal: AbortSignal.timeout(8000) });
-      } catch {
-        response = null;
-      }
+  }
+  const loaded = (await Promise.all(tasks)).filter(Boolean);
+  return loaded.map((candidate, index) => ({ label: `R${index + 1}`, ...candidate }));
+}
+
+async function findExactOfficialImageMatch(imageBytes, candidates) {
+  if (!globalThis.crypto?.subtle || !Array.isArray(candidates) || !candidates.length) return null;
+  const digest = async (bytes) => new Uint8Array(await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new Uint8Array(bytes),
+  ));
+  const sourceHash = await digest(imageBytes);
+  for (const candidate of candidates) {
+    const referenceHash = await digest(candidate.imageBytes);
+    if (sourceHash.length !== referenceHash.length) continue;
+    let equal = true;
+    for (let index = 0; index < sourceHash.length; index += 1) {
+      if (sourceHash[index] !== referenceHash[index]) { equal = false; break; }
     }
-    if (!response?.ok) return null;
-    const buffer = await response.arrayBuffer();
-    if (!buffer.byteLength || buffer.byteLength > 1_500_000) return null;
-    return {
-      item: candidate.record,
-      imageBytes: Array.from(new Uint8Array(buffer)),
+    if (equal) return {
+      item: candidate.item,
+      url: candidate.item.sourceUrl,
+      engine: "Exact official Ministry image fingerprint",
+      similarity: 1,
     };
-  }));
-  return loaded.filter(Boolean).map((candidate, index) => ({
-    label: `R${index + 1}`,
-    ...candidate,
-  }));
+  }
+  return null;
 }
 
 async function compareWithOfficialCatalogPhotos(imageBytes, candidates, apiKey, model, threshold) {
   if (!apiKey || !candidates.length || imageBytes.length > 2_000_000) return null;
   const parts = [
     {
-      text: `الصورة الأولى هي صورة الزائر. الصور التالية صور مرجعية من كتالوج وزارة السياحة والآثار، ولكل صورة رمز قصير قبلها. قارن الصور بصريًا فقط. لا تعتبر التشابه العام أو كونها آثارًا مصرية تطابقًا، ولا تستخدم معرفتك السابقة بالأسماء أو العصور. أعد JSON فقط بالشكل {"matchId":"R1 أو R2 أو R3 أو none","similarity":0.0,"visualEvidence":["علامة مرئية مميزة أولى","علامة مرئية مميزة ثانية"]}. similarity تقدير بصري من 0 إلى 1 وليس CLIP أو قياسًا رياضيًا؛ امنح ${threshold} أو أعلى فقط عند تطابق واضح لعلامتين بصريتين مميزتين على الأقل.`,
+      text: `الصورة الأولى هي صورة الزائر. الصور التالية صور مرجعية من كتالوج وزارة السياحة والآثار، ولكل صورة رمز قصير قبلها. قارن الصور بصريًا فقط. لا تعتبر التشابه العام أو كونها آثارًا مصرية تطابقًا، ولا تستخدم معرفتك السابقة بالأسماء أو العصور. أعد JSON فقط بالشكل {"matchId":"R1 إلى R9 أو none","similarity":0.0,"visualEvidence":["علامة مرئية مميزة أولى","علامة مرئية مميزة ثانية"]}. similarity تقدير بصري من 0 إلى 1 وليس CLIP أو قياسًا رياضيًا؛ امنح ${threshold} أو أعلى فقط عند تطابق واضح لعلامتين بصريتين مميزتين على الأقل.`,
     },
     { inlineData: { mimeType: detectImageMimeType(imageBytes), data: bytesToBase64(imageBytes) } },
   ];
@@ -1998,6 +2035,7 @@ function scannerSpecificCataloguePage(url) {
     (host.endsWith("si.edu") && /\/object\//.test(path)) ||
     (host.endsWith("penn.museum") && /\/collections\/object\//.test(path)) ||
     (host.endsWith("brooklynmuseum.org") && /\/opencollection\/objects\//.test(path)) ||
+    (host.endsWith("mfa.org") && /\/objects\/\d+/.test(path)) ||
     (host.endsWith("louvre.fr") && /\/oeuvres\//.test(path)) ||
     (host.endsWith("europeana.eu") && /\/item\//.test(path))
   );
@@ -2405,7 +2443,7 @@ async function searchMuseumImagesWithoutVision(env, imageBytes, language, vision
 }
 
 async function compareImageCandidatesWithGroq(imageBytes, candidates, apiKey, model, threshold) {
-  const selected = candidates.slice(0, 2);
+  const selected = candidates.slice(0, 6);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
 
   const content = [
@@ -2492,8 +2530,8 @@ async function compareOfficialCatalogPhotosWithGroq(imageBytes, candidates, apiK
     : null;
 }
 
-async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
-  const selected = candidates.slice(0, 3);
+async function compareImageCandidatesWithOpenRouterOnce(imageBytes, candidates, apiKey, model, threshold) {
+  const selected = candidates.slice(0, 6);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
   const content = [
     {
@@ -2570,6 +2608,36 @@ async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiK
       ? { candidate: best.candidate, similarity: best.similarity }
       : null,
   };
+}
+
+async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
+  const models = [...new Set([
+    model,
+    ...OPENROUTER_VISION_MODELS.filter((candidate) => candidate !== model).slice(0, 2),
+  ].filter(Boolean))];
+  const ranked = [];
+  let lastError = null;
+  for (const candidateModel of models) {
+    try {
+      const result = await compareImageCandidatesWithOpenRouterOnce(
+        imageBytes, candidates, apiKey, candidateModel, threshold,
+      );
+      if (result?.match) return result;
+      if (Array.isArray(result?.ranked)) ranked.push(...result.ranked);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (ranked.length) {
+    return {
+      ranked: [...new Map(ranked.map((candidate) => [candidate.url + "|" + candidate.name, candidate])).values()]
+        .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
+        .slice(0, 6),
+      match: null,
+    };
+  }
+  if (lastError) throw lastError;
+  return { ranked: [], match: null };
 }
 
 async function compareOfficialCatalogPhotosWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
@@ -3175,6 +3243,9 @@ async function searchOfficialMonumentsArchive(query) {
   // The Ministry serves current catalogue pages at the language-neutral root
   // (e.g. /collections/statue-of-nephthys-6/) as well as older /ar and /en paths.
   const pageUrls = [
+    `https://egymonuments.gov.eg/en/mpSearchResult?q=${encodeURIComponent(query)}`,
+    `https://egymonuments.gov.eg/ar/mpSearchResult?q=${encodeURIComponent(query)}`,
+    `https://egymonuments.gov.eg/mpSearchResult?q=${encodeURIComponent(query)}`,
     "https://egymonuments.gov.eg/monuments",
     "https://egymonuments.gov.eg/archaeological-sites",
     "https://egymonuments.gov.eg/museums",
@@ -3223,6 +3294,9 @@ async function searchOfficialMonumentsArchive(query) {
       try {
         const nextUrl = new URL(resolvedUrl);
         if (!/egymonuments\.gov\.eg$/i.test(nextUrl.hostname) && !nextUrl.hostname.endsWith(".egymonuments.gov.eg")) continue;
+        // Only individual object/place records are candidates; period, event,
+        // news and general landing pages must never become an artifact identity.
+        if (!scannerSpecificCataloguePage(nextUrl)) continue;
         const normalizedLabel = normalizeSearchTerms(label).join(" ");
         const labelMatches = terms.filter((term) => normalizedLabel.includes(term));
         if (!labelMatches.length && !terms.some((term) => nextUrl.pathname.toLowerCase().includes(term))) continue;
@@ -3596,6 +3670,23 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         }
       } catch {
         // Keep the official built-in catalog if the optional environment catalog is invalid.
+      }
+      if (assetsFetch) {
+        try {
+          const curatedUrl = new URL("/egypt-monuments-curated.json", "https://athara.local").toString();
+          const curatedResponse = await assetsFetch(curatedUrl);
+          if (curatedResponse.ok) {
+            const curatedData = await curatedResponse.json();
+            const curatedRecords = Array.isArray(curatedData?.records) ? curatedData.records : [];
+            catalog.push(...curatedRecords.filter((record) =>
+              record && typeof record.id === "string" && typeof record.title === "string" &&
+              Array.isArray(record.keywords) && typeof record.sourceTitle === "string" &&
+              typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
+            ));
+          }
+        } catch (error) {
+          console.warn(`[Image scanner] Curated catalogue unavailable: ${String(error?.message || error).slice(0, 160)}`);
+        }
       }
 
       const visionPrompt =
@@ -3975,7 +4066,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
             const referenceImage = comparisonImageBytes || imageBytes;
-            if (geminiConfigured) {
+            officialVisualMatch = await findExactOfficialImageMatch(referenceImage, candidateImages);
+            if (!officialVisualMatch && geminiConfigured) {
               try {
                 officialVisualMatch = await compareWithOfficialCatalogPhotos(
                   referenceImage,

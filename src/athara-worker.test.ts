@@ -252,7 +252,10 @@ describe("ATHARA Cloudflare Worker", () => {
       }
       if (url === "https://openrouter.ai/api/v1/chat/completions") {
         const body = JSON.parse(String(init?.body));
-        expect(body.model).toBe("inclusionai/ling-3.2-flash:free");
+        if (body.model === "inclusionai/ling-3.2-flash:free") {
+          return Response.json({ error: { message: "temporary free-model provider failure" } }, { status: 503 });
+        }
+        expect(body.model).toBe("nvidia/nemotron-3.5-super-vl:free");
         return Response.json({
           choices: [{ message: { content: JSON.stringify({
             rankedMatches: [{
@@ -323,6 +326,276 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com/v1beta/interactions"),
       )).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("recognizes an exact official Ministry catalogue image even when AI provider quotas are exhausted", async () => {
+    const referenceUrl = "https://egymonuments.gov.eg/media/4666/dsc_0802.jpg";
+    const catalogueUrl = "https://egymonuments.gov.eg/en/collections/statue-of-nephthys-6/";
+    const imageBytes = Buffer.from(png.split(",")[1], "base64");
+    const curated = {
+      records: [{
+        id: "mota-nephthys-statue",
+        title: "Statue of Nephthys",
+        mode: "objects",
+        keywords: ["Nephthys", "نفتيس", "wooden", "profile", "head", "green headdress", "mourning", "goddess"],
+        description: "Nephthys is shown kneeling in the standard mourning position and is associated with Isis and Osiris in funerary beliefs.",
+        location: "Mummification Museum, Luxor",
+        museum: "Mummification Museum",
+        sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
+        sourceUrl: catalogueUrl,
+        imageUrls: [referenceUrl],
+      }],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === referenceUrl) {
+        return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/egypt-monuments-curated.json")) return Response.json(curated);
+      return new Response("", { status: 404 });
+    });
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "تمثال خشبي لامرأة بغطاء رأس أخضر ووجه جانبي",
+          identity: "تمثال للمعبودة نفتيس",
+          objectType: "wooden statue",
+          material: "wood",
+          searchTerms: ["Nephthys", "wooden statue", "green headdress"],
+          keywords: ["profile", "female deity"],
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          OPENROUTER_API_KEY: "test-openrouter-key",
+          ASSETS: { fetch: assetsFetch },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        ok: true,
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        reverseImageSearchStatus: "match",
+        matchedArtifact: {
+          name: "Statue of Nephthys",
+          museum: "Mummification Museum",
+          location: "Mummification Museum, Luxor",
+          similarity: 1,
+        },
+      });
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        url: catalogueUrl,
+        trusted: true,
+      }));
+      expect(fetchMock).toHaveBeenCalledWith(referenceUrl, expect.anything());
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).startsWith("https://openrouter.ai/"),
+      )).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
+    {
+      title: "Osiris Statuette",
+      identity: "Osiris statuette",
+      terms: ["Osiris", "statuette", "underworld"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/statue-of-osiris-6/",
+      imageUrl: "https://egymonuments.gov.eg/media/4636/59.jpg",
+      description: "Osiris was the god of vegetation and the underworld. Statuettes such as this one were placed in tombs.",
+      keywords: ["Osiris", "أوزير", "statuette", "underworld", "tomb", "funerary"],
+    },
+    {
+      title: "A wooden model of a Funerary boat",
+      identity: "funerary boat model",
+      terms: ["funerary boat", "wooden boat", "mummy transport"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/a-wooden-model-of-a-funerary-boat-4/",
+      imageUrl: "https://egymonuments.gov.eg/media/1511/80.jpg",
+      description: "Boats were used to transport the mummy to the cemetery on the western bank of the Nile.",
+      keywords: ["funerary boat", "wooden boat", "boat model", "mummy transport", "Isis", "Nephthys"],
+    },
+    {
+      title: "The Mummy of Masaharti",
+      identity: "Masaharti mummy",
+      terms: ["Masaharti", "mummy", "Deir el-Bahri"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/collections/the-mummy-of-masaharti-7/",
+      imageUrl: "https://egymonuments.gov.eg/media/1480/1.jpg",
+      description: "Masaharti was a general and high priest of Amun. His mummy was found in the royal cache at Deir el-Bahri in 1881.",
+      keywords: ["Masaharti", "mummy", "high priest of Amun", "Deir el-Bahri", "royal cache"],
+    },
+    {
+      title: "Statue and mummy of a cat",
+      identity: "cat mummy statue of Bastet",
+      terms: ["cat mummy", "Bastet", "animal mummy"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/statue-and-mummy-of-a-cat-7/",
+      imageUrl: "https://egymonuments.gov.eg/media/1526/4.jpg",
+      description: "The object combines a statue and mummy of a cat, a sacred animal of the goddess Bastet.",
+      keywords: ["cat mummy", "cat statue", "Bastet", "animal mummy", "sycamore wood"],
+    },
+    {
+      title: "Narmer Palette",
+      identity: "Narmer Palette",
+      terms: ["Narmer Palette", "hieroglyphic inscription", "green schist"],
+      location: "The Egyptian Museum, Cairo",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/narmer-palette-1",
+      imageUrl: "https://egymonuments.gov.eg/media/2744/palettee.jpg",
+      description: "The Narmer Palette depicts the unification of Upper and Lower Egypt and contains early hieroglyphic inscriptions.",
+      keywords: ["Narmer", "Narmer Palette", "صلاية نعرمر", "hieroglyphic inscription", "green schist"],
+    },
+  ])("recognizes official catalogue reference for $title without external AI quotas", async (testCase) => {
+    const imageBytes = Buffer.from(png.split(",")[1], "base64");
+    const catalogueUrl = testCase.sourceUrl;
+    const record = {
+      id: "curated-" + testCase.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      title: testCase.title,
+      mode: "objects",
+      keywords: testCase.keywords,
+      description: testCase.description,
+      location: testCase.location,
+      museum: testCase.location.split(",")[0],
+      sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
+      sourceUrl: catalogueUrl,
+      imageUrls: [testCase.imageUrl],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === testCase.imageUrl) {
+        return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/egypt-monuments-curated.json")) {
+        return Response.json({ records: [record] });
+      }
+      return new Response("", { status: 404 });
+    });
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: testCase.identity,
+          identity: testCase.identity,
+          objectType: "Egyptian antiquity",
+          searchTerms: testCase.terms,
+          keywords: testCase.terms,
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { AI: { run: aiRun }, OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        reverseImageSearchStatus: "match",
+        matchedArtifact: {
+          name: testCase.title,
+          location: testCase.location,
+          similarity: 1,
+        },
+      });
+      expect(body.sources).toContainEqual(expect.objectContaining({ url: catalogueUrl, trusted: true }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("checks multiple official catalogue angles and can match the third reference view", async () => {
+    const imageBytes = Buffer.from(png.split(",")[1], "base64");
+    const imageUrls = [
+      "https://egymonuments.gov.eg/media/test/front.jpg",
+      "https://egymonuments.gov.eg/media/test/side.jpg",
+      "https://egymonuments.gov.eg/media/test/rear.jpg",
+    ];
+    const sourceUrl = "https://egymonuments.gov.eg/en/collections/multi-view-test-object/";
+    const otherBytes = new Uint8Array([0xff, 0xd8, 0x00, 0x01]);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const index = imageUrls.indexOf(url);
+      if (index >= 0) {
+        return new Response(index === 2 ? imageBytes : otherBytes, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const record = {
+      id: "multi-view-test-object",
+      title: "Multi-view Test Object",
+      mode: "objects",
+      keywords: ["multi-view", "test object", "carved figure"],
+      description: "A carved figure shown in several official catalogue views.",
+      location: "Egyptian Museum, Cairo",
+      museum: "Egyptian Museum",
+      sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
+      sourceUrl,
+      imageUrls,
+    };
+    const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/egypt-monuments-curated.json")) {
+        return Response.json({ records: [record] });
+      }
+      return new Response("", { status: 404 });
+    });
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "carved figure in side view",
+          identity: "Multi-view Test Object",
+          objectType: "carved figure",
+          searchTerms: ["multi-view", "carved figure"],
+          keywords: ["carved figure"],
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { AI: { run: aiRun }, OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        matchedArtifact: {
+          name: "Multi-view Test Object",
+          location: "Egyptian Museum, Cairo",
+          similarity: 1,
+        },
+      });
+      for (const url of imageUrls) {
+        expect(fetchMock).toHaveBeenCalledWith(url, expect.anything());
+      }
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1669,7 +1942,7 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(assetFetch).toHaveBeenCalledTimes(2);
+      expect(assetFetch).toHaveBeenCalledTimes(3);
       expect(fetchMock.mock.calls.filter(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
       )).toHaveLength(2);
