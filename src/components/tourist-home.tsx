@@ -402,7 +402,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             if (isIdentified && artifact?.name) {
               // A museum or publisher is not automatically the archaeological site's location.
               const displayLocation =
-                artifact.currentLocation || artifact.location || artifact.museum || "";
+                artifact.currentLocation || artifact.location || "";
               const story = (data.sourceStory || artifact.description ||
                 data.sources?.find((source) => source.trusted)?.snippet || "")
                 .replace(/https?:\/\/\S+/g, "")
