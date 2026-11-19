@@ -247,9 +247,16 @@ describe("ATHARA Cloudflare Worker", () => {
           });
         }
         return Response.json({
+          choices: [{ message: { content: JSON.stringify({ rankedMatches: [] }) } }],
+        });
+      }
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        const body = JSON.parse(String(init?.body));
+        expect(body.model).toBe("inclusionai/ling-3.2-flash:free");
+        return Response.json({
           choices: [{ message: { content: JSON.stringify({
             rankedMatches: [{
-              candidateId: "C1",
+              candidateId: "R1",
               similarity: 0.94,
               visualEvidence: ["same distinctive crown silhouette", "same profile and shoulder shape"],
             }],
@@ -291,6 +298,7 @@ describe("ATHARA Cloudflare Worker", () => {
         {
           AI: { run: aiRun },
           GROQ_API_KEY: "groq-test-key",
+          OPENROUTER_API_KEY: "openrouter-test-key",
           SCANNER_MATCH_THRESHOLD: "0.80",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
