@@ -720,10 +720,10 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{
+            finishReason: "STOP",
             content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] },
             groundingMetadata: {
               groundingChunks: [
@@ -742,11 +742,10 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الملكة نفرتيتي");
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("gemini-3.8-flash");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.8-flash");
   });
 
   it("passes the same trusted research to Gemini when Groq fails", async () => {
