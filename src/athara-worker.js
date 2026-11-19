@@ -3974,7 +3974,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ? env.OPENROUTER_API_KEY.trim()
           : "";
         if (openRouterVisionKey && needsAdditionalArtifactVision(independentObservations, mode)) {
-          for (const openRouterModel of OPENROUTER_VISION_MODELS.slice(0, 2)) {
+          for (const openRouterModel of OPENROUTER_VISION_MODELS) {
             if (!needsAdditionalArtifactVision(independentObservations, mode)) break;
             try {
               const openRouterResponse = await fetchVisionWithRetry(
