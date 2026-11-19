@@ -411,6 +411,121 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
+  it.each([
+    {
+      title: "Osiris Statuette",
+      identity: "Osiris statuette",
+      terms: ["Osiris", "statuette", "underworld"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/statue-of-osiris-6/",
+      imageUrl: "https://egymonuments.gov.eg/media/4636/59.jpg",
+      description: "Osiris was the god of vegetation and the underworld. Statuettes such as this one were placed in tombs.",
+      keywords: ["Osiris", "أوزير", "statuette", "underworld", "tomb", "funerary"],
+    },
+    {
+      title: "A wooden model of a Funerary boat",
+      identity: "funerary boat model",
+      terms: ["funerary boat", "wooden boat", "mummy transport"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/a-wooden-model-of-a-funerary-boat-4/",
+      imageUrl: "https://egymonuments.gov.eg/media/1511/80.jpg",
+      description: "Boats were used to transport the mummy to the cemetery on the western bank of the Nile.",
+      keywords: ["funerary boat", "wooden boat", "boat model", "mummy transport", "Isis", "Nephthys"],
+    },
+    {
+      title: "The Mummy of Masaharti",
+      identity: "Masaharti mummy",
+      terms: ["Masaharti", "mummy", "Deir el-Bahri"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/collections/the-mummy-of-masaharti-7/",
+      imageUrl: "https://egymonuments.gov.eg/media/1480/1.jpg",
+      description: "Masaharti was a general and high priest of Amun. His mummy was found in the royal cache at Deir el-Bahri in 1881.",
+      keywords: ["Masaharti", "mummy", "high priest of Amun", "Deir el-Bahri", "royal cache"],
+    },
+    {
+      title: "Statue and mummy of a cat",
+      identity: "cat mummy statue of Bastet",
+      terms: ["cat mummy", "Bastet", "animal mummy"],
+      location: "Mummification Museum, Luxor",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/statue-and-mummy-of-a-cat-7/",
+      imageUrl: "https://egymonuments.gov.eg/media/1526/4.jpg",
+      description: "The object combines a statue and mummy of a cat, a sacred animal of the goddess Bastet.",
+      keywords: ["cat mummy", "cat statue", "Bastet", "animal mummy", "sycamore wood"],
+    },
+    {
+      title: "Narmer Palette",
+      identity: "Narmer Palette",
+      terms: ["Narmer Palette", "hieroglyphic inscription", "green schist"],
+      location: "The Egyptian Museum, Cairo",
+      sourceUrl: "https://egymonuments.gov.eg/en/collections/narmer-palette-1",
+      imageUrl: "https://egymonuments.gov.eg/media/2744/palettee.jpg",
+      description: "The Narmer Palette depicts the unification of Upper and Lower Egypt and contains early hieroglyphic inscriptions.",
+      keywords: ["Narmer", "Narmer Palette", "صلاية نعرمر", "hieroglyphic inscription", "green schist"],
+    },
+  ])("recognizes official catalogue reference for $title without external AI quotas", async (testCase) => {
+    const imageBytes = Buffer.from(png.split(",")[1], "base64");
+    const catalogueUrl = testCase.sourceUrl;
+    const record = {
+      id: "curated-" + testCase.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      title: testCase.title,
+      mode: "objects",
+      keywords: testCase.keywords,
+      description: testCase.description,
+      location: testCase.location,
+      museum: testCase.location.split(",")[0],
+      sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
+      sourceUrl: catalogueUrl,
+      imageUrls: [testCase.imageUrl],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === testCase.imageUrl) {
+        return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/egypt-monuments-curated.json")) {
+        return Response.json({ records: [record] });
+      }
+      return new Response("", { status: 404 });
+    });
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: testCase.identity,
+          identity: testCase.identity,
+          objectType: "Egyptian antiquity",
+          searchTerms: testCase.terms,
+          keywords: testCase.terms,
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        { AI: { run: aiRun }, OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        reverseImageSearchStatus: "match",
+        matchedArtifact: {
+          name: testCase.title,
+          location: testCase.location,
+          similarity: 1,
+        },
+      });
+      expect(body.sources).toContainEqual(expect.objectContaining({ url: catalogueUrl, trusted: true }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // Keep the regression suite aligned with trusted visual evidence and isolated free-fallback behavior.
   it("reports the two Cloudflare vision models", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
