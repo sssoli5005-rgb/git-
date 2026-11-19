@@ -427,9 +427,20 @@ describe("ChatWorkspace response completion", () => {
         await Promise.resolve();
       });
 
+      expect(screen.getByRole("log")).toHaveTextContent("رد سابق محفوظ.");
+      if (_caseName === "connection failure") {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        });
+        expect(screen.getByRole("log")).toHaveTextContent("رد ناجح بعد التعافي.");
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        expect(onMessagesChange).toHaveBeenCalledOnce();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        return;
+      }
+
       expect(screen.getByRole("status")).toHaveTextContent(error);
       expect(screen.getByRole("status")).not.toHaveClass("text-destructive");
-      expect(screen.getByRole("log")).toHaveTextContent("رد سابق محفوظ.");
       if (error.includes("مربع الرسالة")) {
         expect(screen.getByText("جزء ناقص")).toBeInTheDocument();
       } else {
