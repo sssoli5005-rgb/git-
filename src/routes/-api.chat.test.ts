@@ -454,46 +454,27 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
   });
 
-  it("continues the conversation cautiously when no trusted source is retrieved", async () => {
+  it("withholds a heritage answer when neither trusted sources nor curated references are available", async () => {
     vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    const searchFetcher = createHeritageSearchFetcher("This answer must not be generated.", [
-      "https://example.com/sphinx",
-    ]);
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname.endsWith("wikipedia.org")) {
-        return searchFetcher(input, init);
+        return Response.json({ query: { search: [] } });
       }
-      if (url.hostname === "localhost" && url.pathname === "/api/chat") {
-        throw new Error("Untrusted fallback model should not be called.");
-      }
-      if (url.hostname === "api.groq.com") {
-        const payload = JSON.parse(String(init?.body)) as {
-          messages: { role: string; content: string }[];
-        };
-        expect(payload.messages[0]?.content).toContain("LIVE SEARCH LIMITATION");
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content:
-                  "مش هقدر أحدد سعر محل غير مذكور، لأن الأسعار بتختلف حسب المكان والوقت. لو تقصدي قطعة أو متجر معين ابعتي اسمه.",
-              },
-            },
-          ],
-        });
-      }
-      throw new Error(`Unexpected request to ${url.hostname}.`);
+      throw new Error(`An AI provider must not be called without evidence: ${url.hostname}.`);
     });
+
     const response = await handleChatPost(
       createChatRequest("What is the exact price of a pharaoh souvenir at an unnamed shop?", "en"),
       fetcher,
     );
+
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("مش هقدر أحدد سعر محل غير مذكور");
+    expect(await response.text()).toContain("I couldn't verify this answer");
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(false);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
   });
 
   it("shows relevant references when the visitor asks where the information came from", async () => {

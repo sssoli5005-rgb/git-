@@ -35,6 +35,23 @@ describe("trusted Egyptian heritage search", () => {
     expect(isEgyptianHeritageQuery([{ role: "user", content: "How do I make tea?" }])).toBe(false);
   });
 
+  it("recognizes Egyptian dynastic phrasing and carries context through longer follow-ups", () => {
+    expect(
+      isEgyptianHeritageQuery([{ role: "user", content: "احكيلي عن ملوك الأسرة الرابعة" }]),
+    ).toBe(true);
+    const conversation = [
+      { role: "user" as const, content: "من هو رمسيس الثاني؟" },
+      { role: "assistant" as const, content: "كان ملكًا من ملوك مصر القديمة." },
+      { role: "user" as const, content: "شكرًا" },
+      { role: "assistant" as const, content: "العفو." },
+      { role: "user" as const, content: "عندي سؤال تاني" },
+      { role: "assistant" as const, content: "اتفضلي." },
+      { role: "user" as const, content: "طب كان حكمه امتى؟" },
+    ];
+    expect(isEgyptianHeritageQuery(conversation)).toBe(true);
+    expect(buildHeritageSearchQuery(conversation)).toContain("من هو رمسيس الثاني؟");
+  });
+
   it("includes a prior heritage question when searching a short follow-up", () => {
     expect(
       buildHeritageSearchQuery([
