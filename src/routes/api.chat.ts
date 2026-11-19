@@ -375,7 +375,7 @@ export async function handleChatPost(
         sources.findIndex((candidate) => candidate.url === source.url) === index,
     )
     .slice(0, 8);
-  const responseSources = heritageQuestion && wantsSources ? knowledgeSources : [];
+  let responseSources = heritageQuestion && wantsSources ? knowledgeSources : [];
   if (parsed.data.language === "ar" && localKnowledgeAnswer.directAnswer) {
     console.info("[Chat] Answering with a curated, source-backed heritage response");
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
@@ -401,14 +401,14 @@ export async function handleChatPost(
     const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
     const requestsLiveResearch =
       !heritageQuestion &&
-      /(?:\\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestion);
+      /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestion);
     // GPT-OSS 20B has Groq's built-in browser_search tool. Use it for
     // explicit web research; keep the configured Qwen model as the normal fast path.
     const groqModels = requestsLiveResearch
       ? ["openai/gpt-oss-20b", primaryModel].filter((model, index, all) => all.indexOf(model) === index)
       : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(8_000);
+      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 20_000 : 8_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -545,7 +545,7 @@ export async function handleChatPost(
   const latestQuestionForSearch = parsed.data.messages.at(-1)?.content ?? "";
   const geminiLiveSearch =
     !heritageQuestion &&
-    /(?:\\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestionForSearch);
+    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestionForSearch);
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
@@ -563,7 +563,7 @@ export async function handleChatPost(
     const primaryModel = readProviderEnv(suppliedEnv, "GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
     const geminiModels = [...new Set([primaryModel, "gemini-3.6-flash"])];
     for (const [index, model] of geminiModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(12_000);
+      const providerTimeout = AbortSignal.timeout(geminiLiveSearch ? 25_000 : 12_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const geminiResponse = await fetcher(
@@ -592,9 +592,34 @@ export async function handleChatPost(
             candidates?: Array<{
               finishReason?: string;
               content?: { parts?: Array<{ text?: string }> };
+              groundingMetadata?: {
+                groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+              };
             }>;
           } | null;
           const candidate = geminiPayload?.candidates?.[0];
+          if (geminiLiveSearch) {
+            const groundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
+              .flatMap((chunk) => {
+                const uri = chunk.web?.uri;
+                if (typeof uri !== "string") return [];
+                try {
+                  const parsedUrl = new URL(uri);
+                  if (parsedUrl.protocol !== "https:") return [];
+                  return [{
+                    title: (chunk.web?.title || parsedUrl.hostname).slice(0, 180),
+                    organization: parsedUrl.hostname.replace(/^www\\./u, ""),
+                    url: parsedUrl.href,
+                  }];
+                } catch {
+                  return [];
+                }
+              });
+            responseSources = [
+              ...responseSources,
+              ...groundedSources.filter((source) => !responseSources.some((existing) => existing.url === source.url)),
+            ].slice(0, 8);
+          }
           const answer = candidate?.content?.parts
             ?.map((part) => part.text ?? "")
             .join("")
