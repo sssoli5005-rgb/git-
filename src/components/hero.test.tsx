@@ -430,11 +430,13 @@ describe("ChatWorkspace response completion", () => {
       expect(screen.getByRole("log")).toHaveTextContent("رد سابق محفوظ.");
       if (_caseName === "connection failure") {
         await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 2_000 });
-        await waitFor(() =>
-          expect(screen.getByRole("log")).toHaveTextContent("رد ناجح بعد التعافي."),
-        );
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
         expect(onMessagesChange).toHaveBeenCalledOnce();
+        expect(onMessagesChange.mock.calls[0]?.[1]).toEqual([
+          ...priorMessages,
+          { role: "user", content: "رسالة فشلت" },
+          { role: "assistant", content: "رد ناجح بعد التعافي." },
+        ]);
         expect(fetchMock).toHaveBeenCalledTimes(2);
         return;
       }
