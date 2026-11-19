@@ -252,7 +252,10 @@ describe("ATHARA Cloudflare Worker", () => {
       }
       if (url === "https://openrouter.ai/api/v1/chat/completions") {
         const body = JSON.parse(String(init?.body));
-        expect(body.model).toBe("inclusionai/ling-3.2-flash:free");
+        if (body.model === "inclusionai/ling-3.2-flash:free") {
+          return Response.json({ error: { message: "temporary free-model provider failure" } }, { status: 503 });
+        }
+        expect(body.model).toBe("nvidia/nemotron-3.5-super-vl:free");
         return Response.json({
           choices: [{ message: { content: JSON.stringify({
             rankedMatches: [{
