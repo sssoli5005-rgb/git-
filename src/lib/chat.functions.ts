@@ -1050,8 +1050,8 @@ export function createArabicQuickReply(data: ChatRequest): string | undefined {
 }
 
 export function createOllamaChatRequest(data: ChatRequest, additionalKnowledge = "") {
-  const model = process.env["OLLAMA_MODEL"]?.trim() || "qwen2.5:14b";
-  const baseUrl = (process.env["OLLAMA_BASE_URL"] ?? "http://localhost:11434").replace(/\/$/, "");
+  const model = process.env["CHAT_OLLAMA_MODEL"]?.trim() || "qwen2.5:14b";
+  const baseUrl = (process.env["CHAT_OLLAMA_BASE_URL"] ?? "http://localhost:11434").replace(/\/$/, "");
   const latestUserMessage = data.messages.at(-1)!.content;
   const conversationAct = detectConversationAct(latestUserMessage, data.messages);
   const briefReplyActs: ConversationAct[] = [
