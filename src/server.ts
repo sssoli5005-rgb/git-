@@ -58,12 +58,24 @@ export default {
       if (!isValidSession(request.headers.get("cookie"))) {
         return Response.json({ code: "unauthorized" }, { status: 401 });
       }
-      const cloudflareAI =
-        env && typeof env === "object" && "AI" in env
-          ? (env as { AI?: Parameters<typeof handleChatPost>[2] }).AI
-          : undefined;
+      const runtimeEnv = env && typeof env === "object"
+        ? env as Record<string, unknown>
+        : {};
+      const chatEnv: Record<string, string | undefined> = {};
+      for (const key of [
+        "CHAT_GROQ_API_KEY",
+        "CHAT_GROQ_MODEL",
+        "CHAT_GEMINI_API_KEY",
+        "CHAT_GEMINI_MODEL",
+        "CHAT_OLLAMA_BASE_URL",
+        "CHAT_OLLAMA_MODEL",
+        "NODE_ENV",
+      ]) {
+        if (typeof runtimeEnv[key] === "string") chatEnv[key] = runtimeEnv[key] as string;
+      }
       try {
-        return await handleChatPost(request, fetch, cloudflareAI, env as Record<string, string | undefined>);
+        // Never pass the scanner's Cloudflare AI binding or scanner credentials to chat.
+        return await handleChatPost(request, fetch, chatEnv);
       } catch (error) {
         console.error("[Chat] Unhandled request failure", {
           name: error instanceof Error ? error.name : "unknown",
