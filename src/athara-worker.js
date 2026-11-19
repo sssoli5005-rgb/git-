@@ -4295,7 +4295,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         // Preserve one useful catalogue lead for the visitor when visual matching
         // is inconclusive. It is explicitly returned as research context, never as
         // a confirmed identification.
-        const researchCandidate = freeFallbackCandidate ||
+        const researchCandidate = sourceBackedArtifact ||
+          freeFallbackCandidate ||
           openScannerSourceCandidates.find((candidate) => candidate?.name && candidate?.url) ||
           openScannerDiscoveredCandidates.find((candidate) => candidate?.name && candidate?.url) ||
           (officialTextCandidates[0]?.record
@@ -4389,6 +4390,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   source: researchCandidate.source || researchCandidate.museum || "",
                   url: researchCandidate.url || researchCandidate.sources?.[0]?.url || "",
                   visuallyMatched: false,
+                  sourceBacked: Boolean(sourceBackedCandidate && sourceBackedSource?.url === researchCandidate.url),
                   status: "research_candidate",
                 },
               }
