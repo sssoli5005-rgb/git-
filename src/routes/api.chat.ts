@@ -275,9 +275,9 @@ function isLiveResearchRequest(query: string): boolean {
   const normalized = normalizeResearchQuery(query);
   if (!normalized) return false;
 
-  const personalOrCasual =
-    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك)/u.test(normalized);
-  if (personalOrCasual) return false;
+  const personalOrCreative =
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية)/u.test(normalized);
+  if (personalOrCreative) return false;
 
   const explicitResearch =
     /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مصدر|المراجع|مرجع|موثق|موثوق|دليل|اتأكد|تحقق|دورلي|شوفلي|اخر اخبار|آخر أخبار|حديث|حاليا|النهارده|اليوم|امبارح|الأسبوع)/u.test(normalized);
@@ -285,9 +285,11 @@ function isLiveResearchRequest(query: string): boolean {
   const englishFactualQuestion =
     /^(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe|according to)\b/u.test(normalized);
 
-  const arabicFactualQuestion =
-    /^(?:ايه|ما(?:\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن|معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد)\b/u.test(normalized) ||
+  const arabicQuestionLead =
+    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن|معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|where|who|when|what|why|how)\b/u.test(normalized);
+  const arabicQuestionInside =
     /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس)(?:\s|$)/u.test(normalized);
+  const arabicFactualQuestion = arabicQuestionLead || arabicQuestionInside;
 
   return explicitResearch || englishFactualQuestion || arabicFactualQuestion;
 }
@@ -402,7 +404,7 @@ export async function handleChatPost(
   const generalResearchContext = liveResearchRequested
     ? [
         "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
-        "Use the active browser-search or Google Search grounding tool. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
+        "Use Groq Compound web search or Gemini Google Search grounding for this factual question. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
       ].join("\n")
     : "";
 
@@ -499,10 +501,10 @@ export async function handleChatPost(
     // Factual questions must use the search-capable model; never fall back to
     // an ungrounded fast chat model on the same turn.
     const groqModels = requestsLiveResearch
-      ? ["openai/gpt-oss-20b"]
+      ? ["groq/compound-mini"]
       : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 20_000 : 8_000);
+      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "groq/compound-mini" ? 25_000 : 8_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -516,16 +518,9 @@ export async function handleChatPost(
             messages: localPayload.messages,
             max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
-            reasoning_effort: model === "openai/gpt-oss-20b" && requestsLiveResearch ? "low" : "medium",
-            reasoning_format: "hidden",
-            ...(model === "openai/gpt-oss-20b" && requestsLiveResearch
-              ? {
-                  tools: [{ type: "browser_search" }],
-                  tool_choice: "required",
-                  citation_options: "enabled",
-                  temperature: 1,
-                }
-              : {}),
+            ...(requestsLiveResearch
+              ? { citation_options: "enabled", temperature: 0.2 }
+              : { reasoning_effort: "medium", reasoning_format: "hidden" }),
           }),
         });
         if (groqResponse.ok) {
@@ -535,43 +530,55 @@ export async function handleChatPost(
               message?: {
                 content?: string | null;
                 executed_tools?: Array<{
-                  browser_results?: Array<{ title?: string; url?: string }>;
+                  search_results?: {
+                    results?: Array<{
+                      title?: string;
+                      url?: string;
+                      content?: string;
+                      score?: number;
+                    }>;
+                  };
                 }>;
               };
             }>;
           } | null;
           const choice = groqPayload?.choices?.[0];
           const answer = choice?.message?.content?.trim();
-          const groqBrowserSources = (choice?.message?.executed_tools ?? [])
-            .flatMap((tool) => tool.browser_results ?? [])
-            .flatMap((result) => {
-              if (typeof result.url !== "string") return [];
+          const groqSearchResults = (choice?.message?.executed_tools ?? [])
+            .flatMap((tool) => tool.search_results?.results ?? [])
+            .filter((result) => {
+              if (typeof result.url !== "string" || typeof result.title !== "string") return false;
+              if (typeof result.content !== "string" || result.content.trim().length < 40) return false;
+              if (typeof result.score === "number" && result.score < 0.2) return false;
               try {
-                const url = new URL(result.url);
-                if (url.protocol !== "https:") return [];
-                return [{
-                  title: (result.title || url.hostname).slice(0, 180),
-                  organization: url.hostname.replace(/^www\./u, ""),
-                  url: url.href,
-                }];
+                return new URL(result.url).protocol === "https:";
               } catch {
-                return [];
+                return false;
               }
             });
-          const hasInlineSearchCitations =
-            typeof answer === "string" && /〖\s*\d+†L\d+(?:-L\d+)?\s*〗/u.test(answer);
-          const hasGroqSearchEvidence = groqBrowserSources.length > 0 || hasInlineSearchCitations;
-          const canUseGroqResearchAnswer =
-            !requestsLiveResearch ||
-            (hasGroqSearchEvidence && (!wantsSources || groqBrowserSources.length > 0));
+          const groqSearchSources = groqSearchResults.flatMap((result) => {
+            try {
+              const url = new URL(result.url!);
+              return [{
+                title: result.title!.slice(0, 180),
+                organization: url.hostname.replace(/^www\\./u, ""),
+                url: url.href,
+              }];
+            } catch {
+              return [];
+            }
+          });
+          const hasGroqSearchEvidence = groqSearchResults.length > 0;
+          const canUseGroqResearchAnswer = !requestsLiveResearch || hasGroqSearchEvidence;
           if (requestsLiveResearch && hasGroqSearchEvidence && wantsSources) {
-            responseSources = mergeResearchSources(responseSources, groqBrowserSources);
+            responseSources = mergeResearchSources(responseSources, groqSearchSources);
           }
           if (choice?.finish_reason === "length") {
             providerFailureCode = "incomplete_response";
             console.warn("[Groq] Response reached its generation limit", { model });
             if (
               answer &&
+              !requestsLiveResearch &&
               canUseGroqResearchAnswer &&
               (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
             ) {
