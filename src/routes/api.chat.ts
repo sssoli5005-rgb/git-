@@ -295,7 +295,7 @@ const TRUSTED_RESEARCH_HOSTS = [
   "mfa.org", "brooklynmuseum.org", "louvre.fr", "ees.ac.uk", "pcma.uw.edu.pl",
   "saqqara.uw.edu.pl", "aeraweb.org", "isac.uchicago.edu", "oi.uchicago.edu",
   "thebanmappingproject.com", "artic.edu", "clevelandart.org", "biblegateway.com",
-  "bible.com", "britannica.com", "oxfordreference.com", "who.int", "un.org",
+  "bible.com", "britannica.com", "oxfordreference.com", "webbtelescope.org", "who.int", "un.org",
   "nasa.gov", "noaa.gov", "nps.gov", "loc.gov", "archives.gov", "europa.eu",
   "nature.com", "science.org", "pubmed.ncbi.nlm.nih.gov", "ox.ac.uk", "cam.ac.uk",
   "harvard.edu", "stanford.edu", "mit.edu",
@@ -736,7 +736,9 @@ export async function handleChatPost(
         parts: [{ text: message.content }],
       }));
     const primaryModel = readProviderEnv(suppliedEnv, "CHAT_GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
-    const geminiModels = [...new Set([primaryModel, "gemini-3.6-flash"])];
+    const geminiModels = geminiLiveSearch
+      ? [primaryModel]
+      : [...new Set([primaryModel, "gemini-3.6-flash"])];
     for (const [index, model] of geminiModels.entries()) {
       const providerTimeout = AbortSignal.timeout(geminiLiveSearch ? 25_000 : 12_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
@@ -1011,8 +1013,7 @@ export async function handleChatPost(
   if (
     liveResearchRequested &&
     localKnowledgeAnswer.directAnswer &&
-    localKnowledgeSources.length > 0 &&
-    searchedSources.length > 0
+    localKnowledgeSources.length > 0
   ) {
     console.info("[Chat] Using directly relevant curated knowledge with verified references after live search failed");
     return asChatStream(
