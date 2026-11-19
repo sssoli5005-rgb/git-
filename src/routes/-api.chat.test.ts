@@ -1559,4 +1559,54 @@ describe("general web research across non-Egypt topics", () => {
   });
 });
 
+
+
+  it("uses live research for an ordinary factual question outside Egyptian heritage", async () => {
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as {
+        model: string;
+        tools?: Array<{ type: string }>;
+        tool_choice?: string;
+      };
+      expect(payload.model).toBe("openai/gpt-oss-20b");
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: { content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي." },
+        }],
+      });
+    });
+    const response = await handleChatPost(createChatRequest("ليه السما زرقا؟"), fetcher);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("تشتت ضوء الشمس");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("keeps personal advice conversational instead of forcing web search", async () => {
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown };
+      expect(payload.model).toBe("qwen/qwen3.8-27b");
+      expect(payload.tools).toBeUndefined();
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: { content: "ابدئي الكلام بهدوء ووضحي لها اللي مضايقك." },
+        }],
+      });
+    });
+    const response = await handleChatPost(
+      createChatRequest("صديقتي زعلت مني ومش عارفة أتصرف إزاي"),
+      fetcher,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("ابدئي الكلام بهدوء");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
 });
