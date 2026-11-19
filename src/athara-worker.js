@@ -4622,6 +4622,39 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 });
               }
             }
+            if (!officialVisualMatch && openAiVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithOpenAI(
+                  referenceImage, candidateImages, openAiVisionKey,
+                  (env.OPENAI_VISION_MODEL || "gpt-5.4-mini").trim(), matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({ model: "OpenAI official catalog comparison", reason: String(error?.message || error).slice(0, 180) });
+              }
+            }
+            if (!officialVisualMatch && mistralVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithMistral(
+                  referenceImage, candidateImages, mistralVisionKey,
+                  (env.MISTRAL_VISION_MODEL || "mistral-small-latest").trim(), matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({ model: "Mistral official catalog comparison", reason: String(error?.message || error).slice(0, 180) });
+              }
+            }
+            if (!officialVisualMatch && anthropicVisionConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithAnthropic(
+                  referenceImage, candidateImages, anthropicVisionKey,
+                  (env.ANTHROPIC_VISION_MODEL || "claude-haiku-5-5").trim(), matchThreshold,
+                );
+                openScannerComparisonSucceeded = true;
+              } catch (error) {
+                visionAttempts.push({ model: "Anthropic official catalog comparison", reason: String(error?.message || error).slice(0, 180) });
+              }
+            }
           }
         }
         if (officialVisualMatch) {
@@ -4775,6 +4808,61 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                     model: "OpenRouter open-catalog comparison",
                     reason: String(error?.message || error).slice(0, 180),
                   });
+                }
+              }
+              for (const comparisonProvider of [
+                openAiVisionConfigured ? {
+                  name: "OpenAI",
+                  run: () => compareImageCandidatesWithOpenAICompatible(
+                    comparisonImageBytes || imageBytes, candidateImages.slice(0, 5), openAiVisionKey,
+                    (env.OPENAI_VISION_MODEL || "gpt-5.4-mini").trim(), matchThreshold,
+                    "https://api.openai.com/v1/chat/completions", "OpenAI", "max_completion_tokens",
+                  ),
+                } : null,
+                mistralVisionConfigured ? {
+                  name: "Mistral",
+                  run: () => compareImageCandidatesWithOpenAICompatible(
+                    comparisonImageBytes || imageBytes, candidateImages.slice(0, 5), mistralVisionKey,
+                    (env.MISTRAL_VISION_MODEL || "mistral-small-latest").trim(), matchThreshold,
+                    "https://api.mistral.ai/v1/chat/completions", "Mistral", "max_tokens",
+                  ),
+                } : null,
+              ].filter(Boolean)) {
+                if (comparison?.match) break;
+                try {
+                  const peerComparison = await comparisonProvider.run();
+                  comparison = peerComparison?.match || !comparison
+                    ? peerComparison
+                    : {
+                        ...comparison,
+                        ranked: [...(comparison.ranked || []), ...(peerComparison.ranked || [])]
+                          .sort((left, right) => (right.similarity || 0) - (left.similarity || 0))
+                          .slice(0, 6),
+                      };
+                  openScannerComparisonSucceeded = true;
+                } catch (error) {
+                  visionAttempts.push({
+                    model: comparisonProvider.name + " open-catalog comparison",
+                    reason: String(error?.message || error).slice(0, 180),
+                  });
+                }
+              }
+              if (!comparison?.match && anthropicVisionConfigured) {
+                try {
+                  const peerMatch = await compareOfficialCatalogPhotosWithAnthropic(
+                    comparisonImageBytes || imageBytes,
+                    candidateImages.slice(0, 5),
+                    anthropicVisionKey,
+                    (env.ANTHROPIC_VISION_MODEL || "claude-haiku-5-5").trim(),
+                    matchThreshold,
+                  );
+                  if (peerMatch) comparison = {
+                    ranked: [{ name: peerMatch.item?.title || "", url: peerMatch.url, similarity: peerMatch.similarity }],
+                    match: { candidate: candidateImages.find((item) => item.item?.id === peerMatch.item?.id), similarity: peerMatch.similarity },
+                  };
+                  openScannerComparisonSucceeded = true;
+                } catch (error) {
+                  visionAttempts.push({ model: "Anthropic open-catalog comparison", reason: String(error?.message || error).slice(0, 180) });
                 }
               }
 
