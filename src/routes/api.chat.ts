@@ -777,7 +777,7 @@ export async function handleChatPost(
             geminiFailureCode = "incomplete_response";
             if (
               answer &&
-              (!geminiLiveSearch || geminiGroundedSources.length > 0) &&
+              !geminiLiveSearch &&
               (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
             ) {
               const continuationTimeout = AbortSignal.timeout(15_000);
