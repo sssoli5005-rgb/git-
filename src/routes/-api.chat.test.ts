@@ -1398,7 +1398,7 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(fallback.model).toBe("qwen3:8b");
     expect(fallback.messages[0]).toEqual(primary.messages[0]);
     expect(fallback.messages[0]?.content).toContain(
-      "multilingual digital tourism and heritage guide",
+      "general-purpose assistant with specialist expertise in Egyptian tourism and heritage",
     );
   });
 
