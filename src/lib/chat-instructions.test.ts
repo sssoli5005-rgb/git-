@@ -151,7 +151,7 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("identify only the specific detail it does not establish");
   });
 
-  it("adapts its conversational style to the user's goal without leaving Egypt heritage scope", () => {
+  it("supports general world questions while retaining Egypt heritage specialization", () => {
     const prompt = buildChatSystemInstruction("ar");
     expect(prompt).toContain(
       "a warm, attentive conversational assistant as well as an Egyptian heritage guide",
@@ -160,9 +160,11 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("teach step by step");
     expect(prompt).toContain("ask one focused clarifying question");
     expect(prompt).toContain("do not agree just to please the user");
-    expect(prompt).toContain(
-      "Stay focused on Egyptian tourism, history, archaeology, and heritage",
-    );
+    expect(prompt).toContain("Support questions across the world, not only Egypt");
+    expect(prompt).toContain("do not force an Egyptian connection");
+    expect(prompt).toContain("Answer ordinary and specialist questions across the world");
+    expect(prompt).toContain("official government and intergovernmental agencies");
+    expect(prompt).toContain("Infer the user's intended meaning despite spelling");
   });
 
   it("uses contextual specialist analysis without falsely claiming university affiliation", () => {
