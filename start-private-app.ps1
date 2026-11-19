@@ -22,15 +22,15 @@ if (-not $tailStatus.Self.DNSName -or $tailStatus.BackendState -ne "Running") {
   throw "Tailscale is installed but not connected. Sign in and connect this PC to your tailnet."
 }
 
-$ollamaModel = $env:OLLAMA_MODEL
+$ollamaModel = $env:CHAT_OLLAMA_MODEL
 if ([string]::IsNullOrWhiteSpace($ollamaModel)) {
   $envFile = Join-Path $appRoot ".env.local"
   if (Test-Path $envFile) {
     $modelLine = Get-Content -LiteralPath $envFile |
-      Where-Object { $_ -match '^\s*OLLAMA_MODEL\s*=' } |
+      Where-Object { $_ -match '^\s*CHAT_CHAT_OLLAMA_MODEL\s*=' } |
       Select-Object -Last 1
     if ($modelLine) {
-      $ollamaModel = $modelLine -replace '^\s*OLLAMA_MODEL\s*=\s*', ""
+      $ollamaModel = $modelLine -replace '^\s*CHAT_CHAT_OLLAMA_MODEL\s*=\s*', ""
       $ollamaModel = $ollamaModel.Trim()
       if ($ollamaModel.StartsWith('"')) {
         $ollamaModel = $ollamaModel.Trim([char]'"')
@@ -45,10 +45,11 @@ if ([string]::IsNullOrWhiteSpace($ollamaModel)) {
 if ([string]::IsNullOrWhiteSpace($ollamaModel)) {
   $ollamaModel = "qwen2.5:14b"
 }
-$env:OLLAMA_MODEL = $ollamaModel
-$env:OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+$env:CHAT_OLLAMA_MODEL = $ollamaModel
+$env:CHAT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+$env:SCANNER_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 try {
-  $ollamaModels = (Invoke-RestMethod -Uri "$env:OLLAMA_BASE_URL/api/tags" -TimeoutSec 5).models
+  $ollamaModels = (Invoke-RestMethod -Uri "$env:CHAT_OLLAMA_BASE_URL/api/tags" -TimeoutSec 5).models
 } catch {
   throw "Ollama is not reachable at 127.0.0.1:11434. Start Ollama, then run this script again."
 }
