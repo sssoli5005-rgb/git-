@@ -256,7 +256,7 @@ describe("ATHARA Cloudflare Worker", () => {
         return Response.json({
           choices: [{ message: { content: JSON.stringify({
             rankedMatches: [{
-              candidateId: "R1",
+              candidateId: "C1",
               similarity: 0.94,
               visualEvidence: ["same distinctive crown silhouette", "same profile and shoulder shape"],
             }],
