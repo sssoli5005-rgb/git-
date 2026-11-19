@@ -45,6 +45,19 @@ const HERITAGE_QUERY_TERMS = [
   "مصر",
   "مصر العليا",
   "مصر السفلى",
+  "المصري القديم",
+  "المصريين القدماء",
+  "الحضاره المصريه",
+  "الحضاره الفرعونيه",
+  "العصر الفرعوني",
+  "ملوك الاسره",
+  "ملوك الأسرات",
+  "الاسره الرابعه",
+  "عصر الاسرات",
+  "ما قبل الاسرات",
+  "مصر البطلميه",
+  "العصر البطلمي",
+  "البطالمه",
   "توحيد مصر",
   "توحيد",
   "كتابة",
@@ -153,6 +166,14 @@ const HERITAGE_QUERY_TERMS = [
   "inscription",
   "excavation",
   "ancient egypt",
+  "ancient egyptian",
+  "egyptian civilization",
+  "pharaonic",
+  "pharaonic egypt",
+  "predynastic egypt",
+  "ptolemaic egypt",
+  "egyptian kingship",
+  "egyptian religion",
   "old kingdom",
   "middle kingdom",
   "new kingdom",
@@ -599,11 +620,23 @@ function sourceCandidates(
 export function isEgyptianHeritageQuery(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
 ): boolean {
-  const recentConversation = messages
-    .slice(-4)
+  const latestUserMessage =
+    [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  if (matchesHeritageQuery(latestUserMessage)) return true;
+
+  const normalizedLatest = normalizeSearchText(latestUserMessage);
+  const isContextualFollowUp =
+    isSourceRequest(latestUserMessage) ||
+    /^(?:طب|طيب|و|وكمان|كمان|بس|ليه|لماذا|ازاي|كيف|امتى|متى|فين|اين|مين|من|هل|وماذا|ماذا عن|what about|and what|who|why|how|when|where)(?:\\s|$)/u.test(
+      normalizedLatest,
+    );
+  if (!isContextualFollowUp) return false;
+
+  const recentContext = messages
+    .slice(-13, -1)
     .map((message) => message.content)
     .join("\n");
-  return matchesHeritageQuery(recentConversation);
+  return matchesHeritageQuery(recentContext);
 }
 
 export function buildHeritageSearchQuery(
@@ -612,7 +645,7 @@ export function buildHeritageSearchQuery(
   const latestQuestion = messages.at(-1)?.content ?? "";
   if (isSourceRequest(latestQuestion)) {
     const previousHeritageQuestion = messages
-      .slice(-7, -1)
+      .slice(-13, -1)
       .reverse()
       .find((message) => message.role === "user" && matchesHeritageQuery(message.content));
     if (previousHeritageQuestion) return previousHeritageQuestion.content.slice(0, 1000);
@@ -620,7 +653,7 @@ export function buildHeritageSearchQuery(
   if (matchesHeritageQuery(latestQuestion)) return latestQuestion.slice(0, 1000);
 
   const priorHeritageQuestion = messages
-    .slice(-6, -1)
+    .slice(-13, -1)
     .reverse()
     .find((message) => message.role === "user" && matchesHeritageQuery(message.content));
   return priorHeritageQuestion
