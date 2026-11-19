@@ -1182,7 +1182,12 @@ async function loadOfficialCandidateImages(candidates, assets) {
           }
         }
         if (!response?.ok) return null;
-        const buffer = await response.arrayBuffer();
+        let buffer;
+        try {
+          buffer = await response.arrayBuffer();
+        } catch {
+          return null;
+        }
         if (!buffer.byteLength || buffer.byteLength > 1_500_000) return null;
         return {
           item: candidate.record,
