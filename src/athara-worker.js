@@ -1155,8 +1155,13 @@ async function findCachedOfficialImages(record, maxImages = 3) {
 
 async function loadOfficialCandidateImages(candidates, assets) {
   const tasks = [];
-  for (const candidate of candidates.slice(0, 3)) {
-    const references = await findCachedOfficialImages(candidate.record, 3);
+  const curatedFallbackMode = candidates.some((candidate) => candidate.curatedFallback);
+  const selectedCandidates = curatedFallbackMode ? candidates.slice(0, 7) : candidates.slice(0, 3);
+  for (const candidate of selectedCandidates) {
+    const maxImages = curatedFallbackMode
+      ? candidate.curatedFallback ? 1 : 2
+      : 3;
+    const references = await findCachedOfficialImages(candidate.record, maxImages);
     for (const reference of references) {
       tasks.push((async () => {
         let response = null;
