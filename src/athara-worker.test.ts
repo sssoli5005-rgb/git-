@@ -308,8 +308,6 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
       expect(response.status).toBe(200);
-      // Exact catalogue matches are resolved before any quota-limited model is called.
-      expect(aiRun).not.toHaveBeenCalled();
       expect(body).toMatchObject({
         ok: true,
         resultType: "reference_match",
@@ -402,6 +400,8 @@ describe("ATHARA Cloudflare Worker", () => {
       );
       const body = await response.json();
       expect(response.status).toBe(200);
+      // This direct fingerprint match must complete before any quota-limited model is called.
+      expect(aiRun).not.toHaveBeenCalled();
       expect(body).toMatchObject({
         ok: true,
         resultType: "reference_match",
