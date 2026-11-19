@@ -2674,7 +2674,7 @@ async function compareImageCandidatesWithOpenAICompatible(
   const raw = typeof payload?.choices?.[0]?.message?.content === "string"
     ? payload.choices[0].message.content
     : Array.isArray(payload?.choices?.[0]?.message?.content)
-      ? payload.choices[0].message.content.map((part) => part?.text || "").join("\\n")
+      ? payload.choices[0].message.content.map((part) => part?.text || "").join("\n")
       : "";
   const jsonText = raw.match(/\\{[\\s\\S]*\\}/)?.[0];
   if (!jsonText) throw new Error(provider + " comparison returned invalid JSON.");
@@ -2773,7 +2773,7 @@ async function compareOfficialCatalogPhotosWithAnthropic(imageBytes, candidates,
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || `Anthropic comparison returned HTTP ${response.status}`);
   const raw = Array.isArray(payload?.content)
-    ? payload.content.filter((part) => part?.type === "text").map((part) => part.text || "").join("\\n")
+    ? payload.content.filter((part) => part?.type === "text").map((part) => part.text || "").join("\n")
     : "";
   const jsonText = raw.match(/\\{[\\s\\S]*\\}/)?.[0];
   if (!jsonText) throw new Error("Anthropic comparison returned invalid JSON.");
