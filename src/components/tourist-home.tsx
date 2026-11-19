@@ -396,22 +396,24 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 : resultCopy.unverifiedStatus;
 
             if (isIdentified && artifact?.name) {
+              // A museum or publisher is not automatically the archaeological site's location.
               const displayLocation =
-                artifact.currentLocation || artifact.museum || artifact.location || "";
+                artifact.currentLocation || artifact.location || artifact.museum || "";
               const story = (data.sourceStory || artifact.description ||
                 data.sources?.find((source) => source.trusted)?.snippet || "")
                 .replace(/https?:\/\/\S+/g, "")
                 .replace(/^(?:قصتها|القصة|من وصف المصدر|Story|Description|From the source description)\s*[:：-]\s*/i, "")
                 .replace(/\n{3,}/g, "\n\n")
                 .trim()
-                .slice(0, 1200);
+                .slice(0, 1800);
+              const details = story || (artifact.period
+                ? `${resultCopy.periodLabel}: ${artifact.period}`
+                : "");
               analysis = [
                 identificationLabel,
                 `${resultCopy.nameLabel}: ${artifact.name}`,
                 displayLocation ? `${resultCopy.locationLabel}: ${displayLocation}` : "",
-                artifact.findSpot ? `مكان اكتشافها: ${artifact.findSpot}` : "",
-                artifact.period ? `${resultCopy.periodLabel}: ${artifact.period}` : "",
-                story ? `${resultCopy.storyLabel}: ${story}` : "",
+                details ? `${resultCopy.storyLabel}: ${details}` : "",
               ].filter(Boolean).join("\n\n");
             } else if (data.researchCandidate?.name) {
               // Show the best trusted catalogue lead as a research candidate, not
@@ -421,18 +423,21 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 .replace(/https?:\/\/\S+/g, "")
                 .replace(/\n{3,}/g, "\n\n")
                 .trim()
-                .slice(0, 1000);
+                .slice(0, 1200);
+              const leadDetails = [
+                leadStory,
+                lead.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
+                lang === "ar"
+                  ? "الاسم والمعلومات من سجل مرتبط بنتائج البحث، وليست تأكيدًا أن الصورة للقطعة نفسها."
+                  : "This related catalogue record does not confirm that the image shows this exact object.",
+              ].filter(Boolean).join(" ");
               analysis = [
                 resultCopy.unverifiedStatus,
                 `اسم مرشح يحتاج مطابقة: ${lead.name}`,
                 lead.location || lead.museum
                   ? `المكان المذكور في المصدر: ${lead.location || lead.museum}`
                   : "",
-                lead.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
-                leadStory ? `${resultCopy.storyLabel}: ${leadStory}` : "",
-                lang === "ar"
-                  ? "الاسم والمعلومات أعلاه من سجل متحفي مرتبط بنتائج البحث، وليست تأكيدًا نهائيًا أن الصورة للقطعة نفسها."
-                  : "The details above come from a related museum record and do not confirm that the uploaded image shows this exact object.",
+                leadDetails ? `${resultCopy.storyLabel}: ${leadDetails}` : "",
               ].filter(Boolean).join("\n\n");
             } else {
               // Keep the model's actual first-pass identification visible.
@@ -483,20 +488,23 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                     .replace(/^(?:لم يتم تأكيد هوية القطعة|لم أستطع تحديد القطعة من الصورة)[^\\n]*\\n?/i, "")
                     .slice(0, 1100)
                 : "";
+              const uncertaintyNote = nameOrVisualLead || story || fallbackNarrative
+                ? (lang === "ar"
+                  ? "المعلومات المبدئية لا تعني أن المطابقة البصرية مع سجل المتحف قد تأكدت."
+                  : "These preliminary details do not mean that a visual match to the museum record has been confirmed.")
+                : (lang === "ar"
+                  ? "لم يظهر اسم مفيد للقطعة في هذه المحاولة. جرّبي صورة أوضح أو زاوية أمامية."
+                  : resultCopy.notIdentified);
+              const fallbackDetails = [
+                story || fallbackNarrative,
+                lead?.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
+                uncertaintyNote,
+              ].filter(Boolean).join(" ");
               analysis = [
                 resultCopy.unverifiedStatus,
                 nameOrVisualLead,
                 reliableLocation ? `المكان الوارد في المصدر: ${reliableLocation}` : "",
-                lead?.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
-                story ? `${resultCopy.storyLabel}: ${story.slice(0, 1100)}` : "",
-                fallbackNarrative,
-                nameOrVisualLead || story || fallbackNarrative
-                  ? (lang === "ar"
-                    ? "المعلومات المبدئية لا تعني أن المطابقة البصرية مع سجل المتحف قد تأكدت."
-                    : "These preliminary details do not mean that a visual match to the museum record has been confirmed.")
-                  : (lang === "ar"
-                    ? "لم يظهر اسم مفيد للقطعة في هذه المحاولة. جرّبي صورة أوضح أو زاوية أمامية."
-                    : resultCopy.notIdentified),
+                fallbackDetails ? `${resultCopy.storyLabel}: ${fallbackDetails}` : "",
               ].filter(Boolean).join("\n\n");
             }
           }

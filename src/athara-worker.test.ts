@@ -1618,7 +1618,7 @@ describe("ATHARA Cloudflare Worker", () => {
         return new Response(JSON.stringify({
           records: [{
             id: "abu-simbel-record",
-            title: "أبو سمبل",
+            title: "أبو سمبل - إكتشف الآثار المصرية",
             mode: "objects",
             keywords: ["واجهة", "تماثيل"],
             description: "معبد أبو سمبل الكبير المنحوت في الصخر، وتزين واجهته تماثيل رمسيس الثاني الأربعة.",
@@ -1638,7 +1638,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-test-key", ASSETS: { fetch: assetFetch } },
+        { GEMINI_API_KEY: "gemini-test-key", GROQ_API_KEY: "groq-test-key", ASSETS: { fetch: assetFetch } },
       );
       const body = await response.json();
 
@@ -1651,8 +1651,13 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(body.sources).toContainEqual(expect.objectContaining({ url: catalogUrl, trusted: true }));
       expect(body.matchedArtifact).toMatchObject({
         name: "أبو سمبل",
+        location: "أبو سمبل",
+        museum: "",
         similarity: 0.92,
       });
+      expect(body.sourceStory).toBe(
+        "معبد أبو سمبل الكبير المنحوت في الصخر، وتزين واجهته تماثيل رمسيس الثاني الأربعة.",
+      );
       expect(fetchMock).toHaveBeenCalledTimes(2);
       const comparisonBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
       expect(comparisonBody.contents[0].parts.filter((part: { inlineData?: unknown }) => part.inlineData)).toHaveLength(2);
