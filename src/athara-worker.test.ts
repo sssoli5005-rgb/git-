@@ -354,7 +354,7 @@ describe("ATHARA Cloudflare Worker", () => {
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
-      if (url === referenceUrl) {
+      if (url.startsWith("https://egymonuments.gov.eg/media/4666/dsc_0802.jpg")) {
         return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
       }
       return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: [] });
