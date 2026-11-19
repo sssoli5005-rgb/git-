@@ -1,3 +1,9 @@
+import curatedCatalogData from "./data/egypt-monuments-curated.json";
+
+const EMBEDDED_CURATED_RECORDS = Array.isArray(curatedCatalogData?.records)
+  ? curatedCatalogData.records
+  : [];
+
 const VISION_MODEL = "@cf/moondream/moondream3.1-9B-A2B";
 const FALLBACK_VISION_MODELS = [
   "@cf/mistralai/mistral-small-3.1-24b-instruct",
@@ -828,36 +834,74 @@ function rankOfficialCatalogCandidates(catalog, observation) {
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
   ].filter(Boolean).join(" ");
-  // Use a model-suggested name only to retrieve possible reference records.
-  // It is not proof: the reference-photo comparison below remains mandatory.
+  const curatedRecords = catalog.filter((record) =>
+    typeof record?.id === "string" && record.id.startsWith("mota-") &&
+    (record.mode === "objects" || record.mode === "both") &&
+    canonicalOfficialArchiveUrl(record.sourceUrl) &&
+    (record.imageUrls || []).some((imageUrl) => {
+      const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
+      return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
+    }),
+  );
+  const curatedFallback = curatedRecords.map((record) => ({
+    record,
+    score: 0,
+    titleMatches: [],
+    descriptionMatches: [],
+    curatedFallback: true,
+  }));
+  // A generic visual label (e.g. "royal bust") must not prevent comparison
+  // against the small bilingual official reference set.
+  const genericIdentityTerms = new Set([
+    "statue", "figure", "bust", "head", "face", "portrait", "profile", "woman", "female",
+    "man", "male", "king", "queen", "royal", "pharaoh", "egyptian", "ancient", "new",
+    "kingdom", "period", "dynasty", "era", "green", "orange", "brown", "painted", "wooden", "stone",
+    "headdress", "crown", "shoulder", "carved", "goddess", "god", "deity",
+    "new kingdom", "الدولة", "عصر", "حديثة", "الحديثة", "أسرة", "اسرة",
+    "تمثال", "تماثيل", "نصفي", "رأس", "راس", "وجه", "امرأة", "انثى", "أنثى", "رجل",
+    "ملك", "ملكة", "ملكي", "ملكية", "فرعون", "مصري", "مصرية", "قديم", "قديمة",
+    "اخضر", "أخضر", "برتقالي", "بني", "خشبي", "حجري", "غطاء", "رأس", "تاج",
+  ]);
   const queryTerms = [...new Set([
     ...normalizeSearchTerms(queryText),
     ...scannerCandidateTerms({ identity: identityText }),
   ])].filter((term) => !GENERIC_IMAGE_SEARCH_TERMS.has(term));
-  if (queryTerms.length < 2) return [];
+  if (queryTerms.length < 2) return curatedFallback;
 
-  return catalog
-    .filter((record) => {
-      if (record.mode !== "objects" && record.mode !== "both") return false;
-      if (!canonicalOfficialArchiveUrl(record.sourceUrl)) return false;
-      return (record.imageUrls || []).some((imageUrl) => {
-        const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
-        return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
-      });
-    })
-    .map((record) => {
-      const titleTerms = new Set(normalizeSearchTerms(
-        [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),
-      ));
-      const descriptionTerms = new Set(normalizeSearchTerms(record.description));
-      const titleMatches = queryTerms.filter((term) => titleTerms.has(term));
-      const descriptionMatches = queryTerms.filter((term) => descriptionTerms.has(term));
-      const score = titleMatches.length * 4 + descriptionMatches.length;
-      return { record, score, titleMatches, descriptionMatches };
-    })
+  const eligibleRecords = catalog.filter((record) => {
+    if (record.mode !== "objects" && record.mode !== "both") return false;
+    if (!canonicalOfficialArchiveUrl(record.sourceUrl)) return false;
+    return (record.imageUrls || []).some((imageUrl) => {
+      const canonicalUrl = canonicalOfficialArchiveUrl(imageUrl);
+      return canonicalUrl && new URL(canonicalUrl).pathname.startsWith("/media/");
+    });
+  });
+  const scored = eligibleRecords.map((record) => {
+    const titleTerms = new Set(normalizeSearchTerms(
+      [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),
+    ));
+    const descriptionTerms = new Set(normalizeSearchTerms(record.description));
+    const titleMatches = queryTerms.filter((term) => titleTerms.has(term));
+    const descriptionMatches = queryTerms.filter((term) => descriptionTerms.has(term));
+    const score = titleMatches.length * 4 + descriptionMatches.length;
+    return { record, score, titleMatches, descriptionMatches };
+  });
+  const ranked = scored
     .filter((candidate) => candidate.titleMatches.length > 0 || candidate.descriptionMatches.length >= 2)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 4);
+    .sort((left, right) => right.score - left.score);
+  const specificIdentityTerms = scannerCandidateTerms({ identity: identityText })
+    .filter((term) => term.length >= 4 && !genericIdentityTerms.has(term));
+  const hasNamedIdentityMatch = specificIdentityTerms.length > 0 && ranked.some((candidate) =>
+    specificIdentityTerms.some((term) => candidate.titleMatches.includes(term)),
+  );
+  if (!hasNamedIdentityMatch && curatedFallback.length) {
+    const bestGeneralCandidate = ranked.find((candidate) => !candidate.record.id?.startsWith("mota-"));
+    return [
+      ...curatedFallback,
+      ...(bestGeneralCandidate ? [{ ...bestGeneralCandidate, curatedFallback: false }] : []),
+    ];
+  }
+  return ranked.slice(0, 4);
 }
 
 const GENERIC_SCANNER_DESCRIPTION_TERMS = new Set([
@@ -1112,8 +1156,13 @@ async function findCachedOfficialImages(record, maxImages = 3) {
 
 async function loadOfficialCandidateImages(candidates, assets) {
   const tasks = [];
-  for (const candidate of candidates.slice(0, 3)) {
-    const references = await findCachedOfficialImages(candidate.record, 3);
+  const curatedFallbackMode = candidates.some((candidate) => candidate.curatedFallback);
+  const selectedCandidates = curatedFallbackMode ? candidates.slice(0, 7) : candidates.slice(0, 3);
+  for (const candidate of selectedCandidates) {
+    const maxImages = curatedFallbackMode
+      ? candidate.curatedFallback ? 1 : 2
+      : 3;
+    const references = await findCachedOfficialImages(candidate.record, maxImages);
     for (const reference of references) {
       tasks.push((async () => {
         let response = null;
@@ -3671,6 +3720,14 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       } catch {
         // Keep the official built-in catalog if the optional environment catalog is invalid.
       }
+      const curatedRecordsById = new Map();
+      const isValidCuratedRecord = (record) =>
+        record && typeof record.id === "string" && typeof record.title === "string" &&
+        Array.isArray(record.keywords) && typeof record.sourceTitle === "string" &&
+        typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl);
+      for (const record of EMBEDDED_CURATED_RECORDS) {
+        if (isValidCuratedRecord(record)) curatedRecordsById.set(record.id, record);
+      }
       if (assetsFetch) {
         try {
           const curatedUrl = new URL("/egypt-monuments-curated.json", "https://athara.local").toString();
@@ -3678,16 +3735,16 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           if (curatedResponse.ok) {
             const curatedData = await curatedResponse.json();
             const curatedRecords = Array.isArray(curatedData?.records) ? curatedData.records : [];
-            catalog.push(...curatedRecords.filter((record) =>
-              record && typeof record.id === "string" && typeof record.title === "string" &&
-              Array.isArray(record.keywords) && typeof record.sourceTitle === "string" &&
-              typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
-            ));
+            for (const record of curatedRecords) {
+              if (isValidCuratedRecord(record)) curatedRecordsById.set(record.id, record);
+            }
           }
         } catch (error) {
-          console.warn(`[Image scanner] Curated catalogue unavailable: ${String(error?.message || error).slice(0, 160)}`);
+          console.warn(`[Image scanner] Curated catalogue asset unavailable: ${String(error?.message || error).slice(0, 160)}`);
         }
       }
+      const existingCatalogIds = new Set(catalog.map((record) => record?.id).filter(Boolean));
+      catalog.push(...[...curatedRecordsById.values()].filter((record) => !existingCatalogIds.has(record.id)));
 
       const visionPrompt =
         mode === "hieroglyphs"
