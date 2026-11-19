@@ -1640,6 +1640,96 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("Joshua 24:32");
   });
 
+  it("falls through Groq and Gemini search failures to the dedicated third OpenRouter research provider", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "chat-gemini-key");
+    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "chat-openrouter-key");
+    const providerOrder: string[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      const payload = JSON.parse(String(init?.body)) as {
+        model?: string;
+        tools?: Array<{ type?: string; parameters?: { allowed_domains?: string[] } }>;
+        tool_choice?: string;
+      };
+      if (url.includes("api.groq.com")) {
+        providerOrder.push("Groq");
+        expect(payload.tools).toContainEqual({ type: "browser_search" });
+        expect(payload.tool_choice).toBe("required");
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "Groq could not retrieve an approved source.", executed_tools: [] },
+          }],
+        });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        providerOrder.push("Gemini");
+        expect(payload.tools).toEqual([{ google_search: {} }]);
+        return Response.json({
+          candidates: [{
+            content: { parts: [{ text: "Gemini could not retrieve an approved source." }] },
+            groundingMetadata: { groundingChunks: [] },
+          }],
+        });
+      }
+      if (url.includes("openrouter.ai")) {
+        providerOrder.push("OpenRouter");
+        expect(payload.tools?.[0]?.type).toBe("openrouter:web_search");
+        expect(payload.tool_choice).toBe("required");
+        expect(payload.tools?.[0]?.parameters?.allowed_domains).toContain("britannica.com");
+        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer chat-openrouter-key");
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content: "باريس هي عاصمة فرنسا.",
+              annotations: [{
+                type: "url_citation",
+                url_citation: {
+                  url: "https://www.britannica.com/place/Paris",
+                  title: "Paris — Encyclopaedia Britannica",
+                  content: "Paris is the capital and most populous city of France. It is located in the north-central part of the country.",
+                },
+              }],
+            },
+          }],
+        });
+      }
+      throw new Error("Unexpected provider request: " + url);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("ما عاصمة فرنسا؟ مع المصادر"),
+      fetcher,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(providerOrder).toEqual(["Groq", "Gemini", "OpenRouter"]);
+    expect(body).toContain("باريس هي عاصمة فرنسا");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.britannica.com/place/Paris");
+  });
+
+  it("does not force live research for a personal question phrased with a question mark", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "chat-openrouter-key");
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as { model?: string; tools?: unknown };
+      expect(payload.model).toBe("qwen/qwen3.8-27b");
+      expect(payload.tools).toBeUndefined();
+      return Response.json({
+        choices: [{ finish_reason: "stop", message: { content: "أنا هنا علشان أساعدك وأسمعك." } }],
+      });
+    });
+    const response = await handleChatPost(createChatRequest("هل بتحبني؟"), fetcher);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("أنا هنا علشان أساعدك");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("rejects a factual answer that has no actual search results and never uses Cloudflare memory as a substitute", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
