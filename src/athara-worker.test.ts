@@ -1157,10 +1157,19 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.resultType).toBe("unverified");
-      expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال خشبي للمعبودة نفتيس");
+      expect(body).toMatchObject({
+        resultType: "probable",
+        identificationStatus: "probable",
+        researchCandidate: {
+          name: "Wooden Statue of Nephthys",
+          sourceBacked: true,
+          visuallyMatched: false,
+        },
+      });
+      expect(body.analysis).toContain("Wooden Statue of Nephthys");
       expect(body.analysis).toContain("Luxor Mummification Museum");
       expect(body.analysis).toContain("protective goddess of the dead");
+      expect(body.analysis).not.toContain("لم يتم تأكيد هوية القطعة");
       expect(body.sources).toContainEqual(expect.objectContaining({
         url: collectionUrl,
         trusted: true,
