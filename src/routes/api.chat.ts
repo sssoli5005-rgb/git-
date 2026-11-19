@@ -323,7 +323,8 @@ export async function handleChatPost(
   const heritageQuestion = isEgyptianHeritageQuery(parsed.data.messages);
 
   if (heritageQuestion) {
-    const searchTimeout = AbortSignal.timeout(4_000);
+    // Give trusted museum/university sources time to respond before falling back.
+    const searchTimeout = AbortSignal.timeout(10_000);
     const searchSignal = AbortSignal.any([request.signal, searchTimeout]);
     try {
       const results = await searchTrustedEgyptianHeritage(
@@ -397,7 +398,15 @@ export async function handleChatPost(
       messages: { role: string; content: string }[];
     };
     const primaryModel = readProviderEnv(suppliedEnv, "GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
-    const groqModels = [...new Set([primaryModel, "openai/gpt-oss-20b"])];
+    const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
+    const requestsLiveResearch =
+      !heritageQuestion &&
+      /(?:\\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestion);
+    // GPT-OSS 20B has Groq's built-in browser_search tool. Use it for
+    // explicit web research; keep the configured Qwen model as the normal fast path.
+    const groqModels = requestsLiveResearch
+      ? ["openai/gpt-oss-20b", primaryModel].filter((model, index, all) => all.indexOf(model) === index)
+      : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
       const providerTimeout = AbortSignal.timeout(8_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
@@ -413,8 +422,11 @@ export async function handleChatPost(
             messages: localPayload.messages,
             max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
-            reasoning_effort: "medium",
+            reasoning_effort: model === "openai/gpt-oss-20b" && requestsLiveResearch ? "low" : "medium",
             reasoning_format: "hidden",
+            ...(model === "openai/gpt-oss-20b" && requestsLiveResearch
+              ? { tools: [{ type: "browser_search" }], tool_choice: "required", temperature: 1 }
+              : {}),
           }),
         });
         if (groqResponse.ok) {
@@ -530,6 +542,10 @@ export async function handleChatPost(
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "GEMINI_API_KEY")?.trim();
+  const latestQuestionForSearch = parsed.data.messages.at(-1)?.content ?? "";
+  const geminiLiveSearch =
+    !heritageQuestion &&
+    /(?:\\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(latestQuestionForSearch);
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
@@ -566,6 +582,7 @@ export async function handleChatPost(
                 maxOutputTokens: 4096,
                 ...(heritageQuestion ? { temperature: 0.2 } : {}),
               },
+              ...(geminiLiveSearch ? { tools: [{ google_search: {} }] } : {}),
             }),
           },
         );
