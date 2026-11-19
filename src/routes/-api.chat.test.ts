@@ -1769,7 +1769,7 @@ describe("general web research across non-Egypt topics", () => {
       });
     });
 
-    const response = await handleChatPost(createChatRequest("عايزة اعرف قصت باريس"), fetcher);
+    const response = await handleChatPost(createChatRequest("عايزة اعرف عن باريس"), fetcher);
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(body).toContain("لو تقصدي قصة باريس");
