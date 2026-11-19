@@ -2116,7 +2116,7 @@ describe("ATHARA Cloudflare Worker", () => {
             snippet: "A small bronze figurine in a seated pose. Late Period",
           }],
         });
-        expect(geminiCall).toBe(4);
+        expect(geminiCall).toBe(5);
         expect(fetchMock.mock.calls.some(([input]) => String(input).includes("serpapi.com"))).toBe(false);
       } finally {
         vi.unstubAllGlobals();
@@ -2230,7 +2230,7 @@ describe("ATHARA Cloudflare Worker", () => {
           messages: expect.any(Array),
           dimensions: 512,
         }));
-        expect(geminiCall).toBe(3);
+        expect(geminiCall).toBe(4);
       } finally {
         vi.unstubAllGlobals();
       }
@@ -2669,7 +2669,7 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
       expect(response.status).toBe(200);
       expect(body.ok).toBe(true);
-      expect(geminiCalls).toBe(3);
+      expect(geminiCalls).toBe(4);
       expect(body.analysis).toContain("اسم محتمل غير مؤكد: تمثال ملكي مصري");
       expect(body.visionDiagnostics).toMatchObject({ provider: "Gemini", usedFallback: true, fallbackOrder: ["Gemini", "Groq"] });
     } finally {
