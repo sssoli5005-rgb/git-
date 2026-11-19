@@ -27,10 +27,10 @@ if ([string]::IsNullOrWhiteSpace($ollamaModel)) {
   $envFile = Join-Path $appRoot ".env.local"
   if (Test-Path $envFile) {
     $modelLine = Get-Content -LiteralPath $envFile |
-      Where-Object { $_ -match '^\s*CHAT_CHAT_OLLAMA_MODEL\s*=' } |
+      Where-Object { $_ -match '^\s*CHAT_OLLAMA_MODEL\s*=' } |
       Select-Object -Last 1
     if ($modelLine) {
-      $ollamaModel = $modelLine -replace '^\s*CHAT_CHAT_OLLAMA_MODEL\s*=\s*', ""
+      $ollamaModel = $modelLine -replace '^\s*CHAT_OLLAMA_MODEL\s*=\s*', ""
       $ollamaModel = $ollamaModel.Trim()
       if ($ollamaModel.StartsWith('"')) {
         $ollamaModel = $ollamaModel.Trim([char]'"')
