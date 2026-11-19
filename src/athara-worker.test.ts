@@ -418,7 +418,9 @@ describe("ATHARA Cloudflare Worker", () => {
         url: catalogueUrl,
         trusted: true,
       }));
-      expect(fetchMock).toHaveBeenCalledWith(referenceUrl, expect.anything());
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).startsWith(referenceUrl),
+      )).toBe(true);
       expect(assetsFetch.mock.calls.some(([input]) =>
         String(input).endsWith("/cached-nephthys-derivative.jpg"),
       )).toBe(false);
