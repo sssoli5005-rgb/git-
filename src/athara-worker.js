@@ -2631,6 +2631,167 @@ async function compareOfficialCatalogPhotosWithGroq(imageBytes, candidates, apiK
     : null;
 }
 
+async function compareImageCandidatesWithOpenAICompatible(
+  imageBytes,
+  candidates,
+  apiKey,
+  model,
+  threshold,
+  endpoint,
+  provider,
+  tokenField = "max_tokens",
+) {
+  const selected = candidates.slice(0, 6);
+  if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
+  const imageContent = (bytes) => {
+    const url = `data:${detectImageMimeType(bytes)};base64,${bytesToBase64(bytes)}`;
+    return provider === "Mistral"
+      ? { type: "image_url", image_url: url }
+      : { type: "image_url", image_url: { url, detail: "high" } };
+  };
+  const content = [{
+    type: "text",
+    text: `قارن صورة الزائر بالصور المرجعية التالية اعتمادًا على السمات البصرية الفعلية فقط، ولا تعتمد على أسماء القطع أو معلوماتك السابقة. أخرج JSON فقط بالشكل {"rankedMatches":[{"candidateId":"R1","similarity":0.0,"visualEvidence":["علامة بصرية مميزة أولى","علامة بصرية مميزة ثانية"]}]}. لا تمنح درجة ${threshold} أو أعلى إلا عند تطابق علامتين بصريتين مميزتين على الأقل. إذا لم يوجد تطابق واضح أعد rankedMatches فارغة.`,
+  }, imageContent(imageBytes)];
+  for (const [index, candidate] of selected.entries()) {
+    const candidateId = candidate.id || candidate.label || `R${index + 1}`;
+    content.push({ type: "text", text: `الصورة المرجعية ${candidateId}: ${candidate.name || candidate.item?.title || "سجل أثري"}` });
+    content.push(imageContent(candidate.imageBytes));
+  }
+  const requestBody = {
+    model,
+    temperature: 0.1,
+    messages: [{ role: "user", content }],
+  };
+  requestBody[tokenField] = 900;
+  const response = await fetchVisionWithRetry(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + apiKey },
+    body: JSON.stringify(requestBody),
+  }, { provider: provider + " official reference comparison", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `${provider} comparison returned HTTP ${response.status}`);
+  const raw = typeof payload?.choices?.[0]?.message?.content === "string"
+    ? payload.choices[0].message.content
+    : Array.isArray(payload?.choices?.[0]?.message?.content)
+      ? payload.choices[0].message.content.map((part) => part?.text || "").join("\\n")
+      : "";
+  const jsonText = raw.match(/\\{[\\s\\S]*\\}/)?.[0];
+  if (!jsonText) throw new Error(provider + " comparison returned invalid JSON.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch { throw new Error(provider + " comparison returned invalid JSON."); }
+  const ranked = (Array.isArray(parsed.rankedMatches) ? parsed.rankedMatches : [])
+    .map((entry, index) => {
+      const candidate = selected.find((item, itemIndex) =>
+        (item.id || item.label || `R${itemIndex + 1}`) === entry?.candidateId,
+      );
+      return {
+        candidate,
+        similarity: Number(entry?.similarity),
+        visualEvidence: Array.isArray(entry?.visualEvidence)
+          ? entry.visualEvidence.filter((item) => typeof item === "string" && item.trim()).slice(0, 3)
+          : [],
+      };
+    })
+    .filter((entry) => entry.candidate && Number.isFinite(entry.similarity) &&
+      entry.similarity >= 0 && entry.similarity <= 1)
+    .sort((left, right) => right.similarity - left.similarity);
+  const best = ranked[0];
+  return {
+    ranked: ranked.map(({ candidate, similarity }) => ({
+      name: candidate.name || candidate.item?.title || "",
+      url: candidate.url || candidate.item?.sourceUrl || "",
+      similarity: Math.round(similarity * 1000) / 1000,
+    })),
+    match: best && best.similarity >= threshold && best.visualEvidence.length >= 2
+      ? { candidate: best.candidate, similarity: best.similarity }
+      : null,
+  };
+}
+
+async function compareOfficialCatalogPhotosWithOpenAI(
+  imageBytes, candidates, apiKey, model, threshold,
+) {
+  const result = await compareImageCandidatesWithOpenAICompatible(
+    imageBytes, candidates, apiKey, model, threshold,
+    "https://api.openai.com/v1/chat/completions", "OpenAI", "max_completion_tokens",
+  );
+  return result.match
+    ? { item: result.match.candidate.item, url: result.match.candidate.item.sourceUrl,
+        engine: "OpenAI official catalogue image comparison", similarity: result.match.similarity }
+    : null;
+}
+
+async function compareOfficialCatalogPhotosWithMistral(
+  imageBytes, candidates, apiKey, model, threshold,
+) {
+  const result = await compareImageCandidatesWithOpenAICompatible(
+    imageBytes, candidates, apiKey, model, threshold,
+    "https://api.mistral.ai/v1/chat/completions", "Mistral", "max_tokens",
+  );
+  return result.match
+    ? { item: result.match.candidate.item, url: result.match.candidate.item.sourceUrl,
+        engine: "Mistral official catalogue image comparison", similarity: result.match.similarity }
+    : null;
+}
+
+async function compareOfficialCatalogPhotosWithAnthropic(imageBytes, candidates, apiKey, model, threshold) {
+  const selected = candidates.slice(0, 6);
+  if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return null;
+  const content = [{
+    type: "text",
+    text: `قارن صورة الزائر بالصور المرجعية التالية اعتمادًا على التشابه البصري الفعلي فقط، ولا تعتمد على أسماء القطع أو معلوماتك السابقة. أخرج JSON فقط بالشكل {"matchId":"R1","similarity":0.0,"visualEvidence":["علامة بصرية مميزة أولى","علامة بصرية مميزة ثانية"]}. لا تمنح درجة ${threshold} أو أعلى إلا عند تطابق علامتين بصريتين مميزتين.`,
+  }, {
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: detectImageMimeType(imageBytes),
+      data: bytesToBase64(imageBytes),
+    },
+  }];
+  for (const [index, candidate] of selected.entries()) {
+    content.push({ type: "text", text: `الصورة المرجعية R${index + 1}: ${candidate.item?.title || "سجل أثري"}` });
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: detectImageMimeType(candidate.imageBytes),
+        data: bytesToBase64(candidate.imageBytes),
+      },
+    });
+  }
+  const response = await fetchVisionWithRetry("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({ model, max_tokens: 500, messages: [{ role: "user", content }] }),
+  }, { provider: "Anthropic official reference comparison", timeoutMs: VISION_PROVIDER_TIMEOUT_MS.groq });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Anthropic comparison returned HTTP ${response.status}`);
+  const raw = Array.isArray(payload?.content)
+    ? payload.content.filter((part) => part?.type === "text").map((part) => part.text || "").join("\\n")
+    : "";
+  const jsonText = raw.match(/\\{[\\s\\S]*\\}/)?.[0];
+  if (!jsonText) throw new Error("Anthropic comparison returned invalid JSON.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch { throw new Error("Anthropic comparison returned invalid JSON."); }
+  const candidate = selected.find((item, index) => (item.label || `R${index + 1}`) === parsed.matchId);
+  const similarity = Number(parsed.similarity);
+  const evidence = Array.isArray(parsed.visualEvidence)
+    ? parsed.visualEvidence.filter((item) => typeof item === "string" && item.trim())
+    : [];
+  return candidate && Number.isFinite(similarity) && similarity >= threshold &&
+    similarity <= 1 && evidence.length >= 2
+    ? { item: candidate.item, url: candidate.item.sourceUrl,
+        engine: "Anthropic official catalogue image comparison", similarity }
+    : null;
+}
+
 async function compareImageCandidatesWithOpenRouterOnce(imageBytes, candidates, apiKey, model, threshold) {
   const selected = candidates.slice(0, 6);
   if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
