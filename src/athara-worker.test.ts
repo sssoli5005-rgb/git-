@@ -347,6 +347,7 @@ describe("ATHARA Cloudflare Worker", () => {
         sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
         sourceUrl: catalogueUrl,
         imageUrls: [referenceUrl],
+        localImageUrls: ["/cached-nephthys-derivative.jpg"],
       }],
     };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -360,6 +361,11 @@ describe("ATHARA Cloudflare Worker", () => {
     const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/egypt-monuments-curated.json")) return Response.json(curated);
+      if (url.endsWith("/cached-nephthys-derivative.jpg")) {
+        return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd8]), {
+          status: 200, headers: { "content-type": "image/jpeg" },
+        });
+      }
       return new Response("", { status: 404 });
     });
     const aiRun = vi.fn(async (model: string) => {
@@ -411,6 +417,9 @@ describe("ATHARA Cloudflare Worker", () => {
         trusted: true,
       }));
       expect(fetchMock).toHaveBeenCalledWith(referenceUrl, expect.anything());
+      expect(assetsFetch.mock.calls.some(([input]) =>
+        String(input).endsWith("/cached-nephthys-derivative.jpg"),
+      )).toBe(false);
       expect(fetchMock.mock.calls.some(([input]) =>
         String(input instanceof Request ? input.url : input).startsWith("https://openrouter.ai/"),
       )).toBe(false);
