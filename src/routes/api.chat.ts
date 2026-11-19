@@ -259,18 +259,55 @@ function removeRepeatedSentences(content: string): {
   return { content: kept.join("").trim(), repetitionsRemoved };
 }
 
+function normalizeResearchQuery(query: string): string {
+  return query
+    .toLocaleLowerCase()
+    .normalize("NFKC")
+    .replace(/[أإآٱ]/gu, "ا")
+    .replace(/[ىي]/gu, "ي")
+    .replace(/[ًٌٍَُِّْـ]/gu, "")
+    .replace(/[؟?!.,،؛:]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 function isLiveResearchRequest(query: string): boolean {
-  const normalized = query.trim();
+  const normalized = normalizeResearchQuery(query);
   if (!normalized) return false;
-  const personalOrCasual =
-    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظرك|ازيك|إزيك|عامل ايه|عاملة ايه|اخبارك|أخبارك)/iu.test(normalized);
-  if (personalOrCasual) return false;
+  const needsImageClarification =
+    /(?:ايه|ما هي|ما هذا|ما هذه).{0,30}(?:قطعة|قطعه|اثر|صورة|صوره)/u.test(normalized);
+  if (needsImageClarification) return false;
+
+  const personalOrCreative =
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here)/u.test(normalized);
+  if (personalOrCreative) return false;
+
   const explicitResearch =
-    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مراجع|موثق|موثوق|اخر اخبار|آخر أخبار|حديث|حاليا|حاليًا|النهارده|اليوم|امبارح|الأسبوع ده|الأسبوع الحالي|اتأكد|تحقق|دورلي|شوفلي)/iu.test(normalized);
-  const factualQuestion =
-    /^\s*(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe)\b/iu.test(normalized) ||
-    /^\s*(?:ايه|ما هو|ما هي|من هو|من هي|مين|متى|فين|أين|ليه|لماذا|ازاي|كيف|هل|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن)/u.test(normalized);
-  return explicitResearch || factualQuestion;
+    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مصدر|المراجع|مرجع|موثق|موثوق|دليل|اتأكد|تحقق|دورلي|شوفلي|اخر اخبار|آخر أخبار|حديث|حاليا|النهارده|اليوم|امبارح|الأسبوع)/u.test(normalized);
+
+  const englishFactualQuestion =
+    /^(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe|according to)\b/u.test(normalized);
+
+  const arabicQuestionLead =
+    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن|معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|where|who|when|what|why|how)\b/u.test(normalized);
+  const arabicQuestionInside =
+    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|ممكن اعرف|ممكن تشرح|اشرح لي|احكي عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(normalized);
+  const arabicFactualQuestion = arabicQuestionLead || arabicQuestionInside;
+
+  return explicitResearch || englishFactualQuestion || arabicFactualQuestion;
+}
+
+function removeInlineResearchCitations(content: string): string {
+  return content.replace(/\s*〖\s*\d+†L\d+(?:-L\d+)?\s*〗/gu, "").trim();
+}
+
+function mergeResearchSources(
+  current: Array<{ title: string; organization: string; url: string }>,
+  incoming: Array<{ title: string; organization: string; url: string }>,
+): Array<{ title: string; organization: string; url: string }> {
+  return [...current, ...incoming]
+    .filter((source, index, all) => all.findIndex((item) => item.url === source.url) === index)
+    .slice(0, 8);
 }
 
 function createUnverifiedHeritageReply(language: LangCode): string {
@@ -284,6 +321,21 @@ function createUnverifiedHeritageReply(language: LangCode): string {
     ru: "В этот раз не удалось проверить ответ по надежному археологическому или институциональному источнику, поэтому я не буду выдавать предположение за факт. Попробуйте позже или уточните правителя, место или предмет.",
     ja: "今回は信頼できる考古学機関・公的機関の資料で回答を確認できませんでした。推測を事実として示すことはしません。時間をおいて再試行するか、王・遺跡・遺物を具体的に指定してください。",
     zh: "本次未能通过可靠的考古或机构来源核实这一答案，因此我不会把猜测当作事实。请稍后重试，或明确指出相关的国王、遗址或文物。",
+  };
+  return messages[language];
+}
+
+function createUnverifiedResearchReply(language: LangCode): string {
+  const messages: Record<LangCode, string> = {
+    ar: "ماقدرتش أتحقق من الإجابة من مصادر موثوقة في المحاولة دي، ومش هقدّم تخمين على إنه حقيقة. جرّب تاني بعد شوية.",
+    en: "I couldn't verify this answer against reliable sources in this attempt, so I won't present a guess as fact. Please try again shortly.",
+    fr: "Je n’ai pas pu vérifier cette réponse auprès de sources fiables lors de cette tentative. Je préfère ne pas présenter une supposition comme un fait. Réessayez plus tard.",
+    es: "No pude verificar esta respuesta con fuentes fiables en este intento, así que no presentaré una suposición como un hecho. Inténtalo de nuevo más tarde.",
+    it: "Non sono riuscito a verificare questa risposta tramite fonti affidabili in questo tentativo, quindi non presenterò un'ipotesi come un fatto. Riprova più tardi.",
+    de: "Ich konnte diese Antwort bei diesem Versuch nicht anhand zuverlässiger Quellen überprüfen und stelle deshalb keine Vermutung als Tatsache dar. Bitte versuchen Sie es später erneut.",
+    ru: "В этот раз не удалось проверить ответ по надежным источникам, поэтому я не буду выдавать предположение за факт. Попробуйте позже.",
+    ja: "今回は信頼できる情報源で回答を確認できませんでした。推測を事実として示すことはしません。時間をおいて再試行してください。",
+    zh: "本次未能通过可靠来源核实答案，因此我不会把猜测当作事实。请稍后重试。",
   };
   return messages[language];
 }
@@ -350,6 +402,14 @@ export async function handleChatPost(
   let searchedSources: Array<{ title: string; organization: string; url: string }> = [];
   let liveSearchUnavailable = false;
   const heritageQuestion = isEgyptianHeritageQuery(parsed.data.messages);
+  const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
+  const liveResearchRequested = !heritageQuestion && isLiveResearchRequest(latestQuestion);
+  const generalResearchContext = liveResearchRequested
+    ? [
+        "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
+        "Use Groq Compound web search or Gemini Google Search grounding for this factual question. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
+      ].join("\n")
+    : "";
 
   if (heritageQuestion) {
     // Give trusted museum/university sources time to respond before falling back.
@@ -428,7 +488,7 @@ export async function handleChatPost(
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
-    [searchContext, searchFallbackContext].filter(Boolean).join("\n\n"),
+    [searchContext, searchFallbackContext, generalResearchContext].filter(Boolean).join("\n\n"),
   );
 
   // Groq is primary. If it is temporarily unavailable, continue to Gemini
@@ -440,15 +500,14 @@ export async function handleChatPost(
       messages: { role: string; content: string }[];
     };
     const primaryModel = readProviderEnv(suppliedEnv, "GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
-    const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
-    const requestsLiveResearch = !heritageQuestion && isLiveResearchRequest(latestQuestion);
-    // GPT-OSS 20B has Groq's built-in browser_search tool. Use it for
-    // explicit web research; keep the configured Qwen model as the normal fast path.
+    const requestsLiveResearch = liveResearchRequested;
+    // Factual questions must use the search-capable model; never fall back to
+    // an ungrounded fast chat model on the same turn.
     const groqModels = requestsLiveResearch
-      ? ["openai/gpt-oss-20b", primaryModel].filter((model, index, all) => all.indexOf(model) === index)
+      ? ["openai/gpt-oss-20b"]
       : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 20_000 : 8_000);
+      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 25_000 : 8_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -462,26 +521,72 @@ export async function handleChatPost(
             messages: localPayload.messages,
             max_completion_tokens: 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
-            reasoning_effort: model === "openai/gpt-oss-20b" && requestsLiveResearch ? "low" : "medium",
-            reasoning_format: "hidden",
-            ...(model === "openai/gpt-oss-20b" && requestsLiveResearch
-              ? { tools: [{ type: "browser_search" }], tool_choice: "required", temperature: 1 }
-              : {}),
+            ...(requestsLiveResearch
+              ? {
+                  tools: [{ type: "browser_search" }],
+                  tool_choice: "required",
+                  citation_options: "enabled",
+                  temperature: 1,
+                  reasoning_effort: "low",
+                }
+              : { reasoning_effort: "medium", reasoning_format: "hidden" }),
           }),
         });
         if (groqResponse.ok) {
           const groqPayload = (await groqResponse.json().catch(() => null)) as {
             choices?: Array<{
               finish_reason?: string;
-              message?: { content?: string | null };
+              message?: {
+                content?: string | null;
+                executed_tools?: Array<{
+                  browser_results?: Array<{
+                    title?: string;
+                    url?: string;
+                    content?: string;
+                  }>;
+                }>;
+              };
             }>;
           } | null;
           const choice = groqPayload?.choices?.[0];
           const answer = choice?.message?.content?.trim();
+          const groqBrowserResults = (choice?.message?.executed_tools ?? [])
+            .flatMap((tool) => tool.browser_results ?? [])
+            .filter((result) => {
+              if (typeof result.url !== "string" || typeof result.title !== "string") return false;
+              if (typeof result.content !== "string" || result.content.trim().length < 40) return false;
+              try {
+                return new URL(result.url).protocol === "https:";
+              } catch {
+                return false;
+              }
+            });
+          const groqSearchSources = groqBrowserResults.flatMap((result) => {
+            try {
+              const url = new URL(result.url!);
+              return [{
+                title: result.title!.slice(0, 180),
+                organization: url.hostname.replace(/^www\\./u, ""),
+                url: url.href,
+              }];
+            } catch {
+              return [];
+            }
+          });
+          const hasGroqSearchEvidence = groqBrowserResults.length > 0;
+          const canUseGroqResearchAnswer = !requestsLiveResearch || hasGroqSearchEvidence;
+          if (requestsLiveResearch && hasGroqSearchEvidence && wantsSources) {
+            responseSources = mergeResearchSources(responseSources, groqSearchSources);
+          }
           if (choice?.finish_reason === "length") {
             providerFailureCode = "incomplete_response";
             console.warn("[Groq] Response reached its generation limit", { model });
-            if (answer && (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))) {
+            if (
+              answer &&
+              !requestsLiveResearch &&
+              canUseGroqResearchAnswer &&
+              (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
+            ) {
               const continuationTimeout = AbortSignal.timeout(15_000);
               const continuationSignal = AbortSignal.any([request.signal, continuationTimeout]);
               try {
@@ -522,7 +627,10 @@ export async function handleChatPost(
                     (parsed.data.language !== "ar" || !hasArabicLanguageMix(continuation))
                   ) {
                     console.info("[Groq] Completed a truncated response", { model });
-                    const cleaned = removeRepeatedSentences(`${answer}\n\n${continuation}`);
+                    const combinedAnswer = requestsLiveResearch
+                      ? removeInlineResearchCitations(answer + "\n\n" + continuation)
+                      : answer + "\n\n" + continuation;
+                    const cleaned = removeRepeatedSentences(combinedAnswer);
                     if (cleaned.repetitionsRemoved) {
                       console.warn(
                         "[Groq] Removed repeated sentences from the completed response",
@@ -548,9 +656,14 @@ export async function handleChatPost(
               }
             }
           }
-          if (answer && (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))) {
+          if (
+              answer &&
+              canUseGroqResearchAnswer &&
+              (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
+            ) {
             if (choice?.finish_reason !== "length") {
-              const cleaned = removeRepeatedSentences(answer);
+              const userFacingAnswer = requestsLiveResearch ? removeInlineResearchCitations(answer) : answer;
+              const cleaned = removeRepeatedSentences(userFacingAnswer);
               if (cleaned.repetitionsRemoved) {
                 console.warn("[Groq] Removed repeated sentences from the response", {
                   model,
@@ -582,8 +695,7 @@ export async function handleChatPost(
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "GEMINI_API_KEY")?.trim();
-  const latestQuestionForSearch = parsed.data.messages.at(-1)?.content ?? "";
-  const geminiLiveSearch = !heritageQuestion && isLiveResearchRequest(latestQuestionForSearch);
+  const geminiLiveSearch = liveResearchRequested;
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
@@ -636,8 +748,9 @@ export async function handleChatPost(
             }>;
           } | null;
           const candidate = geminiPayload?.candidates?.[0];
+          let geminiGroundedSources: Array<{ title: string; organization: string; url: string }> = [];
           if (geminiLiveSearch) {
-            const groundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
+            geminiGroundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
               .flatMap((chunk) => {
                 const uri = chunk.web?.uri;
                 if (typeof uri !== "string") return [];
@@ -653,10 +766,12 @@ export async function handleChatPost(
                   return [];
                 }
               });
-            responseSources = [
-              ...responseSources,
-              ...groundedSources.filter((source) => !responseSources.some((existing) => existing.url === source.url)),
-            ].slice(0, 8);
+            if (wantsSources) {
+              responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
+            }
+            if (!geminiGroundedSources.length) {
+              console.warn("[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer", { model });
+            }
           }
           const answer = candidate?.content?.parts
             ?.map((part) => part.text ?? "")
@@ -665,7 +780,11 @@ export async function handleChatPost(
           if (candidate?.finishReason === "MAX_TOKENS") {
             providerFailureCode = "incomplete_response";
             geminiFailureCode = "incomplete_response";
-            if (answer && (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))) {
+            if (
+              answer &&
+              !geminiLiveSearch &&
+              (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
+            ) {
               const continuationTimeout = AbortSignal.timeout(15_000);
               const continuationSignal = AbortSignal.any([request.signal, continuationTimeout]);
               try {
@@ -747,6 +866,7 @@ export async function handleChatPost(
           if (
             answer &&
             candidate?.finishReason !== "MAX_TOKENS" &&
+            (!geminiLiveSearch || geminiGroundedSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
           ) {
             const cleaned = removeRepeatedSentences(answer);
@@ -785,6 +905,24 @@ export async function handleChatPost(
         console.info("[Gemini] Trying alternate model", { model: geminiModels[index + 1] });
       }
     }
+  }
+
+  if (
+    liveResearchRequested &&
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.length > 0
+  ) {
+    console.info("[Chat] Using directly relevant curated knowledge with verified references after live search failed");
+    return asChatStream(
+      localKnowledgeAnswer.directAnswer,
+      wantsSources ? localKnowledgeSources : [],
+      parsed.data.language,
+    );
+  }
+
+  if (liveResearchRequested) {
+    console.warn("[Chat] Withholding a factual answer because neither search provider returned verifiable grounding");
+    return asChatStream(createUnverifiedResearchReply(parsed.data.language), [], parsed.data.language);
   }
 
   // Cloudflare Workers AI is the production safety net. It uses the Worker binding,

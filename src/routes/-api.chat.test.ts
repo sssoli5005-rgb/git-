@@ -181,7 +181,19 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       expect(String(input)).toContain("api.groq.com");
       return Response.json({
-        choices: [{ finish_reason: "stop", message: { content: generatedAnswer } }],
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: generatedAnswer,
+            executed_tools: [{
+              browser_results: [{
+                title: "University research on archaeological animal bones",
+                url: "https://www.ucl.ac.uk/archaeology/",
+                content: "Zooarchaeology studies animal remains recovered from archaeological sites to reconstruct diet, animal use, and past environments."
+              }]
+            }]
+          }
+        }]
       });
     });
 
@@ -708,10 +720,18 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
-          candidates: [{ content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] } }],
+          candidates: [{
+            finishReason: "STOP",
+            content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] },
+            groundingMetadata: {
+              groundingChunks: [
+                { web: { uri: "https://www.britannica.com/biography/Nefertiti", title: "Nefertiti — Encyclopaedia Britannica" } },
+                { web: { uri: "https://www.metmuseum.org/", title: "The Metropolitan Museum of Art" } }
+              ]
+            }
+          }],
         }),
       );
 
@@ -722,11 +742,10 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الملكة نفرتيتي");
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("gemini-3.8-flash");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.8-flash");
   });
 
   it("passes the same trusted research to Gemini when Groq fails", async () => {
@@ -1480,18 +1499,28 @@ describe("general web research across non-Egypt topics", () => {
       expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
+        citation_options?: string;
         tools?: Array<{ type: string }>;
         tool_choice?: string;
-        reasoning_effort?: string;
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
+      expect(payload.citation_options).toBe("enabled");
       expect(payload.tools).toEqual([{ type: "browser_search" }]);
       expect(payload.tool_choice).toBe("required");
-      expect(payload.reasoning_effort).toBe("low");
       return Response.json({
         choices: [{
           finish_reason: "stop",
-          message: { content: "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗." },
+          message: {
+            content: "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗.",
+            executed_tools: [{
+              browser_results: [{
+                  title: "NASA — James Webb Space Telescope",
+                  url: "https://science.nasa.gov/mission/webb/",
+                  content: "NASA describes the James Webb Space Telescope and its infrared observations.",
+                  score: 0.94
+                }]
+            }]
+          },
         }],
       });
     });
@@ -1528,7 +1557,7 @@ describe("general web research across non-Egypt topics", () => {
       });
     });
     const response = await handleChatPost(
-      createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب"),
+      createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب مع المصادر"),
       fetcher,
     );
     const body = await response.text();
@@ -1548,22 +1577,159 @@ describe("general web research across non-Egypt topics", () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
+        citation_options?: string;
         tools?: Array<{ type: string }>;
         tool_choice?: string;
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
+      expect(payload.citation_options).toBe("enabled");
       expect(payload.tools).toEqual([{ type: "browser_search" }]);
       expect(payload.tool_choice).toBe("required");
       return Response.json({
         choices: [{
           finish_reason: "stop",
-          message: { content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي." },
+          message: {
+            content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي 〖1†L1-L3〗.",
+            executed_tools: [{
+              browser_results: [{
+                  title: "NASA — Earth's Atmosphere",
+                  url: "https://science.nasa.gov/earth/",
+                  content: "The Earth's atmosphere scatters shorter blue wavelengths of sunlight more than longer red wavelengths.",
+                  score: 0.89
+                }]
+            }]
+          },
         }],
       });
     });
     const response = await handleChatPost(createChatRequest("ليه السما زرقا؟"), fetcher);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("تشتت ضوء الشمس");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("researches the exact unaccented Arabic question about Joseph and cites the biblical passages", async () => {
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as {
+        model: string;
+        citation_options?: string;
+        tools?: Array<{ type: string }>;
+        tool_choice?: string;
+        messages: { role: string; content: string }[];
+      };
+      expect(payload.model).toBe("openai/gpt-oss-20b");
+      expect(payload.citation_options).toBe("enabled");
+      expect(payload.tools).toEqual([{ type: "browser_search" }]);
+      expect(payload.tool_choice).toBe("required");
+      expect(payload.messages[0]?.content).toContain(
+        "For biblical or religious questions, retrieve the exact passage",
+      );
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content:
+              "بحسب سفر التكوين 50:25-26، مات يوسف في مصر وعمره 110 سنوات وحُنّط ووُضع في تابوت. ويذكر الخروج 13:19 أن موسى أخذ عظامه معه. ويحدد يشوع 24:32 شكيم مكانًا لدفن عظامه. أما ربط الموقع التقليدي المعروف بقبر يوسف به فلا يثبت هوية الرفات أثريًا بمفرده.",
+            executed_tools: [{
+              browser_results: [
+                  {
+                    title: "Genesis 50:25-26; Exodus 13:19; Joshua 24:32 — NRSVUE",
+                    url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A25-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NRSVUE",
+                    content:
+                      "Genesis 50:25 Joseph asks that his bones be carried up; Genesis 50:26 he is embalmed and placed in a coffin in Egypt. Exodus 13:19 Moses takes the bones of Joseph. Joshua 24:32 says the bones of Joseph were buried at Shechem.",
+                    score: 0.98
+                  },
+                  {
+                    title: "Joseph's Tomb — Encyclopaedia Britannica",
+                    url: "https://www.britannica.com/place/Josephs-Tomb",
+                    content:
+                      "The traditional site identified as Joseph's Tomb is located at Shechem, near Nablus.",
+                    score: 0.74
+                  }
+                ]
+            }]
+          }
+        }]
+      });
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
+      fetcher,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("التكوين 50:25-26");
+    expect(body).toContain("الخروج 13:19");
+    expect(body).toContain("يشوع 24:32");
+    expect(body).toContain("شكيم");
+    expect(body).not.toContain("https://www.biblegateway.com/");
+    expect(body).not.toContain("المصادر:");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("shows the actual retrieved URLs only when a factual user explicitly asks for sources", async () => {
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as {
+        model: string;
+        messages: { role: string; content: string }[];
+      };
+      expect(payload.model).toBe("openai/gpt-oss-20b");
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "بحسب يشوع 24:32 دُفنت عظام يوسف في شكيم.",
+            executed_tools: [{
+              browser_results: [{
+                  title: "Joshua 24:32 — NRSVUE",
+                  url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                  content: "The bones of Joseph were buried at Shechem.",
+                  score: 0.97
+                }]
+            }]
+          }
+        }]
+      });
+    });
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
+      fetcher,
+    );
+    const body = await response.text();
+
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.biblegateway.com/passage/");
+    expect(body).toContain("Joshua 24:32");
+  });
+
+  it("rejects a factual answer that has no actual search results and never uses Cloudflare memory as a substitute", async () => {
+    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      choices: [{
+        finish_reason: "stop",
+        message: {
+          content: "يوسف دُفن في مكان غير معروف ولا توجد عنه معلومات."
+        }
+      }]
+    }));
+    const ai = { run: vi.fn().mockResolvedValue({ response: "إجابة غير موثقة من الذاكرة." }) };
+
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
+      fetcher,
+      ai,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("ماقدرتش أتحقق من الإجابة");
+    expect(ai.run).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
