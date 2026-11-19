@@ -365,12 +365,12 @@ describe("ATHARA Cloudflare Worker", () => {
     const aiRun = vi.fn(async (model: string) => {
       if (model === "@cf/moondream/moondream3.1-9B-A2B") {
         return { response: JSON.stringify({
-          visualDescription: "تمثال خشبي لامرأة بغطاء رأس أخضر ووجه جانبي",
-          identity: "تمثال للمعبودة نفتيس",
-          objectType: "wooden statue",
-          material: "wood",
-          searchTerms: ["Nephthys", "wooden statue", "green headdress"],
-          keywords: ["profile", "female deity"],
+          visualDescription: "نصفي تمثال ملون من الجانب الأيمن، يظهر الرأس والكتف الأيمن، غطاء رأس طويل أخضر ووجه برتقالي/بني وعين مصرية ممدودة",
+          identity: "تمثال ملكي أو ملكية مصرية قديمة، ربما من عصر الدولة الحديثة",
+          objectType: "painted bust",
+          material: "unknown",
+          searchTerms: ["bust", "green headdress", "profile", "orange face"],
+          keywords: ["painted bust", "profile", "headdress"],
         }) };
       }
       throw new Error("Embedding service unavailable in this test");
