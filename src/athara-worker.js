@@ -7,9 +7,10 @@ const FALLBACK_VISION_MODEL = FALLBACK_VISION_MODELS[0];
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const DEFAULT_VISION_PROVIDER_ORDER = ["Cloudflare", "Gemini", "Groq"];
 const OPENROUTER_VISION_MODELS = [
-  "nvidia/nemotron-3.5-super-vl:free",
+  // Newer free multimodal model first; retain an independent second engine
+  // for generic or uncertain first-pass descriptions.
   "inclusionai/ling-3.2-flash:free",
-  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "nvidia/nemotron-3.5-super-vl:free",
   "google/gemma-4-31b-it:free",
   "openrouter/free",
 ];
@@ -526,9 +527,23 @@ function combineVisionObservations(observations) {
   return combined;
 }
 
+function specificVisionIdentityTerms(identity) {
+  const generic = new Set([
+    "statue", "figure", "bust", "head", "portrait", "person", "female", "woman", "male", "man",
+    "goddess", "god", "deity", "king", "queen", "pharaoh", "royal", "egyptian", "ancient",
+    "wooden", "painted", "stone", "plaster", "profile", "carved",
+    "تمثال", "تماثيل", "نصفي", "راس", "وجه", "شخص", "امرأة", "انثي", "انثى", "رجل",
+    "اله", "الهه", "معبود", "معبودة", "ملك", "ملكة", "فرعون", "ملكي", "مصري", "مصرية",
+    "قديم", "قديمة", "خشبي", "ملون", "حجر", "جانبي",
+  ]);
+  return scannerCandidateTerms({ identity }).filter((term) =>
+    term.length > 2 && !generic.has(term),
+  );
+}
+
 function hasVisionIdentityAgreement(identities) {
   const termSets = identities.map((identity) =>
-    new Set(scannerCandidateTerms({ identity }).filter((term) => term.length > 2)),
+    new Set(specificVisionIdentityTerms(identity)),
   );
   for (let left = 0; left < termSets.length; left += 1) {
     for (let right = left + 1; right < termSets.length; right += 1) {
@@ -547,9 +562,10 @@ function needsAdditionalArtifactVision(observations, mode) {
   const identities = observations
     .map((observation) => meaningfulVisionText(observation.identity || observation.visualCandidateIdentity))
     .filter(Boolean);
-  // One usable visual identity is enough to start trusted-source retrieval.
-  // The final state remains only probable until a reference-image comparison passes.
-  if (identities.length < 2) return identities.length === 0;
+  // A generic label such as "an ancient Egyptian bust" is not enough to stop:
+  // ask the next independent vision provider for a named artifact hypothesis.
+  if (identities.length === 0) return true;
+  if (identities.length === 1) return specificVisionIdentityTerms(identities[0]).length === 0;
   // Ask for at most one tie-breaker when two engines disagree; do not exhaust
   // every free vision provider on an ordinary scan.
   return identities.length < 3 && !hasVisionIdentityAgreement(identities);
@@ -791,17 +807,27 @@ const GENERIC_IMAGE_SEARCH_TERMS = new Set([
 ]);
 
 function rankOfficialCatalogCandidates(catalog, observation) {
+  const identityText = [
+    observation.identity,
+    observation.visualCandidateIdentity,
+    ...(Array.isArray(observation.candidateIdentities) ? observation.candidateIdentities : []),
+  ].filter(Boolean).join(" ");
   const queryText = [
     observation.visualDescription,
     observation.sceneDescription,
     observation.objectType,
     observation.printedLabels,
     observation.visibleText,
+    identityText,
     ...(Array.isArray(observation.searchTerms) ? observation.searchTerms : []),
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
   ].filter(Boolean).join(" ");
-  const queryTerms = normalizeSearchTerms(queryText)
-    .filter((term) => !GENERIC_IMAGE_SEARCH_TERMS.has(term));
+  // Use a model-suggested name only to retrieve possible reference records.
+  // It is not proof: the reference-photo comparison below remains mandatory.
+  const queryTerms = [...new Set([
+    ...normalizeSearchTerms(queryText),
+    ...scannerCandidateTerms({ identity: identityText }),
+  ])].filter((term) => !GENERIC_IMAGE_SEARCH_TERMS.has(term));
   if (queryTerms.length < 2) return [];
 
   return catalog
@@ -2443,6 +2469,98 @@ async function compareOfficialCatalogPhotosWithGroq(imageBytes, candidates, apiK
     : null;
 }
 
+async function compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
+  const selected = candidates.slice(0, 3);
+  if (!apiKey || !selected.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
+  const content = [
+    {
+      type: "text",
+      text: `قارن الصورة الأولى (صورة الزائر) بالصور المرجعية التالية. لا تعتمد على اسم المرشح أو معلوماتك التاريخية؛ اعتمد على التطابق البصري الفعلي فقط. أعد JSON فقط بالشكل {"rankedMatches":[{"candidateId":"R1","similarity":0.0,"visualEvidence":["علامة بصرية مميزة أولى","علامة بصرية مميزة ثانية"]}]}. لا تمنح 0.80 أو أعلى إلا عند تطابق علامتين بصريتين مميزتين على الأقل؛ تشابه كون الصورتين أثريتين لا يكفي. إذا لم تتطابق الصور أعد rankedMatches فارغة.`,
+    },
+    {
+      type: "image_url",
+      image_url: { url: `data:${detectImageMimeType(imageBytes)};base64,${bytesToBase64(imageBytes)}` },
+    },
+  ];
+  for (const [index, candidate] of selected.entries()) {
+    const candidateId = candidate.id || candidate.label || `R${index + 1}`;
+    content.push({ type: "text", text: `الصورة المرجعية ${candidateId}: ${candidate.name || candidate.item?.title || "سجل أثري"}` });
+    content.push({
+      type: "image_url",
+      image_url: { url: `data:${detectImageMimeType(candidate.imageBytes)};base64,${bytesToBase64(candidate.imageBytes)}` },
+    });
+  }
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+      "http-referer": "https://ektaberha500-current.sssoli5005.workers.dev",
+      "x-title": "ATHARA Egyptian Heritage Scanner",
+    },
+    body: JSON.stringify({
+      model,
+      reasoning: { enabled: false },
+      temperature: 0.1,
+      max_tokens: 800,
+      response_format: { type: "json_object" },
+      messages: [{ role: "user", content }],
+    }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = payload?.error?.message || payload?.error?.metadata?.raw ||
+      (payload?.error ? JSON.stringify(payload.error) : "");
+    throw new Error(String(detail || `OpenRouter image comparison returned HTTP ${response.status}`).slice(0, 180));
+  }
+  const raw = payload?.choices?.[0]?.message?.content || "";
+  const jsonText = String(raw).match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonText) throw new Error("OpenRouter image comparison returned invalid JSON.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch { throw new Error("OpenRouter image comparison returned invalid JSON."); }
+  const ranked = (Array.isArray(parsed.rankedMatches) ? parsed.rankedMatches : [])
+    .map((entry, index) => {
+      const candidate = selected.find((item, itemIndex) =>
+        (item.id || item.label || `R${itemIndex + 1}`) === entry?.candidateId,
+      );
+      return {
+        candidate,
+        similarity: Number(entry?.similarity),
+        visualEvidence: Array.isArray(entry?.visualEvidence)
+          ? entry.visualEvidence.filter((item) => typeof item === "string" && item.trim()).slice(0, 3)
+          : [],
+      };
+    })
+    .filter((entry) => entry.candidate && Number.isFinite(entry.similarity) &&
+      entry.similarity >= 0 && entry.similarity <= 1)
+    .sort((left, right) => right.similarity - left.similarity);
+  const best = ranked[0];
+  return {
+    ranked: ranked.map(({ candidate, similarity }) => ({
+      name: candidate.name || candidate.item?.title || "",
+      url: candidate.url || candidate.item?.sourceUrl || "",
+      similarity: Math.round(similarity * 1000) / 1000,
+    })),
+    match: best && best.similarity >= threshold && best.visualEvidence.length >= 2
+      ? { candidate: best.candidate, similarity: best.similarity }
+      : null,
+  };
+}
+
+async function compareOfficialCatalogPhotosWithOpenRouter(imageBytes, candidates, apiKey, model, threshold) {
+  const result = await compareImageCandidatesWithOpenRouter(imageBytes, candidates, apiKey, model, threshold);
+  return result.match
+    ? {
+        item: result.match.candidate.item,
+        url: result.match.candidate.item.sourceUrl,
+        engine: "OpenRouter multimodal official catalog comparison",
+        similarity: result.match.similarity,
+      }
+    : null;
+}
+
 async function compareOpenScannerCandidates(imageBytes, candidates, apiKey, model, threshold) {
   if (!apiKey || !candidates.length || imageBytes.length > 2_000_000) return { ranked: [], match: null };
   const parts = [{
@@ -2953,9 +3071,14 @@ function scannerCandidateTerms(observation) {
     ...(Array.isArray(observation.keywords) ? observation.keywords : []),
   ].filter(Boolean).join(" "));
   const aliases = {
-    "نفتيس": ["nephthys"],
+    "نفتيس": ["nephthys", "nebthet"],
+    "نبت": ["nephthys"],
+    "nephthys": ["نفتيس", "نبت"],
+    "nebthet": ["نفتيس", "نبت"],
     "خوفو": ["khufu"],
+    "khufu": ["خوفو"],
     "زوسر": ["djoser"],
+    "djoser": ["زوسر"],
     "توت": ["tut"],
     "عنخ": ["ankh"],
     "امون": ["amun"],
@@ -3280,7 +3403,8 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
       const language =
         typeof body?.language === "string" && LANGUAGES[body.language] ? body.language : "ar";
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
-      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
+      const openRouterConfigured = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
+      const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
       if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
         return json(
           {
@@ -3798,7 +3922,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           ? rankOfficialTextCandidates(catalog, observation)
           : [];
         let matchThreshold = DEFAULT_SCANNER_MATCH_THRESHOLD;
-        if (mode === "objects" && (geminiConfigured || groqVisionConfigured)) {
+        if (mode === "objects" && (geminiConfigured || groqVisionConfigured || openRouterConfigured)) {
           try {
             matchThreshold = scannerMatchThreshold(env);
           } catch (error) {
@@ -3814,7 +3938,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         let openScannerSourceCandidates = [];
         let openScannerDiscoveredCandidates = [];
         let openScannerWebSources = [];
-        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured)) {
+        if (mode === "objects" && !officialVisualMatch && (geminiConfigured || groqVisionConfigured || openRouterConfigured)) {
           const candidates = rankOfficialCatalogCandidates(catalog, observation);
           const candidateImages = await loadOfficialCandidateImages(candidates, env.ASSETS);
           if (candidateImages.length) {
@@ -3828,7 +3952,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                   geminiVisionModels[0],
                   matchThreshold,
                 );
-                openScannerComparisonSucceeded = true;
+                openScannerComparisonSucceeded = Boolean(officialVisualMatch);
               } catch (error) {
                 geminiCatalogComparisonFailed = true;
                 visionAttempts.push({
@@ -3850,11 +3974,28 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                       : "qwen/qwen3.8-27b",
                   matchThreshold,
                 );
-                groqCatalogComparisonSucceeded = true;
-                openScannerComparisonSucceeded = true;
+                groqCatalogComparisonSucceeded = Boolean(officialVisualMatch);
+                openScannerComparisonSucceeded = Boolean(officialVisualMatch);
               } catch (error) {
                 visionAttempts.push({
                   model: "Groq official catalog comparison",
+                  reason: String(error?.message || error).slice(0, 180),
+                });
+              }
+            }
+            if (!officialVisualMatch && !openScannerComparisonSucceeded && openRouterConfigured) {
+              try {
+                officialVisualMatch = await compareOfficialCatalogPhotosWithOpenRouter(
+                  referenceImage,
+                  candidateImages,
+                  env.OPENROUTER_API_KEY.trim(),
+                  OPENROUTER_VISION_MODELS[0],
+                  matchThreshold,
+                );
+                openScannerComparisonSucceeded = Boolean(officialVisualMatch);
+              } catch (error) {
+                visionAttempts.push({
+                  model: "OpenRouter official catalog comparison",
                   reason: String(error?.message || error).slice(0, 180),
                 });
               }
