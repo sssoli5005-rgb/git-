@@ -1604,12 +1604,16 @@ describe("ATHARA Cloudflare Worker", () => {
         }) }] } }],
       },
     ];
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("gemini-test-key");
-      return new Response(JSON.stringify(geminiPayloads.shift()), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestUrl = String(input instanceof Request ? input.url : input);
+      if (requestUrl.includes("generativelanguage.googleapis.com")) {
+        expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("gemini-test-key");
+        return new Response(JSON.stringify(geminiPayloads.shift()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return Response.json({ error: { message: "Groq fallback intentionally unavailable in this test" } }, { status: 503 });
     });
     vi.stubGlobal("fetch", fetchMock);
     const assetFetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -1644,7 +1648,9 @@ describe("ATHARA Cloudflare Worker", () => {
 
       expect(response.status).toBe(200);
       expect(assetFetch).toHaveBeenCalledTimes(2);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls.filter(([input]) =>
+        String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
+      )).toHaveLength(2);
       expect(body.resultType, JSON.stringify(body)).toBe("reference_match");
       expect(body.analysis).toContain("أبو سمبل");
       expect(body.analysis).toContain("معبد أبو سمبل الكبير المنحوت في الصخر");
