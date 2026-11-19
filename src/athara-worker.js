@@ -733,6 +733,7 @@ function applyEvidenceGuard(observation, hasOfficialVisualMatch, candidateIdenti
   return {
     ...observation,
     visualCandidateIdentity: meaningfulVisionText(candidateIdentity),
+    visualCandidateEvidence: meaningfulVisionText(observation.identityEvidence),
     identity: "",
     identityEvidence: "",
     historicalEvidenceConfirmed: false,
@@ -993,7 +994,7 @@ function officialTextCandidateArtifact(candidate) {
 function scannerSourceSupportsVisualIdentity(source, observation) {
   if (source?.trusted !== true || !source?.url) return false;
   const visualIdentity = String(observation?.visualCandidateIdentity || observation?.identity || "").trim();
-  const visualEvidence = String(observation?.identityEvidence || "").trim();
+  const visualEvidence = String(observation?.visualCandidateEvidence || observation?.identityEvidence || "").trim();
   if (!visualIdentity || visualEvidence.length < 12) return false;
   if (!scannerSourceUrlAllowed(source.url)) return false;
   const identityTerms = scannerCandidateTerms({ identity: visualIdentity })
@@ -4253,7 +4254,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
           (candidate) =>
             typeof candidate.similarity === "number" &&
             Number.isFinite(candidate.similarity) &&
-            candidate.similarity >= probableThreshold,
+            candidate.similarity >= matchThreshold,
         );
         const identificationStatus =
           sourceBackedCandidate || indexedProbable || visuallyRankedCandidate
@@ -4262,7 +4263,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         const probableArtifact =
           indexCandidates.find((candidate) => candidate.similarity >= probableThreshold) ||
           openScannerRankedCandidates.find((candidate) =>
-            typeof candidate.similarity === "number" && candidate.similarity >= probableThreshold,
+            typeof candidate.similarity === "number" && candidate.similarity >= matchThreshold,
           ) ||
           sourceBackedArtifact;
         let responseSources = probableArtifact
