@@ -328,6 +328,86 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
+  it("recognizes an exact official Ministry catalogue image even when AI provider quotas are exhausted", async () => {
+    const referenceUrl = "https://egymonuments.gov.eg/media/4666/dsc_0802.jpg";
+    const catalogueUrl = "https://egymonuments.gov.eg/en/collections/statue-of-nephthys-6/";
+    const imageBytes = Buffer.from(png.split(",")[1], "base64");
+    const curated = {
+      records: [{
+        id: "mota-nephthys-statue",
+        title: "Statue of Nephthys",
+        mode: "objects",
+        keywords: ["Nephthys", "نفتيس", "wooden", "profile", "head", "green headdress", "mourning", "goddess"],
+        description: "Nephthys is shown kneeling in the standard mourning position and is associated with Isis and Osiris in funerary beliefs.",
+        location: "Mummification Museum, Luxor",
+        museum: "Mummification Museum",
+        sourceTitle: "Ministry of Tourism and Antiquities, Egypt",
+        sourceUrl: catalogueUrl,
+        imageUrls: [referenceUrl],
+      }],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === referenceUrl) {
+        return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const assetsFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/egypt-monuments-curated.json")) return Response.json(curated);
+      return new Response("", { status: 404 });
+    });
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "تمثال خشبي لامرأة بغطاء رأس أخضر ووجه جانبي",
+          identity: "تمثال للمعبودة نفتيس",
+          objectType: "wooden statue",
+          material: "wood",
+          searchTerms: ["Nephthys", "wooden statue", "green headdress"],
+          keywords: ["profile", "female deity"],
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          OPENROUTER_API_KEY: "test-openrouter-key",
+          ASSETS: { fetch: assetsFetch },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        ok: true,
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        reverseImageSearchStatus: "match",
+        matchedArtifact: {
+          name: "Statue of Nephthys",
+          museum: "Mummification Museum",
+          location: "Mummification Museum, Luxor",
+          similarity: 1,
+        },
+      });
+      expect(body.sources).toContainEqual(expect.objectContaining({
+        url: catalogueUrl,
+        trusted: true,
+      }));
+      expect(fetchMock).toHaveBeenCalledWith(referenceUrl, expect.anything());
+      expect(fetchMock.mock.calls.some(([input]) =>
+        String(input instanceof Request ? input.url : input).startsWith("https://openrouter.ai/"),
+      )).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // Keep the regression suite aligned with trusted visual evidence and isolated free-fallback behavior.
   it("reports the two Cloudflare vision models", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
