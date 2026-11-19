@@ -329,6 +329,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               source?: string;
               url?: string;
               visuallyMatched?: boolean;
+              sourceBacked?: boolean;
               status?: string;
             } | null;
           };
@@ -388,7 +389,10 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             const artifact = data.matchedArtifact ||
               (data.identificationStatus === "probable" ? bestVisualCandidate : null);
             const isIdentified = data.identificationStatus === "confirmed" ||
-              data.identificationStatus === "probable";
+              data.identificationStatus === "probable" ||
+              (data.researchCandidate?.sourceBacked === true &&
+                Boolean(data.researchCandidate?.name) &&
+                data.sources?.some((source) => source.trusted && source.url === data.researchCandidate?.url));
             const identificationLabel = data.identificationStatus === "confirmed"
               ? resultCopy.confirmedStatus
               : data.identificationStatus === "probable"
@@ -398,7 +402,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
             if (isIdentified && artifact?.name) {
               // A museum or publisher is not automatically the archaeological site's location.
               const displayLocation =
-                artifact.currentLocation || artifact.location || artifact.museum || "";
+                artifact.currentLocation || artifact.location || "";
               const story = (data.sourceStory || artifact.description ||
                 data.sources?.find((source) => source.trusted)?.snippet || "")
                 .replace(/https?:\/\/\S+/g, "")
@@ -416,8 +420,8 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 details ? `${resultCopy.storyLabel}: ${details}` : "",
               ].filter(Boolean).join("\n\n");
             } else if (data.researchCandidate?.name) {
-              // Show the best trusted catalogue lead as a research candidate, not
-              // as a visually confirmed identification.
+              // A source-backed visual candidate is useful to the visitor, but
+              // keep its status distinct from a direct reference-photo confirmation.
               const lead = data.researchCandidate;
               const leadStory = (lead.description || data.sourceStory || "")
                 .replace(/https?:\/\/\S+/g, "")
@@ -427,16 +431,29 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const leadDetails = [
                 leadStory,
                 lead.period ? `${resultCopy.periodLabel}: ${lead.period}` : "",
-                lang === "ar"
-                  ? "الاسم والمعلومات من سجل مرتبط بنتائج البحث، وليست تأكيدًا أن الصورة للقطعة نفسها."
-                  : "This related catalogue record does not confirm that the image shows this exact object.",
+                lead.sourceBacked
+                  ? (lang === "ar"
+                    ? "الاسم مدعوم بقرائن الصورة وسجل أثري موثوق؛ المطابقة المرجعية المباشرة لم تكتمل."
+                    : "The image clues and a trusted artifact record support this candidate; direct reference-image matching was not completed.")
+                  : (lang === "ar"
+                    ? "ده سجل أثري مرتبط بالبحث، لكنه لا يثبت وحده إن الصورة لنفس القطعة."
+                    : "This is a related artifact record; by itself it does not prove that the image shows the same object."),
               ].filter(Boolean).join(" ");
+              const sourceBacked = lead.sourceBacked === true &&
+                data.sources?.some((source) => source.trusted && source.url === lead.url);
+              const leadStatus = sourceBacked
+                ? (lang === "ar" ? "تم التعرف على الأثر بنجاح — تطابق مرجّح" : resultCopy.probableStatus)
+                : (lang === "ar" ? "اسم مرشح يحتاج مراجعة" : resultCopy.unverifiedStatus);
+              const leadName = String(lead.name || "")
+                .replace(/\s*[-–—]\s*(?:إكتشف|اكتشف)\s+الآثار(?:\s+المصرية)?(?:\s*[-–—].*)?$/iu, "")
+                .trim();
+              const leadLocation = lead.location && lead.location !== lead.museum
+                ? lead.location
+                : "";
               analysis = [
-                resultCopy.unverifiedStatus,
-                `اسم مرشح يحتاج مطابقة: ${lead.name}`,
-                lead.location || lead.museum
-                  ? `المكان المذكور في المصدر: ${lead.location || lead.museum}`
-                  : "",
+                leadStatus,
+                `${resultCopy.nameLabel}: ${leadName}`,
+                leadLocation ? `${resultCopy.locationLabel}: ${leadLocation}` : "",
                 leadDetails ? `${resultCopy.storyLabel}: ${leadDetails}` : "",
               ].filter(Boolean).join("\n\n");
             } else {
@@ -510,7 +527,10 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           }
 
           if (!cancelled) {
-            setScanResult(analysis);
+            const uniqueParagraphs = [...new Set(
+              analysis.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean),
+            )];
+            setScanResult(uniqueParagraphs.join("\n\n"));
             setScanSources(Array.isArray(data.sources) ? data.sources : []);
             setScanConfidence(data.confidenceByField ?? null);
             setScanWikipediaAvailable(data.wikipediaAvailable ?? null);
