@@ -1,4 +1,7 @@
-const SITEMAP_URL = "https://egymonuments.gov.eg/ar/sitemap.aspx";
+const SITEMAP_URLS = [
+  "https://egymonuments.gov.eg/ar/sitemap.aspx",
+  "https://egymonuments.gov.eg/en/sitemap.aspx",
+];
 const OUTPUT_PATH = new URL("../src/data/egypt-monuments-official.json", import.meta.url);
 const CONCURRENCY = 8;
 const IMAGES_DIR = new URL("../public/egypt-monuments-images/", import.meta.url);
@@ -61,13 +64,40 @@ async function fetchPage(url) {
   return response.text();
 }
 
-const sitemap = await fetch(SITEMAP_URL).then((response) => {
-  if (!response.ok) throw new Error(`Sitemap returned ${response.status}`);
-  return response.text();
-});
-const urls = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/gi)]
-  .map((match) => decodeHtml(match[1]).replace(/&amp;/g, "&"))
-  .filter((url) => /^https:\/\/egymonuments\.gov\.eg\/ar\//i.test(url));
+const sitemapResults = await Promise.all(SITEMAP_URLS.map(async (sitemapUrl) => {
+  try {
+    const response = await fetch(sitemapUrl, {
+      headers: { "user-agent": "ATHARA bilingual official catalogue importer" },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return { sitemapUrl, text: await response.text() };
+  } catch (error) {
+    console.warn(`Sitemap unavailable: ${sitemapUrl} - ${error.message}`);
+    return { sitemapUrl, text: "" };
+  }
+}));
+const discoveredUrls = sitemapResults.flatMap(({ text }) =>
+  [...text.matchAll(/<loc>(.*?)<\/loc>/gi)]
+    .map((match) => decodeHtml(match[1]).replace(/&amp;/g, "&"))
+    .filter((url) => /^https:\/\/egymonuments\.gov\.eg\//i.test(url))
+    .filter((url) => {
+      const segments = new URL(url).pathname.split("/").filter(Boolean);
+      const offset = ["ar", "en"].includes(segments[0]) ? 1 : 0;
+      return segments.length > offset + 1 &&
+        ["monuments", "archaeological-sites", "museums", "collections"].includes(segments[offset]);
+    }),
+);
+// Prefer the Arabic record when both language variants exist, while retaining
+// English-only objects that are absent from the Arabic sitemap.
+const urlsByPath = new Map();
+for (const url of discoveredUrls) {
+  const parsed = new URL(url);
+  const path = parsed.pathname.replace(/^\/(?:ar|en)\//i, "/").replace(/\/+$/, "");
+  const existing = urlsByPath.get(path);
+  if (!existing || /^\/ar\//i.test(parsed.pathname)) urlsByPath.set(path, url);
+}
+const urls = [...urlsByPath.values()].sort((a, b) => a.localeCompare(b));
 
 const records = [];
 let failed = 0;
