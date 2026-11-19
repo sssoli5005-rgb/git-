@@ -374,8 +374,8 @@ describe("handleChatPost hosted Groq provider", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("اختلاف تصوير الإله المصري بين عصرين");
-    expect(body).toContain("عصر العمارنة");
+    expect(body).toContain("ارتباط الهيروغليفية بعقيدة المصري القديم يُفهم من سياق استخدامها");
+    expect(body).not.toContain("عصر العمارنة");
     expect(body).not.toContain("الارتباط بالعقيدة يظهر في سياق النقوش الجنائزية");
     expect(body).not.toContain("المصادر:");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
@@ -414,7 +414,7 @@ describe("handleChatPost hosted Groq provider", () => {
     ).toHaveLength(1);
   });
 
-  it("withholds an Egyptian factual answer when search providers return no trusted evidence", async () => {
+  it("uses a curated institutional answer when all live search providers fail", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
@@ -465,9 +465,11 @@ describe("handleChatPost hosted Groq provider", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("ماقدرتش أتحقق من الإجابة");
+    expect(body).toContain("بعد نشوء الدولة المصرية المبكرة");
+    expect(body).toContain("شواهد من الأسرة الأولى");
     expect(body).not.toContain("الكتابة ساعدت في تسجيل الأسماء والألقاب");
     expect(body).not.toContain("رد غير موثق من Gemini");
+    expect(body).not.toContain("المصادر:");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
