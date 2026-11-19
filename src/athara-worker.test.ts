@@ -2782,4 +2782,195 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
   });
 
+
+
+  it("fails over from exhausted Cloudflare and OpenAI quota to Mistral and resolves the official Mentuhotep II record", async () => {
+    const referenceBytes = Buffer.from(png.split(",")[1], "base64");
+    const calls = { openAi: 0, mistral: 0 };
+    const observation = {
+      visualDescription: "Seated ancient Egyptian king with a tall red crown, black painted face, crossed arms and short white jubilee garment",
+      objectType: "painted sandstone royal statue",
+      identity: "Mentuhotep II (Nebhepetre)",
+      identityEvidence: "The red crown, black Osirian skin, crossed arms and tight jubilee garment match the distinctive seated statue",
+      searchTerms: ["Mentuhotep II", "Nebhepetre", "JE 36195"],
+      keywords: ["red crown", "black painted skin", "crossed arms", "Sed festival"],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://api.openai.com/v1/chat/completions") {
+        calls.openAi += 1;
+        return Response.json({ error: { message: "429 OpenAI quota exhausted" } }, { status: 429 });
+      }
+      if (url === "https://api.mistral.ai/v1/chat/completions") {
+        calls.mistral += 1;
+        const requestBody = JSON.parse(String(init?.body));
+        expect(requestBody.model).toBe("mistral-small-latest");
+        expect(requestBody.messages[0].content.some((part: { type?: string; image_url?: string }) =>
+          part.type === "image_url" && typeof part.image_url === "string" && part.image_url.startsWith("data:image/png;base64,"),
+        )).toBe(true);
+        return Response.json({ choices: [{ message: { content: JSON.stringify(observation) } }] });
+      }
+      if (url.startsWith("https://egymonuments.gov.eg/media/1290/montuhotep.jpg")) {
+        return new Response(referenceBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn().mockRejectedValue(
+      new Error("4006: you have used up your daily free allocation of 10,000 neurons"),
+    );
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          OPENAI_API_KEY: "openai-test-key",
+          MISTRAL_API_KEY: "mistral-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(calls.openAi).toBe(1);
+      expect(calls.mistral).toBe(1);
+      expect(body).toMatchObject({
+        resultType: "reference_match",
+        identificationStatus: "confirmed",
+        matchedArtifact: {
+          name: "Statue of Mentuhotep II (Nebhepetre)",
+          museum: "The Egyptian Museum, Cairo",
+          location: "The Egyptian Museum, Cairo, Gallery 26, Ground Floor",
+          objectNumber: "JE 36195",
+        },
+      });
+      expect(body.sources).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          url: "https://egymonuments.gov.eg/en/collections/statue-of-mentuhotep-4",
+          trusted: true,
+        }),
+        expect.objectContaining({
+          url: "https://egyptianmuseumcairo.eg/artefacts/statue-of-mentuhotep/",
+          trusted: true,
+        }),
+        expect.objectContaining({
+          url: "https://arce.org/seated-statue-king-nebhepetre-mentuhotep-ii/",
+          trusted: true,
+        }),
+      ]));
+      expect(body.analysis).toContain("Nebhepetre Mentuhotep II");
+      expect(body.analysis).not.toContain("quota");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("asks a second independent vision engine to review a generic first observation", async () => {
+    const referenceBytes = Buffer.from(png.split(",")[1], "base64");
+    const calls = { openAi: 0, mistral: 0 };
+    const namedObservation = {
+      visualDescription: "A seated Egyptian king with a red crown, crossed arms and black painted skin",
+      objectType: "painted sandstone statue",
+      identity: "Mentuhotep II",
+      identityEvidence: "The red crown, crossed arms and short white jubilee garment form a distinctive royal statue type",
+      searchTerms: ["Mentuhotep II", "Nebhepetre", "JE 36195"],
+      keywords: ["red crown", "crossed arms", "black skin", "jubilee garment"],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://api.openai.com/v1/chat/completions") {
+        calls.openAi += 1;
+        return Response.json({ choices: [{ message: { content: JSON.stringify(namedObservation) } }] });
+      }
+      if (url === "https://api.mistral.ai/v1/chat/completions") {
+        calls.mistral += 1;
+        return Response.json({ choices: [{ message: { content: JSON.stringify(namedObservation) } }] });
+      }
+      if (url.startsWith("https://egymonuments.gov.eg/media/1290/montuhotep.jpg")) {
+        return new Response(referenceBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return { response: JSON.stringify({
+          visualDescription: "An ancient Egyptian royal statue, seated and photographed from the front",
+          objectType: "statue",
+          identity: "statue",
+          searchTerms: ["ancient Egyptian statue"],
+          keywords: ["seated", "royal"],
+        }) };
+      }
+      throw new Error("Embedding service unavailable in this test");
+    });
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          OPENAI_API_KEY: "openai-test-key",
+          MISTRAL_API_KEY: "mistral-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(calls.openAi).toBe(1);
+      expect(calls.mistral).toBe(1);
+      expect(body.matchedArtifact).toMatchObject({
+        name: "Statue of Mentuhotep II (Nebhepetre)",
+        objectNumber: "JE 36195",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("uses Anthropic vision when Cloudflare daily allocation is exhausted", async () => {
+    const referenceBytes = Buffer.from(png.split(",")[1], "base64");
+    let anthropicCalls = 0;
+    const observation = {
+      visualDescription: "A seated painted sandstone king wearing the red crown, with crossed arms and a short white jubilee cloak",
+      objectType: "royal statue",
+      identity: "Mentuhotep II",
+      identityEvidence: "Distinctive red crown, Osirian black skin and crossed arms",
+      searchTerms: ["Mentuhotep II", "JE 36195"],
+      keywords: ["red crown", "crossed arms", "Sed festival"],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://api.anthropic.com/v1/messages") {
+        anthropicCalls += 1;
+        return Response.json({ content: [{ type: "text", text: JSON.stringify(observation) }] });
+      }
+      if (url.startsWith("https://egymonuments.gov.eg/media/1290/montuhotep.jpg")) {
+        return new Response(referenceBytes, { status: 200, headers: { "content-type": "image/png" } });
+      }
+      return Response.json({ data: [], objectIDs: [], query: { pages: {} }, search: [], entities: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const aiRun = vi.fn().mockRejectedValue(
+      new Error("4006: daily free allocation of 10,000 neurons exhausted"),
+    );
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "en", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          ANTHROPIC_API_KEY: "anthropic-test-key",
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(anthropicCalls).toBe(1);
+      expect(body.matchedArtifact).toMatchObject({
+        name: "Statue of Mentuhotep II (Nebhepetre)",
+        objectNumber: "JE 36195",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
 });
