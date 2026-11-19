@@ -276,7 +276,7 @@ function isLiveResearchRequest(query: string): boolean {
   if (!normalized) return false;
 
   const personalOrCreative =
-    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact)/u.test(normalized);
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here)/u.test(normalized);
   if (personalOrCreative) return false;
 
   const explicitResearch =
@@ -288,7 +288,7 @@ function isLiveResearchRequest(query: string): boolean {
   const arabicQuestionLead =
     /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|عرفني|كلمني عن|معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|where|who|when|what|why|how)\b/u.test(normalized);
   const arabicQuestionInside =
-    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس)(?:\s|$)/u.test(normalized);
+    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|ممكن اعرف|ممكن تشرح|اشرح لي|احكي عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(normalized);
   const arabicFactualQuestion = arabicQuestionLead || arabicQuestionInside;
 
   return explicitResearch || englishFactualQuestion || arabicFactualQuestion;
@@ -902,6 +902,19 @@ export async function handleChatPost(
         console.info("[Gemini] Trying alternate model", { model: geminiModels[index + 1] });
       }
     }
+  }
+
+  if (
+    liveResearchRequested &&
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.length > 0
+  ) {
+    console.info("[Chat] Using directly relevant curated knowledge with verified references after live search failed");
+    return asChatStream(
+      localKnowledgeAnswer.directAnswer,
+      wantsSources ? localKnowledgeSources : [],
+      parsed.data.language,
+    );
   }
 
   if (liveResearchRequested) {
