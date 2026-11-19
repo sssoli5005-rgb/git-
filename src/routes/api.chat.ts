@@ -16,21 +16,6 @@ import {
   searchTrustedEgyptianHeritage,
 } from "@/lib/heritage-search";
 
-type CloudflareAI = {
-  run(
-    model: string,
-    input: {
-      messages: { role: "system" | "user" | "assistant"; content: string }[];
-      max_tokens: number;
-      temperature: number;
-    },
-  ): Promise<unknown>;
-};
-
-type RequestWithCloudflareRuntime = Request & {
-  runtime?: { cloudflare?: { env?: { AI?: CloudflareAI } } };
-};
-
 type ChatProviderEnv = Record<string, string | undefined>;
 
 function readProviderEnv(env: ChatProviderEnv | undefined, key: string): string | undefined {
@@ -383,7 +368,6 @@ function createArabicTourismQuickReply(data: {
 export async function handleChatPost(
   request: Request,
   fetcher: typeof fetch = fetch,
-  suppliedAI?: CloudflareAI,
   suppliedEnv?: ChatProviderEnv,
 ): Promise<Response> {
   const body = await request.json().catch(() => null);
@@ -493,13 +477,13 @@ export async function handleChatPost(
 
   // Groq is primary. If it is temporarily unavailable, continue to Gemini
   // rather than immediately returning a generic server-busy error.
-  const groqApiKey = readProviderEnv(suppliedEnv, "GROQ_API_KEY")?.trim();
+  const groqApiKey = readProviderEnv(suppliedEnv, "CHAT_GROQ_API_KEY")?.trim();
   let providerFailureCode: "provider_error" | "incomplete_response" = "provider_error";
   if (groqApiKey) {
     const localPayload = JSON.parse(chatRequest.body) as {
       messages: { role: string; content: string }[];
     };
-    const primaryModel = readProviderEnv(suppliedEnv, "GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
+    const primaryModel = readProviderEnv(suppliedEnv, "CHAT_GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
     const requestsLiveResearch = liveResearchRequested;
     // Factual questions must use the search-capable model; never fall back to
     // an ungrounded fast chat model on the same turn.
@@ -694,7 +678,7 @@ export async function handleChatPost(
 
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
-  const geminiApiKey = readProviderEnv(suppliedEnv, "GEMINI_API_KEY")?.trim();
+  const geminiApiKey = readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim();
   const geminiLiveSearch = liveResearchRequested;
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
@@ -710,7 +694,7 @@ export async function handleChatPost(
         role: message.role === "assistant" ? "model" : "user",
         parts: [{ text: message.content }],
       }));
-    const primaryModel = readProviderEnv(suppliedEnv, "GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
+    const primaryModel = readProviderEnv(suppliedEnv, "CHAT_GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
     const geminiModels = [...new Set([primaryModel, "gemini-3.6-flash"])];
     for (const [index, model] of geminiModels.entries()) {
       const providerTimeout = AbortSignal.timeout(geminiLiveSearch ? 25_000 : 12_000);
@@ -925,39 +909,8 @@ export async function handleChatPost(
     return asChatStream(createUnverifiedResearchReply(parsed.data.language), [], parsed.data.language);
   }
 
-  // Cloudflare Workers AI is the production safety net. It uses the Worker binding,
-  // so it remains reachable when a third-party provider is down or rate-limited.
-  const cloudflareAI =
-    suppliedAI ?? (request as RequestWithCloudflareRuntime).runtime?.cloudflare?.env?.AI;
-  if (cloudflareAI) {
-    const localPayload = JSON.parse(chatRequest.body) as {
-      messages: { role: "system" | "user" | "assistant"; content: string }[];
-    };
-    try {
-      const result = (await cloudflareAI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
-        messages: localPayload.messages,
-        max_tokens: 2048,
-        temperature: heritageQuestion ? 0.2 : 0.35,
-      })) as { response?: unknown };
-      const answer = typeof result?.response === "string" ? result.response.trim() : "";
-      if (answer && (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))) {
-        console.info("[Chat] Recovered response with Cloudflare Workers AI");
-        const cleaned = removeRepeatedSentences(answer);
-        if (cleaned.repetitionsRemoved) {
-          console.warn("[Chat] Removed repeated sentences from the response", {
-            count: cleaned.repetitionsRemoved,
-          });
-        }
-        return asChatStream(cleaned.content, responseSources, parsed.data.language);
-      }
-      console.error("[Chat] Cloudflare Workers AI returned an empty or invalid-language response");
-    } catch (error) {
-      console.error("[Chat] Cloudflare Workers AI fallback failed", {
-        reason: error instanceof Error ? error.name : "unknown",
-      });
-    }
-  }
-
+  // Chat uses only its dedicated hosted providers and CHAT_OLLAMA_* in local development.
+  // The Cloudflare AI binding and scanner credentials belong exclusively to /api/scan.
   if (
     parsed.data.language === "ar" &&
     heritageQuestion &&
@@ -971,13 +924,13 @@ export async function handleChatPost(
 
   // Do not silently route hosted-provider failures to the local default model.
   // Ollama is available only when explicitly configured, or as the sole local provider.
-  const ollamaBaseUrl = readProviderEnv(suppliedEnv, "OLLAMA_BASE_URL")?.trim();
+  const ollamaBaseUrl = readProviderEnv(suppliedEnv, "CHAT_OLLAMA_BASE_URL")?.trim();
   const production = readProviderEnv(suppliedEnv, "NODE_ENV") === "production";
   if (!ollamaBaseUrl && (production || groqApiKey || geminiApiKey)) {
     console.error("[Chat] All configured hosted AI providers are unavailable", {
       groqConfigured: Boolean(groqApiKey),
       geminiConfigured: Boolean(geminiApiKey),
-      cloudflareAIConfigured: Boolean(cloudflareAI),
+      cloudflareAIConfigured: false,
       geminiFailureCode,
       geminiFailureStatus,
     });

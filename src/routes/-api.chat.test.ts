@@ -170,7 +170,7 @@ describe("chat history validation", () => {
 
 describe("handleChatPost hosted Groq provider", () => {
   it("removes repeated generated sentences before returning an answer", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const repeatedSentence =
       "بتتحلل العظام في المستوطنات القديمة، وده بيساعد الباحثين يعرفوا أنواع الحيوانات.";
     const generatedAnswer = [
@@ -209,8 +209,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("uses the curated sourced answer for deity imagery when hosted AI providers are unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () => new Response("unavailable", { status: 503 }));
     const question =
       "لماذا توجد اختلافات في تصوير نفس الإله المصري القديم بين عصر وآخر؟ وهل تغير شكل الإله بسبب تطور الفن فقط، أم أن التغيرات السياسية والدينية أثرت أيضاً في طريقة تصويره؟ اشرح بمثال تاريخي حقيقي.";
@@ -235,8 +235,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("shows only the curated references when the visitor asks for the answer's sources", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () => new Response("unavailable", { status: 503 }));
     const response = await handleChatPost(
       new Request("http://localhost/api/chat", {
@@ -273,7 +273,7 @@ describe("handleChatPost hosted Groq provider", () => {
     "ما الدليل الرسمي على استخدام الهيروغليفية؟ وما الفرق بينها وبين الهيراطيقية والديموطيقية؟",
     "لماذا اعتُبرت الكتابة الهيروغليفية انعكاسًا لعقيدة المصري القديم ونظرته للعالم؟",
   ])("searches trusted sources before answering heritage questions: %s", async (question) => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
       if (url.hostname === "www.ucl.ac.uk") {
@@ -319,7 +319,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("searches trusted sources without showing citations unless requested", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("سقارة جزء من جبانة منف القديمة.");
 
     const response = await handleChatPost(createChatRequest("إيه أهم الآثار في سقارة؟"), fetcher);
@@ -335,7 +335,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("uses Groq with curated knowledge when trusted pages are unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
       if (url.hostname === "www.ucl.ac.uk") return new Response("blocked", { status: 403 });
@@ -379,7 +379,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("returns a relevant sourced answer when the food question's providers truncate", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname.endsWith("wikipedia.org")) {
@@ -412,7 +412,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("asks the hosted model to answer cautiously when early-state sources are unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
       if (url.hostname.endsWith("ucl.ac.uk"))
@@ -456,7 +456,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("does not show source links for English heritage answers unless requested", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("Saqqara is part of the Memphis necropolis.");
 
     const response = await handleChatPost(createChatRequest("What is in Saqqara?", "en"), fetcher);
@@ -467,8 +467,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("withholds a heritage answer when neither trusted sources nor curated references are available", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname.endsWith("wikipedia.org")) {
@@ -490,7 +490,7 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("shows relevant references when the visitor asks where the information came from", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("سقارة هي المقبرة الرئيسية لمدينة منف.");
 
     const response = await handleChatPost(
@@ -518,8 +518,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("shows curated sources on request when live search is unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname.endsWith("ucl.ac.uk"))
@@ -567,9 +567,9 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("uses the server-side Groq key and returns the generated Qwen answer", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GROQ_MODEL", "qwen/qwen3.8-27b");
-    vi.stubEnv("GEMINI_API_KEY", "secondary-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_MODEL", "qwen/qwen3.8-27b");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "secondary-gemini-key");
     const generatedReply = "اللي ممكن يدمّر الإنسان هو فقدان الأمل، والعزلة، والاستسلام للخوف.";
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
@@ -604,8 +604,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("uses the alternate Groq model with the same key after a rate limit", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
@@ -626,8 +626,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("continues a truncated Groq answer before returning it", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -683,8 +683,8 @@ describe("handleChatPost hosted Groq provider", () => {
   ] as const)(
     "continues a truncated answer in the selected %s interface language",
     async (language, instruction, partial, continuation) => {
-      vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("GEMINI_API_KEY", "");
+      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
       const fetcher = vi
         .fn<typeof fetch>()
         .mockResolvedValueOnce(
@@ -715,8 +715,8 @@ describe("handleChatPost hosted Groq provider", () => {
   );
 
   it("falls back to Gemini when Groq is temporarily unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
@@ -749,8 +749,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("passes the same trusted research to Gemini when Groq fails", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const sourceExcerpt =
       "The hieroglyphic script was regularly deployed with formal art; sacred text and art are interwoven. A coffin text from Sedment names Anubis, while Egyptian writing also served administrative and literary purposes.";
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
@@ -805,8 +805,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("uses the current stable Gemini model when the primary is unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
@@ -825,8 +825,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("continues a truncated Gemini answer before returning it", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -868,8 +868,8 @@ describe("handleChatPost hosted Groq provider", () => {
   });
 
   it("retries with Gemini when Groq mixes English into an Arabic answer", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -894,68 +894,27 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
-  it("recovers through Cloudflare AI when Groq throttles the request", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+  it("does not use the scanner AI binding when chat Groq is throttled", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () => new Response("{}", { status: 429 }));
-    const ai = { run: vi.fn().mockResolvedValue({ response: "خلينا نحكي عن الموضوع بهدوء." }) };
+    const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
+    const request = createChatRequest("عندي مشكلة في التعارف");
+    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
 
-    const response = await handleChatPost(createChatRequest(), fetcher, ai);
+    const response = await handleChatPost(request, fetcher);
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("خلينا نحكي عن الموضوع بهدوء.");
-    expect(ai.run).toHaveBeenCalledWith(
-      "@cf/meta/llama-3.1-8b-instruct-fast",
-      expect.objectContaining({
-        max_tokens: 2048,
-      }),
-    );
+    expect(response.status).toBe(503);
+    expect(scannerAI.run).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalled();
   });
-});
-
-it("uses Cloudflare Workers AI when Groq is unavailable and Gemini is not configured", async () => {
-  vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-  vi.stubEnv("GEMINI_API_KEY", "");
-  const fetcher = vi.fn<typeof fetch>(async () => new Response("{}", { status: 503 }));
-  const ai = {
-    run: vi.fn().mockResolvedValue({
-      response: "أغرب الحكايات التاريخية مش كلها مؤكدة؛ خلينا نفرّق بين الرواية والدليل.",
-    }),
-  };
-
-  const response = await handleChatPost(createChatRequest("إيه أغرب حكاية تقولهالي؟"), fetcher, ai);
-
-  expect(response.status).toBe(200);
-  expect(await response.text()).toContain("أغرب الحكايات التاريخية");
-  expect(ai.run).toHaveBeenCalledOnce();
-  expect(fetcher).toHaveBeenCalledTimes(2);
-});
-
-it("reads Cloudflare Workers AI from the request runtime when no test override is supplied", async () => {
-  vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-  vi.stubEnv("GEMINI_API_KEY", "");
-  const fetcher = vi.fn<typeof fetch>(async () => new Response("{}", { status: 503 }));
-  const ai = {
-    run: vi
-      .fn()
-      .mockResolvedValue({ response: "دي حكاية غريبة، لكن لازم نفرّق بين الدليل والرواية." }),
-  };
-  const request = createChatRequest("إيه أغرب حكاية تقولهالي؟");
-  Object.defineProperty(request, "runtime", {
-    value: { cloudflare: { env: { AI: ai } } },
-  });
-
-  const response = await handleChatPost(request, fetcher);
-
-  expect(response.status).toBe(200);
-  expect(await response.text()).toContain("دي حكاية غريبة");
-  expect(ai.run).toHaveBeenCalledOnce();
 });
 
 describe("handleChatPost hosted Gemini provider", () => {
   it("uses the server-side Gemini key and returns the generated answer", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "test-server-key");
-    vi.stubEnv("GEMINI_MODEL", "gemini-test-model");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
+    vi.stubEnv("CHAT_GEMINI_MODEL", "gemini-test-model");
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const requestBody = JSON.parse(String(init?.body)) as {
         systemInstruction: { parts: { text: string }[] };
@@ -983,23 +942,22 @@ describe("handleChatPost hosted Gemini provider", () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("gemini-test-model:generateContent");
   });
 
-  it("returns a clear rate-limit error when Gemini throttles the request", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-server-key");
+  it("keeps Gemini rate-limit handling inside chat providers", async () => {
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () => new Response("{}", { status: 429 }));
-    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
+    const request = createChatRequest("عندي مشكلة في التعارف");
+    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
 
-    const ai = { run: vi.fn().mockResolvedValue({ response: "خلينا نفهم المشكلة خطوة خطوة." }) };
-    const response = await handleChatPost(createChatRequest("عندي مشكلة في التعارف"), fetcher, ai);
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("خلينا نفهم المشكلة خطوة خطوة.");
-    expect(ai.run).toHaveBeenCalled();
-    expect(errorLog).toHaveBeenCalled();
+    const response = await handleChatPost(request, fetcher);
+    expect(response.status).toBe(503);
+    expect(scannerAI.run).not.toHaveBeenCalled();
   });
 
   it("uses the stable Gemini Flash model when the primary model is unavailable", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "test-server-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
@@ -1017,92 +975,66 @@ describe("handleChatPost hosted Gemini provider", () => {
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.6-flash:generateContent");
   });
 
-  it("recovers through Cloudflare AI when both hosted providers truncate their answers", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+  it("does not borrow the scanner AI when both chat providers return incomplete answers", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       if (String(input).includes("api.groq.com")) {
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "length",
-              message: { content: "رد Groq غير مكتمل" },
-            },
-          ],
-        });
+        return Response.json({ choices: [{ finish_reason: "length", message: { content: "رد Groq غير مكتمل" } }] });
       }
       if (String(input).includes("generativelanguage.googleapis.com")) {
-        return Response.json({
-          candidates: [
-            {
-              finishReason: "MAX_TOKENS",
-              content: { parts: [{ text: "رد Gemini غير مكتمل" }] },
-            },
-          ],
-        });
+        return Response.json({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: "رد Gemini غير مكتمل" }] } }] });
       }
       throw new Error(`Unexpected request to ${String(input)}.`);
     });
-    const ai = {
-      run: vi.fn().mockResolvedValue({ response: "هكمل معاك: دي إجابة واضحة ومكتملة." }),
-    };
+    const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
+    const request = createChatRequest("عندي مشكلة في التعارف");
+    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
 
-    const response = await handleChatPost(createChatRequest(), fetcher, ai);
-    const body = await response.text();
+    const response = await handleChatPost(request, fetcher);
 
-    expect(response.status).toBe(200);
-    expect(body).toContain("دي إجابة واضحة ومكتملة.");
-    expect(body).not.toContain("رد Groq غير مكتمل");
-    expect(body).not.toContain("رد Gemini غير مكتمل");
-    expect(fetcher).toHaveBeenCalledTimes(8);
-    expect(ai.run).toHaveBeenCalledOnce();
-    expect(ai.run).toHaveBeenCalledWith(
-      "@cf/meta/llama-3.1-8b-instruct-fast",
-      expect.objectContaining({ max_tokens: 2048 }),
-    );
+    expect(response.status).toBe(503);
+    expect(scannerAI.run).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalled();
   });
 
-  it("rejects a Gemini Arabic answer that mixes English into the reply", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-server-key");
+  it("rejects a Gemini Arabic answer that mixes English without borrowing scanner AI", async () => {
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () =>
       Response.json({
         candidates: [{ content: { parts: [{ text: "خلينا نفهم الموضوع step by step." }] } }],
       }),
     );
-    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
+    const request = createChatRequest("عندي مشكلة في التعارف");
+    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
 
-    const ai = { run: vi.fn().mockResolvedValue({ response: "خلينا نفهم الموضوع بشكل واضح." }) };
-    const response = await handleChatPost(createChatRequest("ممكن تشرحلي الموضوع؟"), fetcher, ai);
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("خلينا نفهم الموضوع بشكل واضح.");
-    expect(ai.run).toHaveBeenCalled();
-    expect(errorLog).toHaveBeenCalled();
+    const response = await handleChatPost(request, fetcher);
+    expect(response.status).toBe(503);
+    expect(scannerAI.run).not.toHaveBeenCalled();
   });
 
-  it("returns a controlled provider error when Gemini cannot be reached", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "test-server-key");
-    const fetcher = vi.fn<typeof fetch>(async () => {
-      throw new TypeError("network unavailable");
-    });
-    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("returns a controlled error when Gemini cannot be reached without calling scanner AI", async () => {
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async () => { throw new TypeError("network unavailable"); });
+    const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
+    const request = createChatRequest("عندي مشكلة في التعارف");
+    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
 
-    const ai = { run: vi.fn().mockResolvedValue({ response: "خلينا نرتب أفكارك ونشوف الحل." }) };
-    const response = await handleChatPost(createChatRequest("عندي مشكلة في التعارف"), fetcher, ai);
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("خلينا نرتب أفكارك ونشوف الحل.");
-    expect(ai.run).toHaveBeenCalled();
-    expect(errorLog).toHaveBeenCalled();
+    const response = await handleChatPost(request, fetcher);
+    expect(response.status).toBe(503);
+    expect(scannerAI.run).not.toHaveBeenCalled();
   });
 });
 
 describe("handleChatPost production provider configuration", () => {
   it("does not fall back to default local Ollama when configured hosted providers fail", async () => {
     vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
-    vi.stubEnv("OLLAMA_BASE_URL", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_OLLAMA_BASE_URL", "");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
@@ -1123,8 +1055,8 @@ describe("handleChatPost production provider configuration", () => {
 
   it("does not try localhost Ollama when no hosted provider is configured in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("GEMINI_API_KEY", "");
-    vi.stubEnv("OLLAMA_BASE_URL", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_OLLAMA_BASE_URL", "");
     const fetcher = vi.fn<typeof fetch>();
 
     const response = await handleChatPost(createChatRequest(), fetcher);
@@ -1139,7 +1071,7 @@ describe("handleChatPost Ollama stream handling", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("accepts a complete Arabic stream even when NDJSON is split across transport chunks", async () => {
-    vi.stubEnv("OLLAMA_MODEL", "gemma3:4b");
+    vi.stubEnv("CHAT_OLLAMA_MODEL", "gemma3:4b");
     const requestLog = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const raw =
       ollamaChunk("واضح إن الموقف مضايقك. ") +
@@ -1211,8 +1143,8 @@ describe("handleChatPost Ollama stream handling", () => {
   });
 
   it("finishes a non-Arabic reply when Ollama sends its completion marker but keeps the stream open", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     let streamCancelled = false;
     const fetcher = vi.fn<typeof fetch>(
       async () =>
@@ -1245,8 +1177,8 @@ describe("handleChatPost Ollama stream handling", () => {
   });
 
   it("continues with a conversational model when live search cannot verify a Saqqara answer", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname === "ar.wikipedia.org" && url.searchParams.get("list") === "search") {
@@ -1367,7 +1299,7 @@ describe("handleChatPost Ollama stream handling", () => {
   });
 
   it("preserves the system prompt and uses qwen3:8b only for the Arabic-language fallback", async () => {
-    vi.stubEnv("OLLAMA_MODEL", "gemma3:4b");
+    vi.stubEnv("CHAT_OLLAMA_MODEL", "gemma3:4b");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -1476,7 +1408,7 @@ describe("handleChatPost Ollama stream handling", () => {
   );
 
   it("does not invent an artifact identification when asked about an unknown object", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = vi.fn<typeof fetch>(async () =>
       Response.json({
         choices: [
@@ -1493,8 +1425,8 @@ describe("handleChatPost Ollama stream handling", () => {
 
 describe("general web research across non-Egypt topics", () => {
   it("uses Groq browser search when the user explicitly asks for current research", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
       const payload = JSON.parse(String(init?.body)) as {
@@ -1534,8 +1466,8 @@ describe("general web research across non-Egypt topics", () => {
   });
 
   it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
-    vi.stubEnv("GROQ_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
       expect(url).toContain("generativelanguage.googleapis.com");
@@ -1572,8 +1504,8 @@ describe("general web research across non-Egypt topics", () => {
 
 
   it("uses live research for an ordinary factual question outside Egyptian heritage", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
@@ -1609,8 +1541,8 @@ describe("general web research across non-Egypt topics", () => {
   });
 
   it("researches the exact unaccented Arabic question about Joseph and cites the biblical passages", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
@@ -1672,8 +1604,8 @@ describe("general web research across non-Egypt topics", () => {
   });
 
   it("shows the actual retrieved URLs only when a factual user explicitly asks for sources", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
@@ -1709,8 +1641,8 @@ describe("general web research across non-Egypt topics", () => {
   });
 
   it("rejects a factual answer that has no actual search results and never uses Cloudflare memory as a substitute", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () => Response.json({
       choices: [{
         finish_reason: "stop",
@@ -1719,23 +1651,19 @@ describe("general web research across non-Egypt topics", () => {
         }
       }]
     }));
-    const ai = { run: vi.fn().mockResolvedValue({ response: "إجابة غير موثقة من الذاكرة." }) };
-
     const response = await handleChatPost(
       createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
       fetcher,
-      ai,
     );
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("ماقدرتش أتحقق من الإجابة");
-    expect(ai.run).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("keeps personal advice conversational instead of forcing web search", async () => {
-    vi.stubEnv("GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown };
       expect(payload.model).toBe("qwen/qwen3.8-27b");

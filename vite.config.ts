@@ -15,22 +15,40 @@ export default async (configEnv: ConfigEnv) => {
       "ADMIN_PASSWORD",
       "APP_PASSWORD_HASH",
       "APP_SESSION_SECRET",
-      "GROQ_API_KEY",
-      "GROQ_MODEL",
-      "GROQ_VISION_MODEL",
+      "CHAT_GROQ_API_KEY",
+      "CHAT_GROQ_MODEL",
+      "CHAT_GEMINI_API_KEY",
+      "CHAT_GEMINI_MODEL",
+      "CHAT_OLLAMA_BASE_URL",
+      "CHAT_OLLAMA_MODEL",
+      "SCANNER_GEMINI_API_KEY",
+      "SCANNER_GEMINI_VISION_MODEL",
+      "SCANNER_GEMINI_VISION_FALLBACK_MODEL",
+      "SCANNER_GROQ_API_KEY",
+      "SCANNER_GROQ_MODEL",
+      "SCANNER_GROQ_VISION_MODEL",
+      "SCANNER_GROQ_WEB_SEARCH_MODEL",
+      "SCANNER_OPENROUTER_API_KEY",
+      "SCANNER_OLLAMA_BASE_URL",
+      "SCANNER_OLLAMA_VISION_MODEL",
+      "SCANNER_QWEN_VISION_MODEL",
+      "SCANNER_INTERNVL_VISION_MODEL",
       "SCANNER_INDEX_URL",
       "SCANNER_INDEX_TIMEOUT_MS",
       "SCANNER_INDEX_MATCH_THRESHOLD",
       "SCANNER_PROBABLE_THRESHOLD",
-      "GEMINI_API_KEY",
-      "GEMINI_MODEL",
-      "GEMINI_VISION_MODEL",
-      "GEMINI_VISION_FALLBACK_MODEL",
-      "OLLAMA_BASE_URL",
-      "OLLAMA_VISION_MODEL",
+      "SCANNER_MATCH_THRESHOLD",
+      "SCANNER_FREE_FALLBACK_ENABLED",
     ]) {
       if (localEnv[key]) {
         process.env[key] = localEnv[key];
+      } else if (["CHAT_GROQ_API_KEY", "CHAT_GEMINI_API_KEY", "SCANNER_GROQ_API_KEY", "SCANNER_GEMINI_API_KEY"].includes(key)) {
+        // Legacy keys keep existing local installs working during migration.
+        // Set dedicated CHAT_* / SCANNER_* keys to give each pipeline its own quota.
+        const legacyKey = key.includes("GROQ") ? "GROQ_API_KEY" : "GEMINI_API_KEY";
+        if (localEnv[legacyKey]) process.env[key] = localEnv[legacyKey];
+      } else if (key === "SCANNER_OPENROUTER_API_KEY" && localEnv.OPENROUTER_API_KEY) {
+        process.env[key] = localEnv.OPENROUTER_API_KEY;
       } else if (["APP_USERNAME", "ADMIN_PASSWORD", "APP_PASSWORD_HASH", "APP_SESSION_SECRET"].includes(key)) {
         delete process.env[key];
       }

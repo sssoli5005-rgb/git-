@@ -49,21 +49,33 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // Handle chat directly at the Worker boundary so the real Cloudflare AI
-    // binding is passed explicitly. TanStack/Nitro may create a different
-    // Request object for route handlers, so mutating request.runtime is not
-    // a reliable way to expose Worker bindings.
+    // Handle chat directly at the Worker boundary and pass only CHAT_* settings.
+    // The scanner's AI binding and SCANNER_* secrets never enter the chat pipeline.
+    // TanStack/Nitro may create a different Request object for route handlers, so
+    // mutating request.runtime is not a reliable way to expose Worker bindings.
     const url = new URL(request.url);
     if (url.pathname === "/api/chat" && request.method === "POST") {
       if (!isValidSession(request.headers.get("cookie"))) {
         return Response.json({ code: "unauthorized" }, { status: 401 });
       }
-      const cloudflareAI =
-        env && typeof env === "object" && "AI" in env
-          ? (env as { AI?: Parameters<typeof handleChatPost>[2] }).AI
-          : undefined;
+      const runtimeEnv = env && typeof env === "object"
+        ? env as Record<string, unknown>
+        : {};
+      const chatEnv: Record<string, string | undefined> = {};
+      for (const key of [
+        "CHAT_GROQ_API_KEY",
+        "CHAT_GROQ_MODEL",
+        "CHAT_GEMINI_API_KEY",
+        "CHAT_GEMINI_MODEL",
+        "CHAT_OLLAMA_BASE_URL",
+        "CHAT_OLLAMA_MODEL",
+        "NODE_ENV",
+      ]) {
+        if (typeof runtimeEnv[key] === "string") chatEnv[key] = runtimeEnv[key] as string;
+      }
       try {
-        return await handleChatPost(request, fetch, cloudflareAI, env as Record<string, string | undefined>);
+        // Never pass the scanner's Cloudflare AI binding or scanner credentials to chat.
+        return await handleChatPost(request, fetch, chatEnv);
       } catch (error) {
         console.error("[Chat] Unhandled request failure", {
           name: error instanceof Error ? error.name : "unknown",

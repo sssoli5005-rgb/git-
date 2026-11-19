@@ -58,7 +58,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
   });
 
   it("uses Gemini Vision when a Gemini key is configured", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "local-test-key");
+    vi.stubEnv("SCANNER_GEMINI_API_KEY", "local-test-key");
     try {
       const response = await handleAtharaApiRequest(
         new Request("https://athara.test/api/health"),
@@ -74,26 +74,30 @@ describe("ATHARA API dispatch in the production server entry", () => {
     }
   });
 
-  it("keeps the scanner on Cloudflare vision regardless of a local Groq key", async () => {
-    vi.stubEnv("GROQ_API_KEY", "local-test-key");
+  it("does not inherit chat credentials into scanner providers", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-only-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "chat-only-gemini-key");
     try {
       const response = await handleAtharaApiRequest(
         new Request("https://athara.test/api/health"),
-        {},
+        { AI: { run: vi.fn() } },
       );
       expect(response?.status).toBe(200);
-      await expect(response?.json()).resolves.toMatchObject({
+      const body = await response?.json();
+      expect(body).toMatchObject({
         visionProvider: "Cloudflare Workers AI",
-        visionModel: "@cf/moondream/moondream3.1-9B-A2B",
+        aiBound: true,
       });
+      expect(body.visionEngines.find((engine: { name: string }) => engine.name === "Gemini").configured).toBe(false);
+      expect(body.visionEngines.find((engine: { name: string }) => engine.name === "Groq").configured).toBe(false);
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
   it("returns a visual description without claiming an artifact identity without reverse-image search", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "");
-    vi.stubEnv("OLLAMA_BASE_URL", "");
+    vi.stubEnv("SCANNER_GEMINI_API_KEY", "");
+    vi.stubEnv("SCANNER_OLLAMA_BASE_URL", "");
     vi.stubEnv("SCANNER_INDEX_URL", "");
     vi.stubEnv("SCANNER_INDEX_MATCH_THRESHOLD", "");
     vi.stubEnv("SCANNER_PROBABLE_THRESHOLD", "0.85");

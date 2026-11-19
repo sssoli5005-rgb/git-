@@ -143,7 +143,7 @@ describe("ATHARA Cloudflare Worker", () => {
         post("/api/scan", { image: png, language: "en", mode: "objects" }),
         {
           AI: { run: aiRun },
-          GEMINI_API_KEY: "gemini-test-key",
+          SCANNER_GEMINI_API_KEY: "gemini-test-key",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
       );
@@ -213,8 +213,8 @@ describe("ATHARA Cloudflare Worker", () => {
         post("/api/scan", { image: png, language: "en", mode: "objects" }),
         {
           AI: { run: aiRun },
-          GEMINI_API_KEY: "gemini-test-key",
-          GROQ_API_KEY: "groq-test-key",
+          SCANNER_GEMINI_API_KEY: "gemini-test-key",
+          SCANNER_GROQ_API_KEY: "groq-test-key",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
       );
@@ -300,8 +300,8 @@ describe("ATHARA Cloudflare Worker", () => {
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
           AI: { run: aiRun },
-          GROQ_API_KEY: "groq-test-key",
-          OPENROUTER_API_KEY: "openrouter-test-key",
+          SCANNER_GROQ_API_KEY: "groq-test-key",
+          SCANNER_OPENROUTER_API_KEY: "openrouter-test-key",
           SCANNER_MATCH_THRESHOLD: "0.80",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
@@ -394,7 +394,7 @@ describe("ATHARA Cloudflare Worker", () => {
         }),
         {
           AI: { run: aiRun },
-          OPENROUTER_API_KEY: "test-openrouter-key",
+          SCANNER_OPENROUTER_API_KEY: "test-openrouter-key",
           ASSETS: { fetch: assetsFetch },
         },
       );
@@ -527,7 +527,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { AI: { run: aiRun }, OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
+        { AI: { run: aiRun }, SCANNER_OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
       );
       const body = await response.json();
       expect(response.status).toBe(200);
@@ -601,7 +601,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { AI: { run: aiRun }, OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
+        { AI: { run: aiRun }, SCANNER_OPENROUTER_API_KEY: "test-openrouter-key", ASSETS: { fetch: assetsFetch } },
       );
       const body = await response.json();
       expect(response.status).toBe(200);
@@ -651,8 +651,8 @@ describe("ATHARA Cloudflare Worker", () => {
         websearch: vi.fn(),
       },
       ASSETS: { fetch: vi.fn() },
-      GEMINI_API_KEY: "gemini-key",
-      GROQ_API_KEY: "groq-key",
+      SCANNER_GEMINI_API_KEY: "gemini-key",
+      SCANNER_GROQ_API_KEY: "groq-key",
     });
     const body = await response.json();
 
@@ -678,9 +678,9 @@ describe("ATHARA Cloudflare Worker", () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
       AI: { run: vi.fn() },
       ASSETS: { fetch: vi.fn() },
-      GEMINI_API_KEY: "gemini-key",
-      GROQ_API_KEY: "groq-key",
-      OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+      SCANNER_GEMINI_API_KEY: "gemini-key",
+      SCANNER_GROQ_API_KEY: "groq-key",
+      SCANNER_OLLAMA_BASE_URL: "http://127.0.0.1:11434",
     });
     const body = await response.json();
 
@@ -718,8 +718,8 @@ describe("ATHARA Cloudflare Worker", () => {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
-          GEMINI_API_KEY: "gemini-key",
-          GROQ_API_KEY: "groq-key",
+          SCANNER_GEMINI_API_KEY: "gemini-key",
+          SCANNER_GROQ_API_KEY: "groq-key",
           AI: { run },
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
@@ -743,7 +743,7 @@ describe("ATHARA Cloudflare Worker", () => {
 
   it("keeps GEMINI_MODEL separate from the scanner vision model", async () => {
     const response = await worker.fetch(new Request("https://athara.test/api/health"), {
-      GEMINI_API_KEY: "gemini-key",
+      SCANNER_GEMINI_API_KEY: "gemini-key",
       GEMINI_MODEL: "gemini-2.5-flash",
     });
     const body = await response.json();
@@ -974,7 +974,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key", GROQ_MODEL: "qwen/qwen3.8-27b", ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
+        { SCANNER_GEMINI_API_KEY: "gemini-key", SCANNER_GROQ_API_KEY: "groq-key", SCANNER_GROQ_MODEL: "qwen/qwen3.8-27b", ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
       );
       const body = await response.json();
 
@@ -1021,10 +1021,10 @@ describe("ATHARA Cloudflare Worker", () => {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
-          GEMINI_API_KEY: "gemini-key",
-          GEMINI_VISION_MODEL: "gemini-3.8-flash",
-          GROQ_API_KEY: "groq-key",
-          GROQ_MODEL: "qwen/qwen3.8-27b",
+          SCANNER_GEMINI_API_KEY: "gemini-key",
+          SCANNER_GEMINI_VISION_MODEL: "gemini-3.8-flash",
+          SCANNER_GROQ_API_KEY: "groq-key",
+          SCANNER_GROQ_MODEL: "qwen/qwen3.8-27b",
           ASSETS: { fetch: vi.fn() },
         },
       );
@@ -1122,12 +1122,12 @@ describe("ATHARA Cloudflare Worker", () => {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
-          GEMINI_API_KEY: "gemini-key",
-          GEMINI_VISION_MODEL: "gemini-3.8-flash",
-          GROQ_API_KEY: "groq-key",
-          GROQ_VISION_MODEL: "vision-test-model",
-          OLLAMA_BASE_URL: "http://127.0.0.1:11434",
-          OLLAMA_VISION_MODEL: "gemma3:4b",
+          SCANNER_GEMINI_API_KEY: "gemini-key",
+          SCANNER_GEMINI_VISION_MODEL: "gemini-3.8-flash",
+          SCANNER_GROQ_API_KEY: "groq-key",
+          SCANNER_GROQ_VISION_MODEL: "vision-test-model",
+          SCANNER_OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+          SCANNER_OLLAMA_VISION_MODEL: "gemma3:4b",
           AI: { run: vi.fn().mockRejectedValue(new Error("Cloudflare full failure detail")) },
         },
       );
@@ -1167,8 +1167,8 @@ describe("ATHARA Cloudflare Worker", () => {
     const response = await worker.fetch(
       post("/api/scan", { image: png, language: "en", mode: "objects", diagnostics: true }),
       {
-        GEMINI_API_KEY: geminiSecret,
-        GROQ_API_KEY: groqSecret,
+        SCANNER_GEMINI_API_KEY: geminiSecret,
+        SCANNER_GROQ_API_KEY: groqSecret,
         AI: { run: vi.fn().mockRejectedValue(new Error("Cloudflare model unavailable")) },
         ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
       },
@@ -1246,8 +1246,8 @@ describe("ATHARA Cloudflare Worker", () => {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
-          OLLAMA_BASE_URL: "http://127.0.0.1:11434",
-          OLLAMA_VISION_MODEL: "gemma3:4b",
+          SCANNER_OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+          SCANNER_OLLAMA_VISION_MODEL: "gemma3:4b",
         },
       );
       const body = await response.json();
@@ -1638,8 +1638,8 @@ describe("ATHARA Cloudflare Worker", () => {
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
           AI: { run: aiRun },
-          GEMINI_API_KEY: "gemini-test-key",
-          GROQ_API_KEY: "groq-test-key",
+          SCANNER_GEMINI_API_KEY: "gemini-test-key",
+          SCANNER_GROQ_API_KEY: "groq-test-key",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
       );
@@ -1694,8 +1694,8 @@ describe("ATHARA Cloudflare Worker", () => {
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
         {
           AI: { run },
-          GEMINI_API_KEY: "gemini-key",
-          GROQ_API_KEY: "groq-key",
+          SCANNER_GEMINI_API_KEY: "gemini-key",
+          SCANNER_GROQ_API_KEY: "groq-key",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
       );
@@ -1826,7 +1826,7 @@ describe("ATHARA Cloudflare Worker", () => {
     });
     const response = await worker.fetch(
       post("/api/scan", { image: png, language: "ar", mode: "hieroglyphs" }),
-      { AI: { run }, GEMINI_API_KEY: "chat-key", GROQ_API_KEY: "chat-key" },
+      { AI: { run }, SCANNER_GEMINI_API_KEY: "chat-key", SCANNER_GROQ_API_KEY: "chat-key" },
     );
     const body = await response.json();
 
@@ -1958,7 +1958,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-test-key", GROQ_API_KEY: "groq-test-key", ASSETS: { fetch: assetFetch } },
+        { SCANNER_GEMINI_API_KEY: "gemini-test-key", SCANNER_GROQ_API_KEY: "groq-test-key", ASSETS: { fetch: assetFetch } },
       );
       const body = await response.json();
 
@@ -2032,7 +2032,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-test-key", ASSETS: { fetch: assetFetch } },
+        { SCANNER_GEMINI_API_KEY: "gemini-test-key", ASSETS: { fetch: assetFetch } },
       );
       const body = await response.json();
 
@@ -2114,7 +2114,7 @@ describe("ATHARA Cloudflare Worker", () => {
         const response = await worker.fetch(
           post("/api/scan", { image: png, language: "ar", mode: "objects" }),
           {
-            GEMINI_API_KEY: "gemini-test-key",
+            SCANNER_GEMINI_API_KEY: "gemini-test-key",
             SCANNER_MATCH_THRESHOLD: "0.80",
             ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
           },
@@ -2223,7 +2223,7 @@ describe("ATHARA Cloudflare Worker", () => {
           post("/api/scan", { image: png, language: "ar", mode: "objects" }),
           {
             AI: { run: aiRun },
-            GEMINI_API_KEY: "gemini-test-key",
+            SCANNER_GEMINI_API_KEY: "gemini-test-key",
             SCANNER_MATCH_THRESHOLD: "0.80",
             ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
           },
@@ -2289,7 +2289,7 @@ describe("ATHARA Cloudflare Worker", () => {
               const response = await worker.fetch(
                 post("/api/scan", { image: png, language: "ar", mode: "objects" }),
                 {
-                  GEMINI_API_KEY: "gemini-test-key",
+                  SCANNER_GEMINI_API_KEY: "gemini-test-key",
                   SCANNER_MATCH_THRESHOLD: "not-a-number",
                   ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
                 },
@@ -2327,7 +2327,7 @@ describe("ATHARA Cloudflare Worker", () => {
         const response = await worker.fetch(
           post("/api/scan", { image: png, language: "ar", mode: "objects" }),
           {
-            GEMINI_API_KEY: "gemini-test-key",
+            SCANNER_GEMINI_API_KEY: "gemini-test-key",
             SCANNER_MATCH_THRESHOLD: "0.80",
             ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
           },
@@ -2454,7 +2454,7 @@ describe("ATHARA Cloudflare Worker", () => {
     const run = vi.fn().mockRejectedValueOnce(new Error("Cloudflare Moondream busy"));
     const response = await worker.fetch(
       post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-      { AI: { run }, GROQ_API_KEY: "test-groq-key" },
+      { AI: { run }, SCANNER_GROQ_API_KEY: "test-groq-key" },
     );
 
     expect(response.status).toBe(200);
@@ -2685,7 +2685,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const response = await worker.fetch(
         post("/api/scan", { image: png, language: "ar", mode: "objects" }),
-        { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key", AI: { run }, ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
+        { SCANNER_GEMINI_API_KEY: "gemini-key", SCANNER_GROQ_API_KEY: "groq-key", AI: { run }, ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) } },
       );
       const body = await response.json();
       expect(response.status).toBe(200);
@@ -2740,9 +2740,9 @@ describe("ATHARA Cloudflare Worker", () => {
         post("/api/scan", { image: png, language: "ar", mode: "objects", diagnostics: true }),
         {
           AI: { run: aiRun },
-          GEMINI_API_KEY: "gemini-test-key",
-          GROQ_API_KEY: "groq-test-key",
-          OPENROUTER_API_KEY: "openrouter-test-key",
+          SCANNER_GEMINI_API_KEY: "gemini-test-key",
+          SCANNER_GROQ_API_KEY: "groq-test-key",
+          SCANNER_OPENROUTER_API_KEY: "openrouter-test-key",
           ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
         },
       );
@@ -2776,7 +2776,7 @@ describe("ATHARA Cloudflare Worker", () => {
   });
 
   it("reports Gemini then Groq as the actual hosted fallback order", async () => {
-    const response = await worker.fetch(new Request("https://athara.test/api/health"), { GEMINI_API_KEY: "gemini-key", GROQ_API_KEY: "groq-key" });
+    const response = await worker.fetch(new Request("https://athara.test/api/health"), { SCANNER_GEMINI_API_KEY: "gemini-key", SCANNER_GROQ_API_KEY: "groq-key" });
     const body = await response.json();
     expect(body.visionProviderOrder).toEqual(["Cloudflare", "Gemini", "Groq"]);
     expect(body.visionFallbackOrder).toEqual(["Gemini", "Groq"]);
