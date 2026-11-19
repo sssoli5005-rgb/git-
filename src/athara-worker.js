@@ -4247,6 +4247,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
                 const matchedArtifact = {
                   name: candidate.name,
                   museum: candidate.museum,
+                  location: candidate.currentLocation || candidate.museum || "",
                   currentLocation: candidate.currentLocation || "",
                   findSpot: candidate.findSpot || "",
                   period: candidate.period || "",
