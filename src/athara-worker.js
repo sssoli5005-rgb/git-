@@ -3634,7 +3634,7 @@ ${question ? "سؤال الزائر الإضافي: " + question : ""}
         if (typeof originalImage !== "string" || originalImage.length > 700_000) {
           return json({ error: "الصورة الأصلية للمطابقة غير صالحة أو كبيرة." }, 400);
         }
-        const originalImageMatch = /^data:image\\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(originalImage);
+        const originalImageMatch = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(originalImage);
         if (!originalImageMatch) return json({ error: "صيغة الصورة الأصلية غير مدعومة." }, 400);
         try {
           exactMatchImageBytes = Array.from(atob(originalImageMatch[2]), (character) => character.charCodeAt(0));
