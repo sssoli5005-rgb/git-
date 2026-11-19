@@ -42,6 +42,13 @@ export default async (configEnv: ConfigEnv) => {
     ]) {
       if (localEnv[key]) {
         process.env[key] = localEnv[key];
+      } else if (["CHAT_GROQ_API_KEY", "CHAT_GEMINI_API_KEY", "SCANNER_GROQ_API_KEY", "SCANNER_GEMINI_API_KEY"].includes(key)) {
+        // Legacy keys keep existing local installs working during migration.
+        // Set dedicated CHAT_* / SCANNER_* keys to give each pipeline its own quota.
+        const legacyKey = key.includes("GROQ") ? "GROQ_API_KEY" : "GEMINI_API_KEY";
+        if (localEnv[legacyKey]) process.env[key] = localEnv[legacyKey];
+      } else if (key === "SCANNER_OPENROUTER_API_KEY" && localEnv.OPENROUTER_API_KEY) {
+        process.env[key] = localEnv.OPENROUTER_API_KEY;
       } else if (["APP_USERNAME", "ADMIN_PASSWORD", "APP_PASSWORD_HASH", "APP_SESSION_SECRET"].includes(key)) {
         delete process.env[key];
       }
