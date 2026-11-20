@@ -316,17 +316,16 @@ function isSafeResearchUrl(value: unknown): URL | undefined {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) return undefined;
     if (url.port && url.port !== "443") return undefined;
-    const host = url.hostname.toLowerCase().replace(/^\\[|\\]$/gu, "").replace(/\\.$/u, "");
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.$/u, "");
     if (!host || host === "localhost" || host.endsWith(".localhost") ||
       host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".test") ||
       host.endsWith(".invalid") || host.endsWith(".example") ||
-      /^\\d{1,3}(?:\\.\\d{1,3}){3}$/u.test(host) || host.includes(":")) return undefined;
+      /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host) || host.includes(":")) return undefined;
     return url;
   } catch {
     return undefined;
   }
 }
-
 async function fetchPublicResearchPage(
   initialUrl: URL,
   fetcher: typeof fetch,
@@ -497,7 +496,7 @@ async function searchWithChatSpecialists(
       );
       const page = fetched?.response;
       const contentType = page?.headers.get("content-type") || "";
-      if (page && fetched && /text\\/html|application\\/xhtml\\+xml/i.test(contentType)) {
+      if (page && fetched && /text\/html|application\/xhtml\+xml/i.test(contentType)) {
         sourceUrl = fetched.url;
         const html = (await page.text()).slice(0, 600_000);
         const readable = extractReadableResearchText(html);
