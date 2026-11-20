@@ -25,7 +25,7 @@ type ChatWebSearchBinding = {
   }) => Promise<Response>;
 };
 
-type ChatProviderEnv = Record<string, string | undefined> & {
+type ChatProviderEnv = Record<string, unknown> & {
   CHAT_WEB_SEARCH?: ChatWebSearchBinding;
 };
 
@@ -380,12 +380,9 @@ async function searchWithChatSpecialists(
   sources: Array<{ title: string; organization: string; url: string }>;
 }> {
   const query = buildSpecialistSearchQuery(question).slice(0, 1024);
-  const providerOrder: ChatWebSearchBinding["websearch"] extends (input: infer T) => Promise<Response>
-    ? T extends { provider: infer P } ? P[] : never
-    : never = ["exa", "linkup", "ceramic"];
+  const providerOrder: Array<"exa" | "linkup" | "ceramic"> = ["exa", "linkup", "ceramic"];
   for (const provider of providerOrder) {
     try {
-      const searchTimeout = AbortSignal.timeout(12_000);
       const searchResponse = await binding.websearch({
         gatewayId: "default",
         query,
@@ -721,12 +718,11 @@ export async function handleChatPost(
           );
         }
       } else {
-        searchContext = formatHeritageSearchContext(results);
-        searchedSources = results.map(({ title, organization, url }) => ({
-          title,
-          organization,
-          url,
-        }));
+        searchContext = [searchContext, formatHeritageSearchContext(results)].filter(Boolean).join("\n\n");
+        searchedSources = mergeResearchSources(
+          searchedSources,
+          results.map(({ title, organization, url }) => ({ title, organization, url })),
+        );
       }
     } catch (error) {
       console.error("[Heritage search] Request failed", {
