@@ -142,7 +142,7 @@ describe("production chat research wiring", () => {
     expect(websearch).toHaveBeenCalledWith(expect.objectContaining({
       gatewayId: "default",
       provider: "exa",
-      limit: 8,
+      limit: 6,
     }));
     expect(fetcher).toHaveBeenCalledTimes(2);
   });

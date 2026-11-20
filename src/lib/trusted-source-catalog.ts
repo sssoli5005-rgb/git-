@@ -82,7 +82,7 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
   { topic: "egyptology", pattern: /(?:مصر القديمه|مصر القديمة|فرعون|فراعنه|فراعنة|هيروغليف|تحنيط|مومياء|اهرام|أهرام|سقاره|سقارة|الجيزه|الجيزة|الاقصر|الأقصر|اسوان|أسوان|سانت كاترين|سانت كترين|سان كترين|جبل موسى|جبل موسي|ابو سمبل|أبو سمبل|نفرتيتي|توت عنخ|رمسيس|حتشبسوت|خوفو|egyptolog|pharaoh|hieroglyph|mumm|saqqara|giza|luxor|aswan|tutankhamun|ramesses|nefertiti|hatshepsut)/iu },
   { topic: "archaeology", pattern: /(?:اثار|آثار|اثري|أثري|تنقيب|حفائر|مقبره|مقبرة|معبد|قطعه اثريه|قطعة أثرية|مخطوطه|مخطوطة|نقش|artifact|archaeolog|excavation|tomb|temple|inscription|manuscript)/iu },
   { topic: "world-history", pattern: /(?:تاريخ|حضاره|حضارة|ملوك|امبراطور|إمبراطور|حرب|معركه|معركة|دوله قديمه|دولة قديمة|history|historical|civilization|king|queen|emperor|war|battle)/iu },
-  { topic: "science", pattern: /(?:علم|علوم|فيزياء|كيمياء|احياء|أحياء|فضاء|فلك|كوكب|مناخ|تغير مناخي|جيولوجيا|ثقب اسود|ثقب أسود|ثقوب سوداء|black hole|black holes|science|physics|chemistry|biology|space|astronomy|planet|climate|geology|research)/iu },
+  { topic: "science", pattern: /(?:علم|علوم|فيزياء|كيمياء|احياء|أحياء|فضاء|فلك|كوكب|مناخ|تغير مناخي|جيولوجيا|ثقب اسود|ثقب أسود|ثقوب سوداء|الثقوب السوداء|black hole|black holes|science|physics|chemistry|biology|space|astronomy|planet|climate|geology|research)/iu },
   { topic: "geography", pattern: /(?:اين تقع|أين تقع|موقع|مكان|مدينه|مدينة|دوله|دولة|جبل|نهر|بحر|جزيره|جزيرة|طقس|مناخ|خريطه|خريطة|where is|located|geography|mountain|river|sea|island|weather|map)/iu },
 ];
 
