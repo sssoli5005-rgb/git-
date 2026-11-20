@@ -826,11 +826,16 @@ describe("handleChatPost hosted Groq provider", () => {
   it("falls back to Gemini when Groq is temporarily unavailable", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(
-        Response.json({
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "ar.wikipedia.org") {
+        return Response.json({ query: { search: [] } });
+      }
+      if (url.hostname === "api.groq.com") {
+        return new Response("{}", { status: 503 });
+      }
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        return Response.json({
           candidates: [{
             finishReason: "STOP",
             content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] },
@@ -841,8 +846,10 @@ describe("handleChatPost hosted Groq provider", () => {
               ]
             }
           }],
-        }),
-      );
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
 
     const response = await handleChatPost(
       createChatRequest("الملكه نيفرتيتي مدفونه فين؟"),
@@ -851,7 +858,7 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الملكة نفرتيتي");
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.8-flash");

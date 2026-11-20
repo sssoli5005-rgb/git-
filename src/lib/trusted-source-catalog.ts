@@ -95,7 +95,7 @@ const ENTITY_ALIASES: Array<{ canonical: string; english: string; aliases: strin
   { canonical: "أسوان", english: "Aswan", aliases: ["اسوان", "أسوان"] },
   { canonical: "الجيزة", english: "Giza", aliases: ["الجيزه", "الجيزة"] },
   { canonical: "توت عنخ آمون", english: "Tutankhamun", aliases: ["توت عنخ امون", "توت عنخ آمون", "توتانخ امون", "توت عنخ امن"] },
-  { canonical: "نفرتيتي", english: "Nefertiti", aliases: ["نفرتيتي", "نفرتيتى", "نفرتيت"] },
+  { canonical: "نفرتيتي", english: "Nefertiti", aliases: ["نفرتيتي", "نفرتيتى", "نفرتيت", "نيفرتيتي", "نيڤرتيتي"] },
   { canonical: "خوفو", english: "Khufu / Cheops", aliases: ["خوفو", "خوفه"] },
   { canonical: "يوسف الصديق", english: "Joseph son of Jacob in the Bible", aliases: ["يوسف الصديق", "يوسف بن يعقوب", "جسد يوسف", "عظام يوسف"] },
   { canonical: "أبو الهول", english: "Great Sphinx of Giza", aliases: ["ابو الهول", "أبو الهول", "ابوالهول", "ابو هول"] },
