@@ -1671,6 +1671,35 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("accepts Groq browser tool search_results nested under results", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      choices: [{
+        finish_reason: "stop",
+        message: {
+          content: "توضح المصادر أن يوسف دُفن في شكيم.",
+          executed_tools: [{
+            search_results: {
+              results: [{
+                title: "Joshua 24:32",
+                url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                content: "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
+              }],
+            },
+          }],
+        },
+      }],
+    }));
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
+      fetcher,
+    );
+    const body = await response.text();
+    expect(body).toContain("توضح المصادر");
+    expect(body).toContain("https://www.biblegateway.com/passage/");
+  });
+
   it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
