@@ -13,6 +13,54 @@ import { correctKnownResearchEntities } from "./trusted-source-catalog";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
   {
+    id: "luxor-archaeological-sites",
+    title: "أبرز المواقع الأثرية في الأقصر",
+    directResponse: true,
+    keywords: [
+      "الأقصر",
+      "الاقصر",
+      "آثار الأقصر",
+      "اثار الاقصر",
+      "الأماكن الأثرية في الأقصر",
+      "الاماكن الاثريه في الاقصر",
+      "معالم الأقصر",
+      "معالم الاقصر",
+      "أماكن أثرية في الأقصر",
+      "Luxor",
+      "Luxor archaeological sites",
+      "ancient Thebes",
+    ],
+    content:
+      "في الأقصر هتلاقي آثار مهمة على ضفتي النيل. على الضفة الشرقية فيه معبدا الكرنك والأقصر. وعلى الضفة الغربية فيه وادي الملوك ووادي الملكات، ومعبد حتشبسوت في الدير البحري، ومعبد مدينة هابو الجنائزي للملك رمسيس الثالث. اليونسكو بتسجل طيبة القديمة ومقبرتها كموقع تراث عالمي يضم معابد الكرنك والأقصر ومقابر وادي الملوك والملكات. لو دي أول زيارة، ابدئي بالكرنك ومعبد الأقصر، وبعدها اختاري من مواقع البر الغربي حسب وقتك. دي أبرز المواقع مش قائمة كاملة، ومواعيد الزيارة وأسعار التذاكر ممكن تتغير، فراجعي الموقع الرسمي قبل الزيارة.",
+    sources: [
+      {
+        title: "Ancient Thebes with its Necropolis",
+        organization: "UNESCO World Heritage Centre",
+        url: "https://whc.unesco.org/en/list/87/",
+      },
+      {
+        title: "الكرنك",
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/karnak/",
+      },
+      {
+        title: "وادي الملوك",
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/valley-of-the-kings/",
+      },
+      {
+        title: "معبد حتشبسوت",
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/monuments/hatshepsut-temple/",
+      },
+      {
+        title: "معبد مدينة هابو",
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/monuments/the-temple-of-medinet-habu/",
+      },
+    ],
+  },
+  {
     id: "saint-catherine-area-sinai",
     title: "دير سانت كاترين والمنطقة المحيطة به في جنوب سيناء",
     directResponse: true,

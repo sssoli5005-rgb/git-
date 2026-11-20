@@ -8,6 +8,29 @@ import {
 } from "./knowledge-base";
 
 describe("retrieveRelevantKnowledge", () => {
+  it("answers the Luxor archaeological-sites question from reviewed sources", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "ايه الاماكن الاثريه الي الاقيها في الاقصر ؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("معبدا الكرنك والأقصر");
+    expect(answer.directAnswer).toContain("وادي الملوك ووادي الملكات");
+    expect(answer.directAnswer).toContain("معبد حتشبسوت في الدير البحري");
+    expect(answer.directAnswer).toContain("معبد مدينة هابو");
+    expect(answer.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organization: "UNESCO World Heritage Centre",
+          url: "https://whc.unesco.org/en/list/87/",
+        }),
+        expect.objectContaining({
+          organization: "وزارة السياحة والآثار المصرية",
+          url: "https://egymonuments.gov.eg/ar/monuments/hatshepsut-temple/",
+        }),
+      ]),
+    );
+  });
+
   it("retrieves sourced facts about Saint Catherine and distinguishes the monastery from its wider area", () => {
     const messages = [{ role: "user" as const, content: "و ايه الي موجود في سانت كاترين ؟" }];
     const answer = getRelevantKnowledgeAnswer(messages);

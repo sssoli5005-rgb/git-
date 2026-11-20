@@ -709,15 +709,15 @@ function createUnverifiedHeritageReply(language: LangCode): string {
 
 function createUnverifiedResearchReply(language: LangCode): string {
   const messages: Record<LangCode, string> = {
-    ar: "ماقدرتش أتحقق من الإجابة من مصادر موثوقة في المحاولة دي، ومش هقدّم تخمين على إنه حقيقة. جرّب تاني بعد شوية.",
-    en: "I couldn't verify this answer against reliable sources in this attempt, so I won't present a guess as fact. Please try again shortly.",
-    fr: "Je n’ai pas pu vérifier cette réponse auprès de sources fiables lors de cette tentative. Je préfère ne pas présenter une supposition comme un fait. Réessayez plus tard.",
-    es: "No pude verificar esta respuesta con fuentes fiables en este intento, así que no presentaré una suposición como un hecho. Inténtalo de nuevo más tarde.",
-    it: "Non sono riuscito a verificare questa risposta tramite fonti affidabili in questo tentativo, quindi non presenterò un'ipotesi come un fatto. Riprova più tardi.",
-    de: "Ich konnte diese Antwort bei diesem Versuch nicht anhand zuverlässiger Quellen überprüfen und stelle deshalb keine Vermutung als Tatsache dar. Bitte versuchen Sie es später erneut.",
-    ru: "В этот раз не удалось проверить ответ по надежным источникам, поэтому я не буду выдавать предположение за факт. Попробуйте позже.",
-    ja: "今回は信頼できる情報源で回答を確認できませんでした。推測を事実として示すことはしません。時間をおいて再試行してください。",
-    zh: "本次未能通过可靠来源核实答案，因此我不会把猜测当作事实。请稍后重试。",
+    ar: "مش لاقي دليل موثوق يثبت المعلومة دي، فمش هخمن. لو تحددلي المكان أو الشيء أو الفترة المقصودة، أقدر أضيّق الإجابة وأكمل معاك.",
+    en: "I couldn't verify this specific detail from reliable sources, so I won't guess. If you specify the place, object, or period, I can narrow it down and continue.",
+    fr: "Je ne peux pas vérifier ce détail précis à partir de sources fiables, donc je préfère ne pas deviner. Si vous précisez le lieu, l’objet ou la période, je pourrai cibler la réponse et poursuivre.",
+    es: "No puedo verificar este dato concreto con fuentes fiables, así que no voy a adivinar. Si indicas el lugar, el objeto o la época, puedo precisar la respuesta y continuar.",
+    it: "Non posso verificare questo dettaglio specifico con fonti affidabili, quindi non farò supposizioni. Se indichi il luogo, l'oggetto o il periodo, posso circoscrivere la risposta e continuare.",
+    de: "Dieses konkrete Detail kann ich anhand zuverlässiger Quellen nicht überprüfen und möchte nicht raten. Wenn Sie den Ort, das Objekt oder den Zeitraum nennen, kann ich die Antwort eingrenzen und fortfahren.",
+    ru: "Мне не удалось проверить эту конкретную деталь по надежным источникам, поэтому я не буду гадать. Если уточните место, предмет или период, я смогу сузить ответ и продолжить.",
+    ja: "この具体的な内容は信頼できる情報源で確認できないため、推測では答えません。場所、品物、時代を指定していただければ、範囲を絞って続けて説明できます。",
+    zh: "现有可靠来源无法核实这一具体信息，因此我不会猜测。请补充地点、物品或时期，我可以据此缩小范围并继续回答。",
   };
   return messages[language];
 }
@@ -800,6 +800,7 @@ export async function handleChatPost(
           "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
         ] : []),
         "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
+        "SEARCH-FAILURE RECOVERY: Before saying a detail cannot be verified, use any directly relevant curated knowledge and verified references already supplied in the conversation context. If neither live results nor relevant curated knowledge support a factual answer, do not guess or finish with a generic source-unavailable refusal; state the specific limit briefly and ask one focused follow-up or offer a useful next step. Do not reveal source names or links unless the user asks.",
       ].join("\n")
     : "";
 

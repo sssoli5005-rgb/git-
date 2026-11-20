@@ -57,6 +57,12 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     );
     expect(prompt).toContain("Provide the best supported answer rather than a generic refusal");
     expect(prompt).toContain("rather than a generic refusal");
+    expect(prompt).toContain(
+      "When live search fails, first use any directly relevant curated knowledge",
+    );
+    expect(prompt).toContain(
+      "ask one focused follow-up or offer a useful next step",
+    );
   });
 
   it("prioritizes archaeological accuracy and labels uncertainty", () => {

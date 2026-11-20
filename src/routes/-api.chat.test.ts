@@ -145,6 +145,50 @@ function createHeritageSearchFetcher(
 }
 
 describe("general research fallbacks", () => {
+  it("answers the Luxor sites question from reviewed references when live search fails", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "No verified search result was available." },
+          }],
+        });
+      }
+      if (url.hostname.endsWith("wikipedia.org")) {
+        return Response.json({ query: { search: [] } });
+      }
+      return new Response("Temporarily unavailable", { status: 503 });
+    });
+    const request = new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        language: "ar",
+        messages: [
+          { role: "user", content: "اين قبر يوسف الصديق؟" },
+          { role: "assistant", content: "بحسب الرواية الكتابية، دُفنت عظام يوسف في شكيم." },
+          { role: "user", content: "ايه الاماكن الاثريه الي الاقيها في الاقصر ؟" },
+        ],
+      }),
+    });
+
+    const response = await handleChatPost(
+      request,
+      fetcher,
+      { CHAT_GROQ_API_KEY: "test-groq-key" },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("معبدا الكرنك والأقصر");
+    expect(body).toContain("وادي الملوك ووادي الملكات");
+    expect(body).toContain("معبد مدينة هابو");
+    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
+    expect(body).not.toContain("whc.unesco.org");
+  });
+
   it("answers the Saint Catherine question from reviewed references when live search fails", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
@@ -567,7 +611,7 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
   });
 
-  it("withholds a heritage answer when neither trusted sources nor curated references are available", async () => {
+  it("withholds an unverified heritage detail and offers a focused follow-up when no sources are available", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
@@ -592,7 +636,10 @@ describe("handleChatPost hosted Groq provider", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("I couldn't verify this answer");
+    const body = await response.text();
+    expect(body).toContain("I couldn't verify this specific detail");
+    expect(body).toContain("If you specify the place, object, or period");
+    expect(body).not.toContain("Please try again shortly");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
