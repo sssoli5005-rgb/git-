@@ -365,7 +365,7 @@ function buildSpecialistSearchQuery(question: string): string {
 function extractReadableResearchText(html: string): string {
   return normalizeEvidenceText(
     html
-      .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\\1>/giu, " ")
+      .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/giu, " ")
       .replace(/<[^>]*>/gu, " "),
   );
 }
