@@ -145,15 +145,17 @@ function createHeritageSearchFetcher(
 }
 
 describe("general research fallbacks", () => {
-  it("answers the Karnak question with verified sources when live search fails", async () => {
+  it("answers the Karnak question without displaying unrequested sources", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname === "api.groq.com") {
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "No verified search result was available." },
-          }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "No verified search result was available." },
+            },
+          ],
         });
       }
       if (url.hostname.endsWith("wikipedia.org")) {
@@ -162,30 +164,30 @@ describe("general research fallbacks", () => {
       return new Response("Temporarily unavailable", { status: 503 });
     });
 
-    const response = await handleChatPost(
-      createChatRequest("ايه الي موجود في الكرنك ؟"),
-      fetcher,
-      { CHAT_GROQ_API_KEY: "test-groq-key" },
-    );
+    const response = await handleChatPost(createChatRequest("ايه الي موجود في الكرنك ؟"), fetcher, {
+      CHAT_GROQ_API_KEY: "test-groq-key",
+    });
     const body = await response.text();
 
     expect(response.status).toBe(200);
     expect(body).toContain("صالة الأعمدة الكبرى");
     expect(body).toContain("البحيرة المقدسة");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://egymonuments.gov.eg/ar/archaeological-sites/karnak/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://egymonuments.gov.eg/ar/archaeological-sites/karnak/");
     expect(body).not.toContain("مش لاقي دليل موثوق");
   });
 
-  it("answers the Luxor sites question from reviewed references when live search fails", async () => {
+  it("answers the Luxor sites question without displaying unrequested references", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname === "api.groq.com") {
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "No verified search result was available." },
-          }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "No verified search result was available." },
+            },
+          ],
         });
       }
       if (url.hostname.endsWith("wikipedia.org")) {
@@ -206,11 +208,7 @@ describe("general research fallbacks", () => {
       }),
     });
 
-    const response = await handleChatPost(
-      request,
-      fetcher,
-      { CHAT_GROQ_API_KEY: "test-groq-key" },
-    );
+    const response = await handleChatPost(request, fetcher, { CHAT_GROQ_API_KEY: "test-groq-key" });
     const body = await response.text();
 
     expect(response.status).toBe(200);
@@ -218,8 +216,8 @@ describe("general research fallbacks", () => {
     expect(body).toContain("وادي الملوك ووادي الملكات");
     expect(body).toContain("معبد مدينة هابو");
     expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://whc.unesco.org/en/list/87/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://whc.unesco.org/en/list/87/");
   });
 
   it("answers the Saint Catherine question from reviewed references when live search fails", async () => {
@@ -233,10 +231,12 @@ describe("general research fallbacks", () => {
       }
       if (url.hostname === "api.groq.com") {
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "No verified search result was available." },
-          }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "No verified search result was available." },
+            },
+          ],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
@@ -256,7 +256,6 @@ describe("general research fallbacks", () => {
     expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
   });
 
-
   it("answers the Joseph burial question from its reviewed Bible reference when all live providers fail", async () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
@@ -265,40 +264,235 @@ describe("general research fallbacks", () => {
       const url = new URL(String(input));
       if (url.hostname === "api.groq.com") {
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "Unverified generated answer without source evidence." },
-          }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "Unverified generated answer without source evidence." },
+            },
+          ],
         });
       }
       if (url.hostname === "generativelanguage.googleapis.com") {
         return Response.json({
-          candidates: [{
-            content: { parts: [{ text: "Unverified Gemini answer." }] },
-            groundingMetadata: { groundingChunks: [] },
-          }],
+          candidates: [
+            {
+              content: { parts: [{ text: "Unverified Gemini answer." }] },
+              groundingMetadata: { groundingChunks: [] },
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(createChatRequest("أين جسد يوسف الصديق؟"), fetcher, {
+      CHAT_GROQ_API_KEY: "test-groq-key",
+      CHAT_GEMINI_API_KEY: "test-gemini-key",
+      CHAT_WEB_SEARCH: searchBinding,
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("سفر يشوع 24:32");
+    expect(body).toContain("شكيم");
+    expect(body).toContain("لا تثبت");
+    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    "إيه الفرق بين الإنجيليين والكاثوليك؟",
+    "ايه الفرق بين الانجليين و الكاثوليك",
+    "الفرق بين الانجليين والكاثوليك مش عارف",
+  ])("answers a stable religion question from general knowledge when live search has no results: %s", async (question) => {
+    const answer =
+      "الإنجيليون والكاثوليك تقليدان مسيحيان. الإنجيلية حركة واسعة تضم كنائس متعددة، ويؤكد كثير من الإنجيليين سلطة الكتاب المقدس والإيمان الشخصي. أما الكاثوليكية فتجمع بين الكتاب المقدس والتقليد المقدس، ولها بنية كنسية يقودها البابا والأساقفة، وتعترف بسبعة أسرار. هذه فروق عامة، مع تنوع داخلي في التقاليد الإنجيلية والكاثوليكية.";
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
+        const prompt = payload.messages.map((message) => message.content).join("\n");
+        expect(prompt).toContain("GENERAL-KNOWLEDGE FALLBACK");
+        expect(prompt).toContain("National Association of Evangelicals");
+        expect(prompt).toContain("الكرسي الرسولي");
+        if (question.includes("الانجليين")) {
+          expect(prompt).toContain("HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION");
+          expect(prompt).toContain("الإنجيليين");
+          expect(prompt).toContain("Evangelical Christians");
+        }
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: answer } }],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
     });
 
     const response = await handleChatPost(
-      createChatRequest("أين جسد يوسف الصديق؟"),
+      createChatRequest(question),
       fetcher,
       {
         CHAT_GROQ_API_KEY: "test-groq-key",
-        CHAT_GEMINI_API_KEY: "test-gemini-key",
         CHAT_WEB_SEARCH: searchBinding,
       },
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("سفر يشوع 24:32");
-    expect(body).toContain("شكيم");
-    expect(body).toContain("لا تثبت أن رفاته عُثر عليها");
-    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
+    expect(body).toContain("الإنجيليون والكاثوليك تقليدان مسيحيان");
+    expect(body).toContain("تنوع داخلي");
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("nae.org");
+    expect(body).not.toContain("vatican.va");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ["ايه الفرق بين الحاسوب واللابتوب؟", "الحاسوب واللابتوب", "الحاسوب واللابتوب"],
+    ["ممكن تصححلي جمله فيها غلط املائي؟", "اللغة", "الجملة صحيحة"],
+  ])("infers the intent of varied typo-heavy chat question %s", async (question, correction, answerFragment) => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
+        const prompt = payload.messages.map((message) => message.content).join("\n");
+        expect(prompt).toContain("Infer the user's intended meaning despite spelling");
+        expect(prompt).toContain("answer that likely question in the same reply");
+        if (correction === "سقارة") {
+          expect(prompt).toContain("سقارة");
+        }
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: `ده شرح واضح ومختصر عن ${answerFragment}.` },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(createChatRequest(question), fetcher, {
+      CHAT_GROQ_API_KEY: "test-groq-key",
+      CHAT_WEB_SEARCH: searchBinding,
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(answerFragment);
+    expect(body).not.toContain("مش عارف");
+  });
+
+  it("answers who Catholics are as stable general knowledge", async () => {
+    const response = await handleChatPost(
+      createChatRequest("مين هما الكاثوليك؟"),
+      vi.fn<typeof fetch>(async () => Response.json({ items: [] })),
+      { CHAT_GROQ_API_KEY: "test-groq-key" },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("أتباع الكنيسة الكاثوليكية");
+    expect(body).toContain("البابا");
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+  });
+
+  it.each([
+    ["مين هما اليهود؟", "اليهودية دي ديانة إبراهيمية قديمة"],
+    ["إيه هو الإسلام باختصار؟", "الإسلام ديانة إبراهيمية توحيدية"],
+    ["اشرحلي الدين الفرعوني؟", "الدين الفرعوني اسم عام لمعتقدات"],
+  ])("answers a broad religious or pharaonic knowledge question: %s", async (question, answerFragment) => {
+    const response = await handleChatPost(
+      createChatRequest(question),
+      vi.fn<typeof fetch>(async () => Response.json({ items: [] })),
+      { CHAT_GROQ_API_KEY: "test-groq-key" },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(answerFragment);
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+  });
+
+  it("answers a stable question about another religious tradition when live search has no results", async () => {
+    const answer =
+      "البوذية نشأت في شمال الهند القديمة وتعتمد على تعاليم منسوبة إلى بوذا. تختلف المدارس في تفسير هذه التعاليم وممارستها، لذلك لا يصح اختزال كل البوذيين في تصور واحد.";
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
+        expect(payload.messages.map((message) => message.content).join("\n")).toContain(
+          "Answer safe questions about religious traditions broadly",
+        );
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: answer } }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("ما المبادئ الأساسية في البوذية؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("البوذية نشأت في شمال الهند القديمة");
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+    expect(body).not.toContain("المصادر:");
+  });
+
+  it("answers an explicitly sourced question with an accurate general fallback instead of refusing", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "الإنجيليون والكاثوليك تقليدان مسيحيان يختلفان في سلطة الكتاب المقدس والتقليد والكنيسة والسرائر." },
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("ما الفرق بين الإنجيليين والكاثوليك؟ اذكر المصادر", "ar"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+    expect(body).not.toContain("An unsupported answer");
   });
 });
 
@@ -339,19 +533,26 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       expect(String(input)).toContain("api.groq.com");
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content: generatedAnswer,
-            executed_tools: [{
-              browser_results: [{
-                title: "University research on archaeological animal bones",
-                url: "https://www.ucl.ac.uk/archaeology/",
-                content: "Zooarchaeology studies animal remains recovered from archaeological sites to reconstruct diet, animal use, and past environments."
-              }]
-            }]
-          }
-        }]
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: generatedAnswer,
+              executed_tools: [
+                {
+                  browser_results: [
+                    {
+                      title: "University research on archaeological animal bones",
+                      url: "https://www.ucl.ac.uk/archaeology/",
+                      content:
+                        "Zooarchaeology studies animal remains recovered from archaeological sites to reconstruct diet, animal use, and past environments.",
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       });
     });
 
@@ -382,8 +583,10 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("أشعة تنتهي بأيدٍ");
     expect(body).toContain("اختلاف تصوير الإله المصري بين عصرين");
     expect(body).not.toContain("ماقدرتش أتحقق");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/ideology.html");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain(
+      "https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/ideology.html",
+    );
     expect(body).not.toContain("كان آمون يُصوّر برأس ثور");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
       false,
@@ -469,8 +672,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("ارتباطًا دينيًا");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
     expect(
       fetcher.mock.calls.some(([input]) =>
@@ -479,7 +682,7 @@ describe("handleChatPost hosted Groq provider", () => {
     ).toBe(true);
   });
 
-  it("includes trusted-source citations with factual heritage answers", async () => {
+  it("uses trusted sources without displaying them when not requested", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("سقارة جزء من جبانة منف القديمة.");
 
@@ -487,8 +690,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     const body = await response.text();
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://whc.unesco.org/en/list/86/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
     const requestedUrls = fetcher.mock.calls.map(([url]) => String(url));
     expect(requestedUrls.some((url) => url.includes("whc.unesco.org"))).toBe(true);
     expect(requestedUrls.some((url) => url.includes("ucl.ac.uk"))).toBe(true);
@@ -515,7 +718,7 @@ describe("handleChatPost hosted Groq provider", () => {
               finish_reason: "stop",
               message: {
                 content:
-                  "الارتباط بالعقيدة يظهر في سياق النقوش الجنائزية والفن الرسمي، لكن ده مايعنيش إن كل كتابة هيروغليفية كانت دينية.",
+                  "ارتباط الهيروغليفية بعقيدة المصري القديم يُفهم من سياق استخدامها في العبادة والدفن؛ والكتابة نفسها كانت نظامًا يستخدم في مجالات دينية وإدارية.",
               },
             },
           ],
@@ -536,12 +739,12 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("ارتباط الهيروغليفية بعقيدة المصري القديم يُفهم من سياق استخدامها");
     expect(body).not.toContain("عصر العمارنة");
     expect(body).not.toContain("الارتباط بالعقيدة يظهر في سياق النقوش الجنائزية");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
   });
 
-  it("returns a relevant sourced answer when the food question's providers truncate", async () => {
+  it("returns a relevant answer without unrequested references when food providers truncate", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
@@ -568,8 +771,8 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("توزيع الخبز والبيرة كحصص غذائية");
     expect(body).not.toContain("الرد توقف قبل أن يكتمل");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("aeraweb.org/feeding-pyramid-workers/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("aeraweb.org/feeding-pyramid-workers/");
     expect(
       fetcher.mock.calls.filter(([input]) => String(input).includes("api.groq.com")),
     ).toHaveLength(1);
@@ -580,7 +783,8 @@ describe("handleChatPost hosted Groq provider", () => {
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
-      if (url.hostname.endsWith("ucl.ac.uk")) return new Response("temporarily blocked", { status: 403 });
+      if (url.hostname.endsWith("ucl.ac.uk"))
+        return new Response("temporarily blocked", { status: 403 });
       if (url.hostname.endsWith("wikipedia.org")) return Response.json({ query: { search: [] } });
       if (url.hostname === "api.groq.com") {
         const payload = JSON.parse(String(init?.body)) as {
@@ -590,28 +794,45 @@ describe("handleChatPost hosted Groq provider", () => {
         expect(payload.messages[0]?.content).toContain("MANDATORY THREE-STAGE VERIFIED RESEARCH");
         expect(payload.tools).toEqual([{ type: "browser_search" }]);
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: {
-              content: "الكتابة ساعدت في تسجيل الأسماء والألقاب والإمدادات.",
-              executed_tools: [{ browser_results: [{
-                title: "Generic ancient history article",
-                url: "https://example.com/ancient-egypt",
-                content: "An unverified general article about ancient Egypt that is not an approved institutional source.",
-              }] }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: "بعد نشوء الدولة المصرية المبكرة ظهرت كتابة رسمية موثقة ساعدت الملك في إدارة الأقاليم وتسجيل السلع والألقاب؛ شواهد من الأسرة الأولى تدعم دور الإدارة والسلطة.",
+                executed_tools: [
+                  {
+                    browser_results: [
+                      {
+                        title: "Generic ancient history article",
+                        url: "https://example.com/ancient-egypt",
+                        content:
+                          "An unverified general article about ancient Egypt that is not an approved institutional source.",
+                      },
+                    ],
+                  },
+                ],
+              },
             },
-          }],
+          ],
         });
       }
       if (url.hostname === "generativelanguage.googleapis.com") {
         return Response.json({
-          candidates: [{
-            content: { parts: [{ text: "رد غير موثق من Gemini." }] },
-            groundingMetadata: { groundingChunks: [{ web: {
-              uri: "https://example.com/egypt",
-              title: "Unverified general article",
-            } }] },
-          }],
+          candidates: [
+            {
+              content: { parts: [{ text: "رد غير موثق من Gemini." }] },
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    web: {
+                      uri: "https://example.com/egypt",
+                      title: "Unverified general article",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
@@ -630,22 +851,24 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("شواهد من الأسرة الأولى");
     expect(body).not.toContain("الكتابة ساعدت في تسجيل الأسماء والألقاب");
     expect(body).not.toContain("رد غير موثق من Gemini");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/administration/index.html");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain(
+      "https://www.ucl.ac.uk/museums-static/digitalegypt/administration/index.html",
+    );
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(false);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
-  it("shows sources for English heritage answers too", async () => {
+  it("hides sources for English heritage answers unless requested", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("Saqqara is part of the Memphis necropolis.");
 
     const response = await handleChatPost(createChatRequest("What is in Saqqara?", "en"), fetcher);
 
     const body = await response.text();
-    expect(body).toContain("Sources:");
-    expect(body).toContain("https://whc.unesco.org/en/list/86/");
+    expect(body).not.toContain("Sources:");
+    expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
   });
 
   it("searches current pyramid discoveries instead of returning a general Saqqara summary", async () => {
@@ -654,22 +877,26 @@ describe("handleChatPost hosted Groq provider", () => {
       websearch: vi.fn(async ({ query }: { query: string }) => {
         queries.push(query);
         return Response.json({
-          items: [{
-            title: "Precise characterization of a corridor-shaped structure in Khufu's Pyramid",
-            url: "https://www.nature.com/articles/s41467-023-36351-0",
-            description:
-              "A peer-reviewed ScanPyramids study reports a corridor-shaped structure about 9 metres long in Khufu's Pyramid, detected with cosmic-ray muon measurements.",
-          }, {
-            title: "Saqqara — Digital Egypt — University College London",
-            url: "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
-            description:
-              "Saqqara was the main cemetery of Memphis. The site includes pyramids and tombs from different historical periods.",
-          }, {
-            title: "Memphis and its Necropolis — UNESCO World Heritage Centre",
-            url: "https://whc.unesco.org/en/list/86/",
-            description:
-              "Memphis and its Necropolis covers multiple archaeological zones, including Saqqara, Giza, pyramids, and tombs.",
-          }],
+          items: [
+            {
+              title: "Precise characterization of a corridor-shaped structure in Khufu's Pyramid",
+              url: "https://www.nature.com/articles/s41467-023-36351-0",
+              description:
+                "A peer-reviewed ScanPyramids study reports a corridor-shaped structure about 9 metres long in Khufu's Pyramid, detected with cosmic-ray muon measurements.",
+            },
+            {
+              title: "Saqqara — Digital Egypt — University College London",
+              url: "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
+              description:
+                "Saqqara was the main cemetery of Memphis. The site includes pyramids and tombs from different historical periods.",
+            },
+            {
+              title: "Memphis and its Necropolis — UNESCO World Heritage Centre",
+              url: "https://whc.unesco.org/en/list/86/",
+              description:
+                "Memphis and its Necropolis covers multiple archaeological zones, including Saqqara, Giza, pyramids, and tombs.",
+            },
+          ],
         });
       }),
     };
@@ -694,16 +921,22 @@ describe("handleChatPost hosted Groq provider", () => {
         };
         expect(payload.messages[0]?.content).toContain("9 m length");
         expect(payload.messages[0]?.content).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
-        expect(payload.messages[0]?.content).not.toContain("Saqqara was the main cemetery of Memphis.");
-        expect(payload.messages[0]?.content).not.toContain("Memphis and its Necropolis covers multiple archaeological zones");
+        expect(payload.messages[0]?.content).not.toContain(
+          "Saqqara was the main cemetery of Memphis.",
+        );
+        expect(payload.messages[0]?.content).not.toContain(
+          "Memphis and its Necropolis covers multiple archaeological zones",
+        );
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: {
-              content:
-                "أيوه، من الاكتشافات المؤكدة ممر داخل هرم خوفو كُشف عنه بقياسات أشعة الميون، وقدّرت الدراسة طوله بنحو ٩ أمتار. ده يثبت وجود الممر وأبعاده، لكن وظيفته الأصلية غير محسومة.",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content:
+                  "أيوه، من الاكتشافات المؤكدة ممر داخل هرم خوفو كُشف عنه بقياسات أشعة الميون، وقدّرت الدراسة طوله بنحو ٩ أمتار. ده يثبت وجود الممر وأبعاده، لكن وظيفته الأصلية غير محسومة.",
+              },
             },
-          }],
+          ],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
@@ -723,9 +956,11 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("ممر داخل هرم خوفو");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
-    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain(
+      "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
+    );
     expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
     expect(body).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
@@ -734,19 +969,24 @@ describe("handleChatPost hosted Groq provider", () => {
 
   it("uses reviewed pyramid evidence when discovery searches return only general Saqqara pages", async () => {
     const searchBinding = {
-      websearch: vi.fn(async () => Response.json({
-        items: [{
-          title: "Saqqara — Digital Egypt — University College London",
-          url: "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
-          description:
-            "Saqqara was the main cemetery of Memphis. The site includes pyramids and tombs from different historical periods.",
-        }, {
-          title: "Memphis and its Necropolis — UNESCO World Heritage Centre",
-          url: "https://whc.unesco.org/en/list/86/",
-          description:
-            "Memphis and its Necropolis covers multiple archaeological zones, including Saqqara, Giza, pyramids, and tombs.",
-        }],
-      })),
+      websearch: vi.fn(async () =>
+        Response.json({
+          items: [
+            {
+              title: "Saqqara — Digital Egypt — University College London",
+              url: "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
+              description:
+                "Saqqara was the main cemetery of Memphis. The site includes pyramids and tombs from different historical periods.",
+            },
+            {
+              title: "Memphis and its Necropolis — UNESCO World Heritage Centre",
+              url: "https://whc.unesco.org/en/list/86/",
+              description:
+                "Memphis and its Necropolis covers multiple archaeological zones, including Saqqara, Giza, pyramids, and tombs.",
+            },
+          ],
+        }),
+      ),
     };
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
@@ -758,25 +998,29 @@ describe("handleChatPost hosted Groq provider", () => {
           messages: { role: string; content: string }[];
         };
         expect(payload.messages[0]?.content).toContain("نحو 9 أمتار");
-        expect(payload.messages[0]?.content).not.toContain("Saqqara was the main cemetery of Memphis.");
-        expect(payload.messages[0]?.content).not.toContain("Memphis and its Necropolis covers multiple archaeological zones");
+        expect(payload.messages[0]?.content).not.toContain(
+          "Saqqara was the main cemetery of Memphis.",
+        );
+        expect(payload.messages[0]?.content).not.toContain(
+          "Memphis and its Necropolis covers multiple archaeological zones",
+        );
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: {
-              content:
-                "في الجيزة، قاست دراسة منشورة سنة 2023 ممرًا خلف منطقة الشيفرون في هرم خوفو بطول يقارب 9 أمتار. الدليل يدعم وجود الممر وأبعاده، لكنه لا يحدد وظيفته. لا أملك هنا مصدرًا مراجعًا يحدد أحدث كشف في سقارة.",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content:
+                  "في الجيزة، قاست دراسة منشورة سنة 2023 ممرًا خلف منطقة الشيفرون في هرم خوفو بطول يقارب 9 أمتار. الدليل يدعم وجود الممر وأبعاده، لكنه لا يحدد وظيفته. لا أملك هنا مصدرًا مراجعًا يحدد أحدث كشف في سقارة.",
+              },
             },
-          }],
+          ],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
     });
 
     const response = await handleChatPost(
-      createChatRequest(
-        "هل لسه فيه اكتشافات في الأهرامات بالجيزة وسقارة؟ عايزة الأدلة والمصادر.",
-      ),
+      createChatRequest("هل لسه فيه اكتشافات في الأهرامات بالجيزة وسقارة؟ عايزة الأدلة والمصادر."),
       fetcher,
       {
         CHAT_GROQ_API_KEY: "test-groq-key",
@@ -788,7 +1032,9 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("9 أمتار");
     expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
-    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html");
+    expect(body).not.toContain(
+      "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
+    );
     expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
   });
@@ -801,12 +1047,14 @@ describe("handleChatPost hosted Groq provider", () => {
     },
     {
       language: "en",
-      question: "What recent discoveries are documented in the pyramids at Giza and Saqqara, and what is the evidence?",
+      question:
+        "What recent discoveries are documented in the pyramids at Giza and Saqqara, and what is the evidence?",
       expected: "about 9 metres long",
     },
     {
       language: "fr",
-      question: "Quelles découvertes récentes sont documentées dans les pyramides de Gizeh et de Saqqara ?",
+      question:
+        "Quelles découvertes récentes sont documentées dans les pyramides de Gizeh et de Saqqara ?",
       expected: "9 mètres de long",
     },
     {
@@ -821,7 +1069,8 @@ describe("handleChatPost hosted Groq provider", () => {
     },
     {
       language: "de",
-      question: "Welche neuen Entdeckungen sind in den Pyramiden von Gizeh und Saqqara dokumentiert?",
+      question:
+        "Welche neuen Entdeckungen sind in den Pyramiden von Gizeh und Saqqara dokumentiert?",
       expected: "9 Meter lang",
     },
     {
@@ -839,42 +1088,37 @@ describe("handleChatPost hosted Groq provider", () => {
       question: "吉萨和萨卡拉的金字塔最近有哪些新发现？",
       expected: "长约 9 米",
     },
-  ])("answers a $language pyramid-discovery question in the selected language when chat providers are unavailable", async ({
-    language,
-    question,
-    expected,
-  }) => {
-    const fetcher = vi.fn<typeof fetch>(async (input) => {
-      const url = new URL(String(input));
-      expect(url.hostname).toBe("www.nature.com");
-      return new Response(
-        "<html><head><title>Precise characterization of a corridor-shaped structure</title></head><body><main>" +
-          "The ScanPyramids team reported previously unknown voids in 2016 and 2017 using cosmic-ray muon radiography. " +
-          "New measurements reveal a corridor-shaped structure of about 9 m length and a 2.0 m by 2.0 m section." +
-          " The study does not establish its original function." +
-          "</main></body></html>",
-        { headers: { "Content-Type": "text/html; charset=utf-8" } },
-      );
-    });
+  ])(
+    "answers a $language pyramid-discovery question without unrequested sources",
+    async ({ language, question, expected }) => {
+      const fetcher = vi.fn<typeof fetch>(async (input) => {
+        const url = new URL(String(input));
+        expect(url.hostname).toBe("www.nature.com");
+        return new Response(
+          "<html><head><title>Precise characterization of a corridor-shaped structure</title></head><body><main>" +
+            "The ScanPyramids team reported previously unknown voids in 2016 and 2017 using cosmic-ray muon radiography. " +
+            "New measurements reveal a corridor-shaped structure of about 9 m length and a 2.0 m by 2.0 m section." +
+            " The study does not establish its original function." +
+            "</main></body></html>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      });
 
-    const response = await handleChatPost(
-      createChatRequest(question, language),
-      fetcher,
-      {
+      const response = await handleChatPost(createChatRequest(question, language), fetcher, {
         CHAT_GROQ_API_KEY: "",
         CHAT_GEMINI_API_KEY: "",
         CHAT_OPENROUTER_API_KEY: "",
-      },
-    );
-    const body = await response.text();
+      });
+      const body = await response.text();
 
-    expect(response.status).toBe(200);
-    expect(body).toContain(expected);
-    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
-    expect(body).not.toContain("مش لاقي دليل موثوق");
-    expect(body).not.toContain("Saqqara is the main cemetery of Memphis");
-    expect(fetcher).toHaveBeenCalledOnce();
-  });
+      expect(response.status).toBe(200);
+      expect(body).toContain(expected);
+      expect(body).not.toContain("https://www.nature.com/articles/s41467-023-36351-0");
+      expect(body).not.toContain("مش لاقي دليل موثوق");
+      expect(body).not.toContain("Saqqara is the main cemetery of Memphis");
+      expect(fetcher).toHaveBeenCalledOnce();
+    },
+  );
 
   it("uses the reviewed Arabic discovery fallback instead of a generic refusal when Nature is unreachable", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
@@ -895,8 +1139,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("قياسات أدق لممر خلف منطقة الشيفرون");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://www.nature.com/articles/s41467-023-36351-0");
     expect(body).not.toContain("مش لاقي دليل موثوق");
     expect(body).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
     expect(fetcher).toHaveBeenCalledOnce();
@@ -934,33 +1178,28 @@ describe("handleChatPost hosted Groq provider", () => {
       expected: "المعتقدات والطقوس اتغيرت عبر العصور",
       source: "https://www.ucl.ac.uk/museums-static/digitalegypt/religion/deitiesindex.html",
     },
-  ])("answers the reviewed $question question instead of refusing when live pages are unavailable", async ({
-    question,
-    expected,
-    source,
-  }) => {
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      new Response("temporarily unavailable", { status: 503 }),
-    );
+  ])(
+    "answers the reviewed $question question without showing unrequested sources",
+    async ({ question, expected, source }) => {
+      const fetcher = vi.fn<typeof fetch>(
+        async () => new Response("temporarily unavailable", { status: 503 }),
+      );
 
-    const response = await handleChatPost(
-      createChatRequest(question, "ar"),
-      fetcher,
-      {
+      const response = await handleChatPost(createChatRequest(question, "ar"), fetcher, {
         CHAT_GROQ_API_KEY: "",
         CHAT_GEMINI_API_KEY: "",
         CHAT_OPENROUTER_API_KEY: "",
-      },
-    );
-    const body = await response.text();
+      });
+      const body = await response.text();
 
-    expect(response.status).toBe(200);
-    expect(body).toContain(expected);
-    expect(body).toContain(source);
-    expect(body).not.toContain("مش لاقي دليل موثوق");
-  });
+      expect(response.status).toBe(200);
+      expect(body).toContain(expected);
+      expect(body).not.toContain(source);
+      expect(body).not.toContain("مش لاقي دليل موثوق");
+    },
+  );
 
-  it("withholds an unverified heritage detail and offers a focused follow-up when no sources are available", async () => {
+  it("tries a cautious general answer instead of refusing when no exact souvenir source is available", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
@@ -968,12 +1207,22 @@ describe("handleChatPost hosted Groq provider", () => {
       if (url.hostname.endsWith("wikipedia.org")) return Response.json({ query: { search: [] } });
       if (url.hostname === "api.groq.com") {
         return Response.json({
-          choices: [{ finish_reason: "stop", message: { content: "A guess without evidence.", executed_tools: [] } }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "A souvenir price varies by shop and location, so I cannot give one exact unnamed-shop price.", executed_tools: [] },
+            },
+          ],
         });
       }
       if (url.hostname === "generativelanguage.googleapis.com") {
         return Response.json({
-          candidates: [{ content: { parts: [{ text: "A guess without evidence." }] }, groundingMetadata: { groundingChunks: [] } }],
+          candidates: [
+            {
+              content: { parts: [{ text: "A souvenir price varies by shop and location, so I cannot give one exact unnamed-shop price." }] },
+              groundingMetadata: { groundingChunks: [] },
+            },
+          ],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
@@ -986,11 +1235,14 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     const body = await response.text();
-    expect(body).toContain("I couldn't verify this specific detail");
-    expect(body).toContain("If you specify the place, object, or period");
-    expect(body).not.toContain("Please try again shortly");
+    expect(body).toContain("A souvenir price varies");
+    expect(body).not.toContain("I couldn't verify this specific detail");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
+    expect(
+      fetcher.mock.calls.some(([input]) =>
+        String(input).includes("generativelanguage.googleapis.com"),
+      ),
+    ).toBe(false);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
@@ -1232,16 +1484,28 @@ describe("handleChatPost hosted Groq provider", () => {
       }
       if (url.hostname === "generativelanguage.googleapis.com") {
         return Response.json({
-          candidates: [{
-            finishReason: "STOP",
-            content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] },
-            groundingMetadata: {
-              groundingChunks: [
-                { web: { uri: "https://www.britannica.com/biography/Nefertiti", title: "Nefertiti — Encyclopaedia Britannica" } },
-                { web: { uri: "https://www.metmuseum.org/", title: "The Metropolitan Museum of Art" } }
-              ]
-            }
-          }],
+          candidates: [
+            {
+              finishReason: "STOP",
+              content: { parts: [{ text: "الملكة نفرتيتي كانت زوجة أخناتون." }] },
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    web: {
+                      uri: "https://www.britannica.com/biography/Nefertiti",
+                      title: "Nefertiti — Encyclopaedia Britannica",
+                    },
+                  },
+                  {
+                    web: {
+                      uri: "https://www.metmuseum.org/",
+                      title: "The Metropolitan Museum of Art",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
         });
       }
       throw new Error(`Unexpected request to ${url.hostname}.`);
@@ -1313,8 +1577,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("السياق الديني ظاهر");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
   });
 
   it("uses the current stable Gemini model when the primary is unavailable", async () => {
@@ -1413,11 +1677,13 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response("{}", { status: 429 }));
     const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
     const request = createChatRequest("عندي مشكلة في التعارف");
-    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
+    Object.defineProperty(request, "runtime", {
+      value: { cloudflare: { env: { AI: scannerAI } } },
+    });
 
     const response = await handleChatPost(request, fetcher);
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(scannerAI.run).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalled();
   });
@@ -1461,10 +1727,12 @@ describe("handleChatPost hosted Gemini provider", () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response("{}", { status: 429 }));
     const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
     const request = createChatRequest("عندي مشكلة في التعارف");
-    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
+    Object.defineProperty(request, "runtime", {
+      value: { cloudflare: { env: { AI: scannerAI } } },
+    });
 
     const response = await handleChatPost(request, fetcher);
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(scannerAI.run).not.toHaveBeenCalled();
   });
 
@@ -1493,20 +1761,28 @@ describe("handleChatPost hosted Gemini provider", () => {
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       if (String(input).includes("api.groq.com")) {
-        return Response.json({ choices: [{ finish_reason: "length", message: { content: "رد Groq غير مكتمل" } }] });
+        return Response.json({
+          choices: [{ finish_reason: "length", message: { content: "رد Groq غير مكتمل" } }],
+        });
       }
       if (String(input).includes("generativelanguage.googleapis.com")) {
-        return Response.json({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: "رد Gemini غير مكتمل" }] } }] });
+        return Response.json({
+          candidates: [
+            { finishReason: "MAX_TOKENS", content: { parts: [{ text: "رد Gemini غير مكتمل" }] } },
+          ],
+        });
       }
       throw new Error(`Unexpected request to ${String(input)}.`);
     });
     const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
     const request = createChatRequest("عندي مشكلة في التعارف");
-    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
+    Object.defineProperty(request, "runtime", {
+      value: { cloudflare: { env: { AI: scannerAI } } },
+    });
 
     const response = await handleChatPost(request, fetcher);
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(scannerAI.run).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalled();
   });
@@ -1521,23 +1797,29 @@ describe("handleChatPost hosted Gemini provider", () => {
     );
     const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
     const request = createChatRequest("عندي مشكلة في التعارف");
-    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
+    Object.defineProperty(request, "runtime", {
+      value: { cloudflare: { env: { AI: scannerAI } } },
+    });
 
     const response = await handleChatPost(request, fetcher);
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(scannerAI.run).not.toHaveBeenCalled();
   });
 
   it("returns a controlled error when Gemini cannot be reached without calling scanner AI", async () => {
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-server-key");
     vi.stubEnv("CHAT_GROQ_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () => { throw new TypeError("network unavailable"); });
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      throw new TypeError("network unavailable");
+    });
     const scannerAI = { run: vi.fn().mockResolvedValue({ response: "scanner-only result" }) };
     const request = createChatRequest("عندي مشكلة في التعارف");
-    Object.defineProperty(request, "runtime", { value: { cloudflare: { env: { AI: scannerAI } } } });
+    Object.defineProperty(request, "runtime", {
+      value: { cloudflare: { env: { AI: scannerAI } } },
+    });
 
     const response = await handleChatPost(request, fetcher);
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(scannerAI.run).not.toHaveBeenCalled();
   });
 });
@@ -1557,8 +1839,8 @@ describe("handleChatPost production provider configuration", () => {
 
     const response = await handleChatPost(createChatRequest(), fetcher);
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ code: "provider_error" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).not.toContain("مش لاقي دليل موثوق");
     expect(fetcher).toHaveBeenCalledTimes(4);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
@@ -1574,8 +1856,8 @@ describe("handleChatPost production provider configuration", () => {
 
     const response = await handleChatPost(createChatRequest(), fetcher);
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ code: "not_configured" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("المعلومة العامة");
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
@@ -1739,9 +2021,9 @@ describe("handleChatPost Ollama stream handling", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("سقارة هي المقبرة الرئيسية لمدينة منف.");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("Digital Egypt");
-    expect(body).toContain(
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("Digital Egypt");
+    expect(body).not.toContain(
       "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
     );
     expect(
@@ -1935,126 +2217,144 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-
-describe("general web research across non-Egypt topics", () => {
-  it("uses Groq browser search when the user explicitly asks for current research", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-      expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        citation_options?: string;
-        tools?: Array<{ type: string }>;
-        tool_choice?: string;
-      };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload.citation_options).toBe("enabled");
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
-      return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content: "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗.",
-            executed_tools: [{
-              browser_results: [{
-                  title: "NASA — James Webb Space Telescope",
-                  url: "https://science.nasa.gov/mission/webb/",
-                  content: "NASA describes the James Webb Space Telescope and its infrared observations.",
-                  score: 0.94
-                }]
-            }]
-          },
-        }],
-      });
-    });
-    const response = await handleChatPost(
-      createChatRequest("ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر"),
-      fetcher,
-    );
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("إحالات نتائج البحث");
-    expect(fetcher).toHaveBeenCalledOnce();
-  });
-
-  it("verifies Groq browser-search citations against the opened institutional page", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const pageText = "Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.";
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-      if (String(input).includes("api.groq.com")) {
+  describe("general web research across non-Egypt topics", () => {
+    it("uses Groq browser search when the user explicitly asks for current research", async () => {
+      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+        expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
         const payload = JSON.parse(String(init?.body)) as {
-          messages: Array<{ role: string; content: string }>;
+          model: string;
+          citation_options?: string;
           tools?: Array<{ type: string }>;
           tool_choice?: string;
         };
+        expect(payload.model).toBe("openai/gpt-oss-20b");
+        expect(payload.citation_options).toBe("enabled");
         expect(payload.tools).toEqual([{ type: "browser_search" }]);
         expect(payload.tool_choice).toBe("required");
-        expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: {
-              content: "لو تقصدي يوسف الصديق، يذكر سفر التكوين أنه مات في مصر ودُفن في تابوت. <ATHARA_SOURCES>[{\"title\":\"Genesis 50:26 — Bible Gateway\",\"url\":\"https://www.biblegateway.com/passage/?search=Genesis%2050%3A26\",\"evidence\":\"Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.\"}]</ATHARA_SOURCES>",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content:
+                  "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗.",
+                executed_tools: [
+                  {
+                    browser_results: [
+                      {
+                        title: "NASA — James Webb Space Telescope",
+                        url: "https://science.nasa.gov/mission/webb/",
+                        content:
+                          "NASA describes the James Webb Space Telescope and its infrared observations.",
+                        score: 0.94,
+                      },
+                    ],
+                  },
+                ],
+              },
             },
-          }],
+          ],
         });
-      }
-      expect(String(input)).toContain("biblegateway.com");
-      return new Response(
-        "<html><body><main>Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.</main></body></html>",
-        { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
-      );
-    });
-    const response = await handleChatPost(
-      createChatRequest("اين يوجد جسد يوسق الصديق؟ عايزة المصدر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(response.status).toBe(200);
-    expect(body).toContain("لو تقصدي يوسف الصديق");
-    expect(body).toContain("biblegateway.com");
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
-
-  it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-      const url = String(input);
-      expect(url).toContain("generativelanguage.googleapis.com");
-      const payload = JSON.parse(String(init?.body)) as {
-        tools?: Array<{ google_search?: Record<string, never> }>;
-      };
-      expect(payload.tools).toEqual([{ google_search: {} }]);
-      return Response.json({
-        candidates: [{
-          finishReason: "STOP",
-          content: { parts: [{ text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء." }] },
-          groundingMetadata: {
-            groundingChunks: [
-              { web: { uri: "https://science.nasa.gov/mission/webb/", title: "NASA — James Webb Space Telescope" } },
-              { web: { uri: "https://webbtelescope.org/", title: "WebbTelescope.org" } },
-            ],
-          },
-        }],
       });
+      const response = await handleChatPost(
+        createChatRequest("ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر"),
+        fetcher,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("إحالات نتائج البحث");
+      expect(fetcher).toHaveBeenCalledOnce();
     });
-    const response = await handleChatPost(
-      createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(response.status).toBe(200);
-    expect(body).toContain("تلسكوب جيمس ويب مرصد فضائي");
-    expect(body).toContain("https://science.nasa.gov/mission/webb/");
-    expect(body).toContain("https://webbtelescope.org/");
-    expect(fetcher).toHaveBeenCalledOnce();
+
+    it("verifies Groq browser-search citations against the opened institutional page", async () => {
+      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+      const pageText =
+        "Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.";
+      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+        if (String(input).includes("api.groq.com")) {
+          const payload = JSON.parse(String(init?.body)) as {
+            messages: Array<{ role: string; content: string }>;
+            tools?: Array<{ type: string }>;
+            tool_choice?: string;
+          };
+          expect(payload.tools).toEqual([{ type: "browser_search" }]);
+          expect(payload.tool_choice).toBe("required");
+          expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
+          return Response.json({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content:
+                    'لو تقصدي يوسف الصديق، يذكر سفر التكوين أنه مات في مصر ودُفن في تابوت. <ATHARA_SOURCES>[{"title":"Genesis 50:26 — Bible Gateway","url":"https://www.biblegateway.com/passage/?search=Genesis%2050%3A26","evidence":"Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt."}]</ATHARA_SOURCES>',
+                },
+              },
+            ],
+          });
+        }
+        expect(String(input)).toContain("biblegateway.com");
+        return new Response(
+          "<html><body><main>Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      });
+      const response = await handleChatPost(
+        createChatRequest("اين يوجد جسد يوسق الصديق؟ عايزة المصدر"),
+        fetcher,
+      );
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain("لو تقصدي يوسف الصديق");
+      expect(body).toContain("biblegateway.com");
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
+      vi.stubEnv("CHAT_GROQ_API_KEY", "");
+      vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
+      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+        const url = String(input);
+        expect(url).toContain("generativelanguage.googleapis.com");
+        const payload = JSON.parse(String(init?.body)) as {
+          tools?: Array<{ google_search?: Record<string, never> }>;
+        };
+        expect(payload.tools).toEqual([{ google_search: {} }]);
+        return Response.json({
+          candidates: [
+            {
+              finishReason: "STOP",
+              content: {
+                parts: [{ text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء." }],
+              },
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    web: {
+                      uri: "https://science.nasa.gov/mission/webb/",
+                      title: "NASA — James Webb Space Telescope",
+                    },
+                  },
+                  { web: { uri: "https://webbtelescope.org/", title: "WebbTelescope.org" } },
+                ],
+              },
+            },
+          ],
+        });
+      });
+      const response = await handleChatPost(
+        createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب مع المصادر"),
+        fetcher,
+      );
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain("تلسكوب جيمس ويب مرصد فضائي");
+      expect(body).toContain("https://science.nasa.gov/mission/webb/");
+      expect(body).toContain("https://webbtelescope.org/");
+      expect(fetcher).toHaveBeenCalledOnce();
+    });
   });
-});
-
-
 
   it("uses live research for an ordinary factual question outside Egyptian heritage", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
@@ -2071,20 +2371,27 @@ describe("general web research across non-Egypt topics", () => {
       expect(payload.tools).toEqual([{ type: "browser_search" }]);
       expect(payload.tool_choice).toBe("required");
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي 〖1†L1-L3〗.",
-            executed_tools: [{
-              browser_results: [{
-                  title: "NASA — Earth's Atmosphere",
-                  url: "https://science.nasa.gov/earth/",
-                  content: "The Earth's atmosphere scatters shorter blue wavelengths of sunlight more than longer red wavelengths.",
-                  score: 0.89
-                }]
-            }]
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي 〖1†L1-L3〗.",
+              executed_tools: [
+                {
+                  browser_results: [
+                    {
+                      title: "NASA — Earth's Atmosphere",
+                      url: "https://science.nasa.gov/earth/",
+                      content:
+                        "The Earth's atmosphere scatters shorter blue wavelengths of sunlight more than longer red wavelengths.",
+                      score: 0.89,
+                    },
+                  ],
+                },
+              ],
+            },
           },
-        }],
+        ],
       });
     });
     const response = await handleChatPost(createChatRequest("ليه السما زرقا؟"), fetcher);
@@ -2093,7 +2400,7 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("researches the exact unaccented Arabic question about Joseph and cites the biblical passages", async () => {
+  it("researches the exact unaccented Arabic question without showing unrequested sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
@@ -2115,31 +2422,35 @@ describe("general web research across non-Egypt topics", () => {
         "For religious history and theology, consult primary council or religious texts",
       );
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content:
-              "بحسب سفر التكوين 50:25-26، مات يوسف في مصر وعمره 110 سنوات وحُنّط ووُضع في تابوت. ويذكر الخروج 13:19 أن موسى أخذ عظامه معه. ويحدد يشوع 24:32 شكيم مكانًا لدفن عظامه. أما ربط الموقع التقليدي المعروف بقبر يوسف به فلا يثبت هوية الرفات أثريًا بمفرده.",
-            executed_tools: [{
-              browser_results: [
-                  {
-                    title: "Genesis 50:25-26; Exodus 13:19; Joshua 24:32 — NRSVUE",
-                    url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A25-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NRSVUE",
-                    content:
-                      "Genesis 50:25 Joseph asks that his bones be carried up; Genesis 50:26 he is embalmed and placed in a coffin in Egypt. Exodus 13:19 Moses takes the bones of Joseph. Joshua 24:32 says the bones of Joseph were buried at Shechem.",
-                    score: 0.98
-                  },
-                  {
-                    title: "Joseph's Tomb — Encyclopaedia Britannica",
-                    url: "https://www.britannica.com/place/Josephs-Tomb",
-                    content:
-                      "The traditional site identified as Joseph's Tomb is located at Shechem, near Nablus.",
-                    score: 0.74
-                  }
-                ]
-            }]
-          }
-        }]
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content:
+                "بحسب سفر التكوين 50:25-26، مات يوسف في مصر وعمره 110 سنوات وحُنّط ووُضع في تابوت. ويذكر الخروج 13:19 أن موسى أخذ عظامه معه. ويحدد يشوع 24:32 شكيم مكانًا لدفن عظامه. أما ربط الموقع التقليدي المعروف بقبر يوسف به فلا يثبت هوية الرفات أثريًا بمفرده.",
+              executed_tools: [
+                {
+                  browser_results: [
+                    {
+                      title: "Genesis 50:25-26; Exodus 13:19; Joshua 24:32 — NRSVUE",
+                      url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A25-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NRSVUE",
+                      content:
+                        "Genesis 50:25 Joseph asks that his bones be carried up; Genesis 50:26 he is embalmed and placed in a coffin in Egypt. Exodus 13:19 Moses takes the bones of Joseph. Joshua 24:32 says the bones of Joseph were buried at Shechem.",
+                      score: 0.98,
+                    },
+                    {
+                      title: "Joseph's Tomb — Encyclopaedia Britannica",
+                      url: "https://www.britannica.com/place/Josephs-Tomb",
+                      content:
+                        "The traditional site identified as Joseph's Tomb is located at Shechem, near Nablus.",
+                      score: 0.74,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       });
     });
 
@@ -2154,31 +2465,40 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("الخروج 13:19");
     expect(body).toContain("يشوع 24:32");
     expect(body).toContain("شكيم");
-    expect(body).toContain("https://www.biblegateway.com/");
-    expect(body).toContain("المصادر:");
+    expect(body).not.toContain("https://www.biblegateway.com/");
+    expect(body).not.toContain("المصادر:");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("accepts Groq browser tool search_results nested under results", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
-      choices: [{
-        finish_reason: "stop",
-        message: {
-          content: "توضح المصادر أن يوسف دُفن في شكيم.",
-          executed_tools: [{
-            search_results: {
-              results: [{
-                title: "Joshua 24:32",
-                url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                content: "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
-              }],
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "توضح المصادر أن يوسف دُفن في شكيم.",
+              executed_tools: [
+                {
+                  search_results: {
+                    results: [
+                      {
+                        title: "Joshua 24:32",
+                        url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                        content:
+                          "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
+                      },
+                    ],
+                  },
+                },
+              ],
             },
-          }],
-        },
-      }],
-    }));
+          },
+        ],
+      }),
+    );
     const response = await handleChatPost(
       createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
       fetcher,
@@ -2186,7 +2506,6 @@ describe("general web research across non-Egypt topics", () => {
     const body = await response.text();
     expect(body).toContain("توضح المصادر");
     expect(body).toContain("https://www.biblegateway.com/passage/");
-    
   });
 
   it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {
@@ -2195,20 +2514,25 @@ describe("general web research across non-Egypt topics", () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       expect(String(input)).toContain("api.groq.com");
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content: "بحسب سفر يشوع، دُفنت عظام يوسف في شكيم.",
-            annotations: [{
-              type: "url_citation",
-              url_citation: {
-                url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                title: "Joshua 24:32 — NRSVUE",
-                content: "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
-              },
-            }],
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "بحسب سفر يشوع، دُفنت عظام يوسف في شكيم.",
+              annotations: [
+                {
+                  type: "url_citation",
+                  url_citation: {
+                    url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                    title: "Joshua 24:32 — NRSVUE",
+                    content:
+                      "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
+                  },
+                },
+              ],
+            },
           },
-        }],
+        ],
       });
     });
     const response = await handleChatPost(
@@ -2225,23 +2549,29 @@ describe("general web research across non-Egypt topics", () => {
   it("accepts Groq's native URL citation metadata when it omits an excerpt field", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
-      choices: [{
-        finish_reason: "stop",
-        message: {
-          content: "تذكر يشوع 24:32 دفن عظام يوسف في شكيم.",
-          annotations: [{
-            type: "url_citation",
-            url_citation: {
-              url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-              title: "Joshua 24:32 — NRSVUE",
-              start_index: 15,
-              end_index: 27,
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "تذكر يشوع 24:32 دفن عظام يوسف في شكيم.",
+              annotations: [
+                {
+                  type: "url_citation",
+                  url_citation: {
+                    url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                    title: "Joshua 24:32 — NRSVUE",
+                    start_index: 15,
+                    end_index: 27,
+                  },
+                },
+              ],
             },
-          }],
-        },
-      }],
-    }));
+          },
+        ],
+      }),
+    );
     const response = await handleChatPost(
       createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
       fetcher,
@@ -2261,20 +2591,26 @@ describe("general web research across non-Egypt topics", () => {
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content: "بحسب يشوع 24:32 دُفنت عظام يوسف في شكيم.",
-            executed_tools: [{
-              browser_results: [{
-                  title: "Joshua 24:32 — NRSVUE",
-                  url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                  content: "The bones of Joseph were buried at Shechem.",
-                  score: 0.97
-                }]
-            }]
-          }
-        }]
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "بحسب يشوع 24:32 دُفنت عظام يوسف في شكيم.",
+              executed_tools: [
+                {
+                  browser_results: [
+                    {
+                      title: "Joshua 24:32 — NRSVUE",
+                      url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                      content: "The bones of Joseph were buried at Shechem.",
+                      score: 0.97,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       });
     });
     const response = await handleChatPost(
@@ -2305,20 +2641,27 @@ describe("general web research across non-Egypt topics", () => {
         expect(payload.tools).toContainEqual({ type: "browser_search" });
         expect(payload.tool_choice).toBe("required");
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "Groq could not retrieve an approved source.", executed_tools: [] },
-          }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: "Groq could not retrieve an approved source.",
+                executed_tools: [],
+              },
+            },
+          ],
         });
       }
       if (url.includes("generativelanguage.googleapis.com")) {
         providerOrder.push("Gemini");
         expect(payload.tools).toEqual([{ google_search: {} }]);
         return Response.json({
-          candidates: [{
-            content: { parts: [{ text: "Gemini could not retrieve an approved source." }] },
-            groundingMetadata: { groundingChunks: [] },
-          }],
+          candidates: [
+            {
+              content: { parts: [{ text: "Gemini could not retrieve an approved source." }] },
+              groundingMetadata: { groundingChunks: [] },
+            },
+          ],
         });
       }
       if (url.includes("openrouter.ai")) {
@@ -2326,31 +2669,44 @@ describe("general web research across non-Egypt topics", () => {
         expect(payload.tools?.[0]?.type).toBe("openrouter:web_search");
         expect(payload.tool_choice).toBe("required");
         expect(payload.tools?.[0]?.parameters?.allowed_domains).toContain("britannica.com");
+        expect(payload.tools?.[0]?.parameters?.allowed_domains).toEqual(
+          expect.arrayContaining([
+            "quran.com",
+            "sunnah.com",
+            "dar-alifta.org",
+            "sefaria.org",
+            "uee.ucla.edu",
+            "escholarship.org",
+            "thesaurus-linguae-aegyptiae.de",
+          ]),
+        );
         expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer chat-openrouter-key");
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: {
-              content: "باريس هي عاصمة فرنسا.",
-              annotations: [{
-                type: "url_citation",
-                url_citation: {
-                  url: "https://www.britannica.com/place/Paris",
-                  title: "Paris — Encyclopaedia Britannica",
-                  content: "Paris is the capital and most populous city of France. It is located in the north-central part of the country.",
-                },
-              }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: "باريس هي عاصمة فرنسا.",
+                annotations: [
+                  {
+                    type: "url_citation",
+                    url_citation: {
+                      url: "https://www.britannica.com/place/Paris",
+                      title: "Paris — Encyclopaedia Britannica",
+                      content:
+                        "Paris is the capital and most populous city of France. It is located in the north-central part of the country.",
+                    },
+                  },
+                ],
+              },
             },
-          }],
+          ],
         });
       }
       throw new Error("Unexpected provider request: " + url);
     });
 
-    const response = await handleChatPost(
-      createChatRequest("ما عاصمة فرنسا؟ مع المصادر"),
-      fetcher,
-    );
+    const response = await handleChatPost(createChatRequest("ما عاصمة فرنسا؟ مع المصادر"), fetcher);
     const body = await response.text();
 
     expect(response.status).toBe(200);
@@ -2360,7 +2716,7 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("https://www.britannica.com/place/Paris");
   });
 
-  it("uses trusted live research for a colloquial Arabic question with a spelling mistake", async () => {
+  it("uses trusted live research without showing unrequested sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     vi.stubEnv("CHAT_OPENROUTER_API_KEY", "");
@@ -2375,17 +2731,25 @@ describe("general web research across non-Egypt topics", () => {
       expect(payload.tool_choice).toBe("required");
       expect(payload.messages[0]?.content).toContain("Infer the user's intended meaning");
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: {
-            content: "لو تقصدي قصة باريس، فهي العاصمة الفرنسية.",
-            executed_tools: [{ browser_results: [{
-              title: "Paris — Encyclopaedia Britannica",
-              url: "https://www.britannica.com/place/Paris",
-              content: "Paris is the capital and most populous city of France.",
-            }] }],
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "لو تقصدي قصة باريس، فهي العاصمة الفرنسية.",
+              executed_tools: [
+                {
+                  browser_results: [
+                    {
+                      title: "Paris — Encyclopaedia Britannica",
+                      url: "https://www.britannica.com/place/Paris",
+                      content: "Paris is the capital and most populous city of France.",
+                    },
+                  ],
+                },
+              ],
+            },
           },
-        }],
+        ],
       });
     });
 
@@ -2393,8 +2757,8 @@ describe("general web research across non-Egypt topics", () => {
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(body).toContain("لو تقصدي قصة باريس");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("britannica.com");
+    expect(body).not.toContain("المصادر:");
+    expect(body).not.toContain("britannica.com");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
@@ -2419,14 +2783,18 @@ describe("general web research across non-Egypt topics", () => {
   it("uses the reviewed Bible answer for Joseph when live providers return no verifiable search results", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
-      choices: [{
-        finish_reason: "stop",
-        message: {
-          content: "يوسف دُفن في مكان غير معروف ولا توجد عنه معلومات."
-        }
-      }]
-    }));
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "يوسف دُفن في شكيم حسب رواية سفر يشوع 24:32؛ في قول المصر أن عظامه نُقلت إلى أرض إسرائيل. رواية التكوين 50:25-26 وترجمة الاسم وشكيم لا تثبتان أن رفاته عُثر عليها حديثًا.",
+            },
+          },
+        ],
+      }),
+    );
     const response = await handleChatPost(
       createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
       fetcher,
@@ -2436,7 +2804,7 @@ describe("general web research across non-Egypt topics", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("سفر يشوع 24:32");
     expect(body).toContain("شكيم");
-    expect(body).toContain("لا تثبت أن رفاته عُثر عليها");
+    expect(body).toContain("لا تثبت");
     expect(body).not.toContain("مكان غير معروف ولا توجد عنه معلومات");
     expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
     expect(fetcher).toHaveBeenCalledOnce();
@@ -2448,36 +2816,44 @@ describe("general web research across non-Egypt topics", () => {
     vi.stubEnv("CHAT_OPENROUTER_API_KEY", "");
     const specialistProviders: string[] = [];
     const searchBinding = {
-      websearch: vi.fn(async ({ provider, query }: { provider: "exa" | "linkup" | "ceramic"; query: string }) => {
-        specialistProviders.push(provider);
-        expect(query).toContain("Joshua 24:32");
-        if (provider === "exa") return new Response("search unavailable", { status: 503 });
-        if (provider === "linkup") return Response.json({
-          items: [{
-            title: "Joshua 24:32 — Bible text",
-            url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-            description: "Joshua 24:32 records the burial of Joseph's bones at Shechem.",
-          }],
-        });
-        return Response.json({
-          items: [{
-            title: "Joshua 24:32 — Bible.com",
-            url: "https://www.bible.com/bible/111/JOS.24.32.NIV",
-            description: "The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem.",
-          }],
-        });
-      }),
+      websearch: vi.fn(
+        async ({ provider, query }: { provider: "exa" | "linkup" | "ceramic"; query: string }) => {
+          specialistProviders.push(provider);
+          expect(query).toContain("Joshua 24:32");
+          if (provider === "exa") return new Response("search unavailable", { status: 503 });
+          if (provider === "linkup")
+            return Response.json({
+              items: [
+                {
+                  title: "Joshua 24:32 — Bible text",
+                  url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                  description: "Joshua 24:32 records the burial of Joseph's bones at Shechem.",
+                },
+              ],
+            });
+          return Response.json({
+            items: [
+              {
+                title: "Joshua 24:32 — Bible.com",
+                url: "https://www.bible.com/bible/111/JOS.24.32.NIV",
+                description:
+                  "The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem.",
+              },
+            ],
+          });
+        },
+      ),
     };
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
       if (url.hostname === "www.biblegateway.com") {
         return new Response(
           "<html><head><title>Joshua 24:32</title></head><body><main>" +
-          "The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem, " +
-          "in the piece of ground that Jacob had bought from the children of Hamor, the father of Shechem, " +
-          "for one hundred pieces of money. It became an inheritance of the descendants of Joseph. " +
-          "This passage is the scriptural account of the burial place named in the book of Joshua." +
-          "</main></body></html>",
+            "The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem, " +
+            "in the piece of ground that Jacob had bought from the children of Hamor, the father of Shechem, " +
+            "for one hundred pieces of money. It became an inheritance of the descendants of Joseph. " +
+            "This passage is the scriptural account of the burial place named in the book of Joshua." +
+            "</main></body></html>",
           { headers: { "Content-Type": "text/html; charset=utf-8" } },
         );
       }
@@ -2488,14 +2864,18 @@ describe("general web research across non-Egypt topics", () => {
         );
       }
       if (url.hostname === "api.groq.com") {
-        const payload = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] };
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
         expect(payload.messages[0]?.content).toContain("The bones of Joseph");
         expect(payload.messages[0]?.content).toContain("SOURCE 1:");
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "بحسب سفر يشوع 24:32، دُفنت عظام يوسف في شكيم." },
-          }],
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "بحسب سفر يشوع 24:32، دُفنت عظام يوسف في شكيم." },
+            },
+          ],
         });
       }
       throw new Error("Unexpected request to " + url.hostname);
@@ -2512,7 +2892,9 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("شكيم");
     expect(body).toContain("المصادر:");
     expect(body).toContain("https://www.biblegateway.com/passage/");
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
+      false,
+    );
   });
 
   it("keeps personal advice conversational instead of forcing web search", async () => {
@@ -2523,10 +2905,12 @@ describe("general web research across non-Egypt topics", () => {
       expect(payload.model).toBe("qwen/qwen3.8-27b");
       expect(payload.tools).toBeUndefined();
       return Response.json({
-        choices: [{
-          finish_reason: "stop",
-          message: { content: "ابدئي الكلام بهدوء ووضحي لها اللي مضايقك." },
-        }],
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: "ابدئي الكلام بهدوء ووضحي لها اللي مضايقك." },
+          },
+        ],
       });
     });
     const response = await handleChatPost(
@@ -2538,48 +2922,55 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-
-  it("accepts relevant public-web research results outside the curated source directory", async () => {
+  it("accepts relevant trusted public-web research results outside the local curated index", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "chat-only-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const openWebUrl = "https://www.nationalgeographic.com/history/article/ark-of-the-covenant";
+    const openWebUrl = "https://isac.uchicago.edu/research/publications/ark-of-the-covenant";
     const searchBinding = {
       websearch: vi.fn(async ({ provider }: { provider: "exa" | "linkup" | "ceramic" }) =>
         provider === "exa"
           ? Response.json({
-              items: [{
-                title: "The Ark of the Covenant: historical evidence",
-                url: openWebUrl,
-                description: "A detailed historical overview discussing the Ark of the Covenant, the biblical accounts, the Babylonian destruction of Jerusalem, and the limits of archaeological evidence available to researchers.",
-              }],
+              items: [
+                {
+                  title: "The Ark of the Covenant: historical evidence",
+                  url: openWebUrl,
+                  description:
+                    "A detailed historical overview discussing the Ark of the Covenant, the biblical accounts, the Babylonian destruction of Jerusalem, and the limits of archaeological evidence available to researchers.",
+                },
+              ],
             })
           : Response.json({ items: [] }),
       ),
     };
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
-      if (url.hostname === "www.nationalgeographic.com") {
+      if (url.hostname === "isac.uchicago.edu") {
         return new Response(
           "<html><body><main>" +
-          "The Ark of the Covenant is described in biblical texts as a sacred chest. " +
-          "Historical accounts connect the loss of the First Temple treasures with the Babylonian capture of Jerusalem. " +
-          "No archaeological discovery has conclusively established the Ark's present location. " +
-          "Scholars distinguish the biblical narrative from later traditions about its fate and location." +
-          "</main></body></html>",
+            "The Ark of the Covenant is described in biblical texts as a sacred chest. " +
+            "Historical accounts connect the loss of the First Temple treasures with the Babylonian capture of Jerusalem. " +
+            "No archaeological discovery has conclusively established the Ark's present location. " +
+            "Scholars distinguish the biblical narrative from later traditions about its fate and location." +
+            "</main></body></html>",
           { headers: { "Content-Type": "text/html; charset=utf-8" } },
         );
       }
       if (url.hostname === "api.groq.com") {
-        const payload = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] };
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
         expect(payload.messages[0]?.content).toContain("No archaeological discovery");
         expect(payload.messages[0]?.content).toContain(openWebUrl);
         return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: {
-              content: "لا يوجد تاريخ مؤكد لاختفاء تابوت العهد، ولا يوجد دليل أثري حاسم يحدد مكانه الحالي.",
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content:
+                  "لا يوجد تاريخ مؤكد لاختفاء تابوت العهد، ولا يوجد دليل أثري حاسم يحدد مكانه الحالي.",
+              },
             },
-          }],
+          ],
         });
       }
       throw new Error("Unexpected request to " + url.hostname);
@@ -2595,5 +2986,4 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain(openWebUrl);
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
   });
-
 });

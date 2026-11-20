@@ -796,7 +796,7 @@ export const scannerResultCopy = {
     references: "نتائج البحث والمراجع",
     showReferences: "المصادر",
     confirmedStatus: "تم التعرف على الأثر بنجاح",
-    probableStatus: "تم التعرف على الأثر بنجاح",
+    probableStatus: "الاسم مرجّح؛ يحتاج المطابقة إلى تأكيد بصري مرجعي",
     unverifiedStatus: "لم يتم تأكيد هوية القطعة",
     nameLabel: "اسم الأثر",
     locationLabel: "الموقع",

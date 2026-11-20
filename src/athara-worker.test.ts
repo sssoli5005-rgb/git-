@@ -38,6 +38,59 @@ function expectUnverifiedScan(body: {
 }
 
 describe("ATHARA Cloudflare Worker", () => {
+  it.each([
+    ["تمثال ملكي جالس بغطاء رأس وشدوان", "تمثال"],
+    ["تابوت خشبي مزخرف به نقوش هيروغليفية", "تابوت"],
+    ["واجهة معبد صخري بتماثيل ضخمة", "مكان أثرى"],
+    ["تمثال أبوالهول منحوت في الحجر الجيري", "تمثال"],
+  ])("keeps a %s visual result explicitly unverified for an uploaded image", async (visualDescription, expectedFragment) => {
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return {
+          response: JSON.stringify({
+            visualDescription,
+            identity: "",
+            objectType: expectedFragment,
+            searchTerms: [expectedFragment],
+            keywords: [expectedFragment],
+            confidence: "low",
+            confidenceByField: {
+              identity: "low",
+              place: "low",
+              period: "low",
+            },
+          }),
+        };
+      }
+      throw new Error("No reverse-image index configured");
+    });
+    stubEmptyHeritageSearch();
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          ASSETS: { fetch: vi.fn(async () => new Response("", { status: 404 })) },
+        },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.resultType).toBe("unverified");
+      expect(body.identificationStatus).toBe("unverified");
+      expect(body.reverseImageSearchStatus).toBe("unavailable");
+      expect(body.analysis).toContain(visualDescription);
+      expect(body.matchedArtifact).toBeUndefined();
+      expect(body.confidenceByField).toMatchObject({
+        identity: "low",
+        place: "low",
+        period: "low",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses Cloudflare Web Search as the search provider when Gemini and Groq keys are absent", async () => {
     const catalogueUrl = "https://egymonuments.gov.eg/ar/collections/wooden-figure-catalogue";
     const websearch = vi.fn(async (args: { gatewayId: string; query: string; provider: string; limit: number }) => {
@@ -319,8 +372,8 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject({
         ok: true,
-        resultType: "reference_match",
-        identificationStatus: "confirmed",
+        resultType: "probable",
+        identificationStatus: "probable",
         reverseImageSearchStatus: "match",
         matchedArtifact: {
           name: "Wooden Statue of Nephthys",
@@ -873,8 +926,8 @@ describe("ATHARA Cloudflare Worker", () => {
       const body = await response.json();
 
       expect(body).toMatchObject({
-        resultType: "reference_match",
-        identificationStatus: "confirmed",
+        resultType: "probable",
+        identificationStatus: "probable",
         reverseImageSearchStatus: "match",
         matchedArtifact: {
           name: "قناع توت عنخ آمون",
@@ -1929,6 +1982,50 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the configured Groq vision engine for hieroglyph scans without Cloudflare or Gemini", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input instanceof Request ? input.url : input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                visualDescription: "علامات محفورة على لوح حجري",
+                scriptType: "هيروغليفية محتملة",
+                visibleText: "علامة واحدة واضحة",
+                signAnalysis: "العلامة المنفردة قابلة للوصف، لكن لا تكفي وحدها لتأكيد كلمة أو ترجمة.",
+                keywords: ["نقش حجري"],
+              }),
+            },
+          }],
+        });
+      }
+      if (url.hostname.endsWith("wikipedia.org") || url.hostname === "commons.wikimedia.org") {
+        return Response.json({ query: { pages: {} } });
+      }
+      return new Response("<html><body></body></html>", {
+        headers: { "content-type": "text/html" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "hieroglyphs" }),
+        { SCANNER_GROQ_API_KEY: "scanner-groq-key" },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.visionDiagnostics.provider).toBe("Groq");
+      expect(body.analysis).toContain("العلامة المنفردة قابلة للوصف");
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
+        true,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("does not use a vision fallback to identify artifacts without reverse-image search", async () => {
     stubEmptyHeritageSearch();
     const run = vi.fn().mockResolvedValueOnce({
@@ -2056,7 +2153,7 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(fetchMock.mock.calls.filter(([input]) =>
         String(input instanceof Request ? input.url : input).includes("generativelanguage.googleapis.com"),
       )).toHaveLength(2);
-      expect(body.resultType, JSON.stringify(body)).toBe("reference_match");
+      expect(body.resultType, JSON.stringify(body)).toBe("probable");
       expect(body.analysis).toContain("أبو سمبل");
       expect(body.analysis).toContain("معبد أبو سمبل الكبير المنحوت في الصخر");
       expect(body.sources).toContainEqual(expect.objectContaining({ url: catalogUrl, trusted: true }));
@@ -2213,7 +2310,8 @@ describe("ATHARA Cloudflare Worker", () => {
         expect(response.status).toBe(200);
         expect(body).toMatchObject({
           ok: true,
-          resultType: "reference_match",
+          resultType: "probable",
+          identificationStatus: "probable",
           reverseImageSearchStatus: "match",
           matchedArtifact: {
             name: "Seated Bronze Figurine",
@@ -2321,7 +2419,8 @@ describe("ATHARA Cloudflare Worker", () => {
         expect(response.status).toBe(200);
         expect(body).toMatchObject({
           ok: true,
-          resultType: "reference_match",
+          resultType: "probable",
+          identificationStatus: "probable",
           reverseImageSearchStatus: "match",
           matchedArtifact: {
             name: "Royal Figure from Ancient Egypt",
@@ -2668,6 +2767,7 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(body.sources).toEqual([]);
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls.every((url) => !/vision\.googleapis\.com|serpapi\.com/.test(url))).toBe(true);
+    expect(run.mock.calls[0][1].question).toContain("ANGLE ROBUSTNESS");
     vi.unstubAllGlobals();
   });
 
@@ -2706,6 +2806,7 @@ describe("ATHARA Cloudflare Worker", () => {
       response: JSON.stringify({
         visualDescription: "علامات محفورة",
         visibleText: "",
+        signAnalysis: "العلامات الظاهرة منفردة لا تكفي لتأكيد قراءة أو ترجمة.",
         keywords: ["علامات", "نقش"],
         periodClues: [],
       }),
@@ -2721,7 +2822,9 @@ describe("ATHARA Cloudflare Worker", () => {
       expect(run.mock.calls[0][1].question).toContain("الهيراطيقية والديموطيقية");
       expect(run.mock.calls[0][1].question).toContain("ترجمة حرفية");
       expect(run.mock.calls[0][1].question).toContain("أنشئ searchTerms قصيرة ودقيقة");
+      expect(run.mock.calls[0][1].question).toContain("SIGN-BY-SIGN ACCURACY");
       expect(body.analysis).toContain("لم يتم التأكد من الهوية بدقة");
+      expect(body.analysis).toContain("العلامات الظاهرة منفردة لا تكفي");
       expect(body.analysis).not.toContain("قراءة أو ترجمة مخترعة");
     } finally {
       vi.unstubAllGlobals();

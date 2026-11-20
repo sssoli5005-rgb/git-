@@ -58,11 +58,9 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("Provide the best supported answer rather than a generic refusal");
     expect(prompt).toContain("rather than a generic refusal");
     expect(prompt).toContain(
-      "When live search fails, first use any directly relevant curated knowledge",
+      "When live search fails, first use relevant curated knowledge and conversation evidence",
     );
-    expect(prompt).toContain(
-      "ask one focused follow-up or offer a useful next step",
-    );
+    expect(prompt).toContain("state the specific limit and offer a useful next step");
   });
 
   it("prioritizes archaeological accuracy and labels uncertainty", () => {
@@ -135,9 +133,9 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("only when supported by current verified information");
   });
 
-  it("includes verified sources with factual answers", () => {
+  it("shows sources only when requested", () => {
     expect(buildChatSystemInstruction("ar")).toContain(
-      "For factual answers grounded in live search or curated knowledge, include the verified source names and links",
+      "do not show source names, citations, URLs, or a sources section unless the user explicitly asks for sources or references",
     );
   });
 
@@ -153,7 +151,7 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain(
       "Do not refuse the whole question merely because live search or another source service is unavailable",
     );
-    expect(prompt).toContain("place each supplied source link beside the claim it supports");
+    expect(prompt).toContain("place that supplied link beside the claim it supports");
     expect(prompt).toContain("identify only the specific detail it does not establish");
   });
 
@@ -169,10 +167,37 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("Support questions across the world, not only Egypt");
     expect(prompt).toContain("do not force an Egyptian connection");
     expect(prompt).toContain("Answer ordinary and specialist questions across the world");
-    expect(prompt).toContain("official government and intergovernmental agencies");
-    expect(prompt).toContain("When a live web-search tool is available for a factual question, use it");
-    expect(prompt).toContain("never invent source names, links, or citations");
+    expect(prompt).toContain(
+      "For factual questions, use reliable primary or institutional sources when available",
+    );
+    expect(prompt).toContain("still search when useful");
+    expect(prompt).toContain(
+      "For stable general-knowledge questions outside those strict categories",
+    );
+    expect(prompt).toContain(
+      "a cautious, helpful explanation from well-established general knowledge",
+    );
+    expect(prompt).toContain(
+      "For exact scriptural passages, current facts, high-impact medical/legal/financial questions",
+    );
+    expect(prompt).toContain("Never invent a citation or imply that a search succeeded");
     expect(prompt).toContain("Infer the user's intended meaning despite spelling");
+  });
+
+  it("supports multiple religious traditions without conflating text, commentary, and institutional views", () => {
+    const prompt = buildChatSystemInstruction("ar");
+    expect(prompt).toContain("Answer safe questions about religious traditions broadly");
+    expect(prompt).toContain("historical scholarship from each tradition's own teachings");
+    expect(prompt).toContain(
+      "never present one denomination, school, or institution as the view of every believer",
+    );
+    expect(prompt).toContain("Keep scripture, commentary, later tradition, and historical evidence distinct");
+    expect(prompt).toContain(
+      "for hadith, include collection/context and reported grading when verified",
+    );
+    expect(prompt).toContain(
+      "If sources are unavailable for a stable general question, explain carefully from established knowledge",
+    );
   });
 
   it("uses contextual specialist analysis without falsely claiming university affiliation", () => {

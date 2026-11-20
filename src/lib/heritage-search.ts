@@ -463,9 +463,16 @@ export function isDiscoveryResearchQuestion(value: string): boolean {
 
 const PYRAMID_TOPIC_PATTERN =
   /(?:اهرام|هرم|pyramid|pir[aá]mid|khufu|cheops|great pyramid|пирамид|ピラミッド|金字塔)/iu;
+const PYRAMID_DISCOVERY_INTENT_PATTERN =
+  /(?:اكتشافات|اكتشاف(?:\s+(?:جديد|حديث|اخير|أخير))?|اكتشفوا|مستجدات|latest|recent|new|discoveries|new findings|recent findings|hallazgos recientes|descubrimientos|nuevos descubrimientos|découvertes récentes|nouvelles découvertes|neu(?:e|en)? entdeckungen|nuove scoperte|новые открытия|последние открытия|最近発見|新発見|最新发现|新发现)/iu;
 
 export function isPyramidDiscoveryQuestion(value: string): boolean {
-  return isDiscoveryResearchQuestion(value) && PYRAMID_TOPIC_PATTERN.test(normalizeSearchText(value));
+  const normalized = normalizeSearchText(value);
+  return (
+    isDiscoveryResearchQuestion(value) &&
+    PYRAMID_TOPIC_PATTERN.test(normalized) &&
+    PYRAMID_DISCOVERY_INTENT_PATTERN.test(normalized)
+  );
 }
 
 function matchesHeritageQuery(value: string): boolean {

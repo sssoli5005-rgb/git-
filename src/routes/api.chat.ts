@@ -11,14 +11,11 @@ import {
   buildResearchSearchQuery,
   correctKnownResearchEntities,
   describeTrustedSourcesForQuestion,
+  inferResearchTopics,
   isTrustedResearchHost,
   TRUSTED_SOURCE_CATALOG,
 } from "@/lib/trusted-source-catalog";
-import {
-  pyramidDiscoveryFallbackCopy,
-  translations,
-  type LangCode,
-} from "@/i18n/translations";
+import { pyramidDiscoveryFallbackCopy, translations, type LangCode } from "@/i18n/translations";
 import { isSourceRequest } from "@/lib/source-request";
 import {
   buildHeritageSearchQuery,
@@ -286,47 +283,97 @@ function isLiveResearchRequest(query: string): boolean {
   const needsImageClarification =
     /(?:ايه|ما هي|ما هذا|ما هذه).{0,30}(?:قطعة|قطعه|اثر|صورة|صوره)/u.test(normalized);
   const needsConversationClarification =
-    /^(?:ممكن\s+)?(?:تشرحلي|تشرح\s+لي|تشرح|وضحلي|وضح\s+لي|افهم|اكمل|تكمل|تكمللي|تكمل\s+لي|كملي|كمل|كمّل)(?:\s+(?:الفكرة|الموضوع|ده|دي|المقصود|السؤال|بقى|باقي))?\s*[؟?]?$/u.test(normalized);
+    /^(?:ممكن\s+)?(?:تشرحلي|تشرح\s+لي|تشرح|وضحلي|وضح\s+لي|افهم|اكمل|تكمل|تكمللي|تكمل\s+لي|كملي|كمل|كمّل)(?:\s+(?:الفكرة|الموضوع|ده|دي|المقصود|السؤال|بقى|باقي))?\s*[؟?]?$/u.test(
+      normalized,
+    );
   if (needsImageClarification || needsConversationClarification) return false;
 
   const personalOrCreative =
-    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here|هل تحبني|بتحبني|تحبني|هل تفتقدني|مشتاق|اشتقتلك|ايه رأيك|ما رأيك|تنصحني|اعمل ايه|أعمل ايه|ماذا أفعل|ماذا افعل)/u.test(normalized);
+    /(?:\b(?:hello|hi|hey|how are you|how do you feel|what do you think|your opinion|my friend|my relationship|i feel|i am sad|i am lonely|dating|crush|breakup|tell me a story|make up a story|fictional story)\b|صديقتي|صاحبي|صديقي|علاقتي|مشاعري|حاسس|حاسة|زعلان|زعلانه|متضايق|مضايقني|بحب|وحشني|رأيك|وجهة نظر|ازيك|عامل ايه|عاملة ايه|اخبارك|اغرب حكاية|احكيلي حكاية|احكيلي قصة|قصة خيالية|حكاية خيالية|ايه القطعة دي|ايه الأثر ده|القطعة دي|الأثر ده|الصورة دي|ما هذه القطعة|what is this object|what is this artifact|what is this picture|what is shown here|هل تحبني|بتحبني|تحبني|هل تفتقدني|مشتاق|اشتقتلك|ايه رأيك|ما رأيك|تنصحني|اعمل ايه|أعمل ايه|ماذا أفعل|ماذا افعل)/u.test(
+      normalized,
+    );
   if (personalOrCreative) return false;
 
-  const ordinaryQuestion = /[؟?]/u.test(query) ||
-    /^(?:ما معنى|معنى|تعريف|معلومات عن|تاريخ|أسباب|سبب|نتائج|نتيجة|متى|اين|فين|كيف|لماذا|ليه|من هو|من هي|من هم|ما هو|ما هي|هل|كم|ما اسم|اسم)\b/u.test(normalized);
+  const ordinaryQuestion =
+    /[؟?]/u.test(query) ||
+    /^(?:ما معنى|معنى|تعريف|معلومات عن|تاريخ|أسباب|سبب|نتائج|نتيجة|متى|اين|فين|كيف|لماذا|ليه|من هو|من هي|من هم|ما هو|ما هي|هل|كم|ما اسم|اسم|الفرق(?:\s|$)|فرق(?:\s|$))/u.test(
+      normalized,
+    );
 
   const explicitResearch =
-    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مصدر|المراجع|مرجع|موثق|موثوق|دليل|اتأكد|تحقق|دورلي|شوفلي|اخر اخبار|آخر أخبار|حديث|حاليا|النهارده|اليوم|امبارح|الأسبوع)/u.test(normalized);
+    /(?:\b(?:search|sources?|references?|cite|latest|current|today|yesterday|this week|recent|news|updated|look up|verify|research)\b|ابحث|مصادر|مصدر|المراجع|مرجع|موثق|موثوق|دليل|اتأكد|تحقق|دورلي|شوفلي|اخر اخبار|آخر أخبار|حديث|حاليا|النهارده|اليوم|امبارح|الأسبوع)/u.test(
+      normalized,
+    );
 
   const englishFactualQuestion =
-    /^(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe|according to)\b/u.test(normalized);
+    /^(?:what|who|when|where|why|how|which|is|are|was|were|can you explain|explain|tell me about|define|describe|according to)\b/u.test(
+      normalized,
+    );
 
   const arabicQuestionLead =
-    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|احكي|عرفني|كلمني عن|اتكلم عن|اتكلمي عن|معلومات عن|ممكن معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|اكتبلي عن|اكتب لي عن|where|who|when|what|why|how)\b/u.test(normalized);
+    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)*(?:ايه|ما(?:هو|هي|\s|$)|من هو|من هي|مين|اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|هل|كم|اذكر|اشرح|وضح|فسر|احكيلي|احكي|عرفني|كلمني عن|اتكلم عن|اتكلمي عن|معلومات عن|ممكن معلومات عن|ما معنى|ما اسم|ما مكان|اين يقع|اين توجد|اكتبلي عن|اكتب لي عن|where|who|when|what|why|how)\b/u.test(
+      normalized,
+    );
   const arabicQuestionInside =
-    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|عاوز اعرف|عاوزة اعرف|عايزين نعرف|ممكن اعرف|ممكن تشرح|ممكن تقولي عن|محتاج اعرف|محتاجة اعرف|اشرح لي|احكي عن|احكيلي عن|اتكلم عن|اتكلمي عن|اعرف عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(normalized);
+    /(?:^|\s)(?:اين|فين|متى|امتى|ليه|لماذا|ازاي|كيف|كم|ايه|ما مكان|ما معنى|ما اسم|ماذا يقول|هل ورد|بحسب الكتاب المقدس|وفقا للكتاب المقدس|قولي|قول لي|اخبرني|عايز اعرف|عايزة اعرف|عاوز اعرف|عاوزة اعرف|عايزين نعرف|ممكن اعرف|ممكن تشرح|ممكن تقولي عن|محتاج اعرف|محتاجة اعرف|اشرح لي|احكي عن|احكيلي عن|اتكلم عن|اتكلمي عن|اعرف عن|تاريخ|قصه|قصة)(?:\s|$)/u.test(
+      normalized,
+    );
   const arabicFactualQuestion = arabicQuestionLead || arabicQuestionInside;
 
   return explicitResearch || ordinaryQuestion || englishFactualQuestion || arabicFactualQuestion;
+}
+
+function requiresVerifiedEvidence(
+  query: string,
+  heritageQuestion: boolean,
+  wantsSources: boolean,
+): boolean {
+  const stablePharaonicReligionOverview =
+    /(?:الدين الفرعوني|الديانة الفرعونية|الآلهة المصرية|المعبودات المصرية|ancient Egyptian religion|Egyptian gods|pharaonic religion)/iu.test(
+      normalizeResearchQuery(query),
+    );
+  if (stablePharaonicReligionOverview && !wantsSources) return false;
+  if (heritageQuestion || wantsSources) return true;
+  const topics = inferResearchTopics(query);
+  if (topics.some((topic) => ["health", "law", "economy", "scripture"].includes(topic))) {
+    return true;
+  }
+  const normalized = normalizeResearchQuery(query);
+  return /(?:\b(?:latest|current|today|yesterday|this week|recent|news|updated|as of|search|look up|verify|research)\b|dernier|actuel|aujourd'hui|récent|actualité|recherche|vérifier|último|actual|hoy|reciente|noticias|buscar|verificar|investigar|ultimo|attuale|oggi|recente|notizie|cerca|verifica|neueste|aktuell|heute|nachrichten|suche|prüfen|последн|сейчас|сегодня|недавно|новост|найди|проверь|最新|現在|今日|最近|ニュース|調べて|検索|確認|احدث|اخر|حاليا|اليوم|النهارده|امبارح|اخبار|ابحث|موثق|موثوق|اتأكد|تحقق|دورلي|شوفلي|حديث|الاسبوع)/u.test(
+    normalized,
+  );
 }
 
 function removeInlineResearchCitations(content: string): string {
   return content.replace(/\s*〖\s*\d+†L\d+(?:-L\d+)?\s*〗/gu, "").trim();
 }
 
-// The curated directory ranks sources; it must never block the open web.
+// The curated directory ranks sources and every accepted web result must still
+// be an institutional, academic, governmental, or catalogued trusted host.
 function isSafeResearchUrl(value: unknown): URL | undefined {
   if (typeof value !== "string" || value.length > 2_048) return undefined;
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password) return undefined;
     if (url.port && url.port !== "443") return undefined;
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.$/u, "");
-    if (!host || host === "localhost" || host.endsWith(".localhost") ||
-      host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".test") ||
-      host.endsWith(".invalid") || host.endsWith(".example") ||
-      /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host) || host.includes(":")) return undefined;
+    const host = url.hostname
+      .toLowerCase()
+      .replace(/^\[|\]$/gu, "")
+      .replace(/\.$/u, "");
+    if (
+      !host ||
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      host.endsWith(".test") ||
+      host.endsWith(".invalid") ||
+      host.endsWith(".example") ||
+      /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host) ||
+      host.includes(":")
+    )
+      return undefined;
+    if (!isTrustedResearchHost(host)) return undefined;
     return url;
   } catch {
     return undefined;
@@ -383,31 +430,59 @@ function buildSpecialistSearchQuery(question: string): string {
   const normalized = normalizeResearchQuery(question);
   const directoryQuery = buildResearchSearchQuery(question);
   if (isPyramidDiscoveryQuestion(question)) {
-    return `${directoryQuery} Egypt recent archaeological discovery research pyramids Giza Saqqara`.slice(0, 1024);
+    return `${directoryQuery} Egypt recent archaeological discovery research pyramids Giza Saqqara`.slice(
+      0,
+      1024,
+    );
   }
   if (
     /(?:افسس|ephesus|خلقيدون|chalcedon|كيرلس|cyril|اوطاخ|eutyches|miaphys|monophys|mia physis)/u.test(
       normalized,
     )
   ) {
-    return `${directoryQuery} Cyril of Alexandria mia physis Eutyches Eutychianism Council of Ephesus 431 Council of Chalcedon 451 Coptic Orthodox Christology primary texts`.slice(0, 1024);
+    return `${directoryQuery} Cyril of Alexandria mia physis Eutyches Eutychianism Council of Ephesus 431 Council of Chalcedon 451 Coptic Orthodox Christology primary texts`.slice(
+      0,
+      1024,
+    );
+  }
+  if (
+    /(?:انجيلي|انجيل|كاثوليك|كاثوليكي|بروتستانت|evangelical|catholic|protestant)/u.test(normalized)
+  ) {
+    return `${directoryQuery} Evangelical Christianity Catholic Church differences Bible authority tradition papacy sacraments National Association of Evangelicals Vatican Catechism balanced overview`.slice(
+      0,
+      1024,
+    );
   }
   if (/(?:ديانه|دين|معتقد|طقوس|الالهه|egyptian religion|egyptian gods)/u.test(normalized)) {
-    return `${directoryQuery} ancient Egyptian religion beliefs gods rituals temple cult primary texts Egyptology`.slice(0, 1024);
+    return `${directoryQuery} ancient Egyptian religion beliefs gods rituals temple cult primary texts Egyptology`.slice(
+      0,
+      1024,
+    );
   }
   if (/(?:يوسف|joseph|shechem|شكيم)/u.test(normalized)) {
-    return (directoryQuery + " Genesis 50:25-26 Exodus 13:19 Joshua 24:32 exact Bible passages Shechem Joseph bones").slice(0, 1024);
+    return (
+      directoryQuery +
+      " Genesis 50:25-26 Exodus 13:19 Joshua 24:32 exact Bible passages Shechem Joseph bones"
+    ).slice(0, 1024);
   }
   return directoryQuery.slice(0, 1024);
 }
 
-function isRelevantDiscoverySearchResult(question: string, title: string, excerpt: string): boolean {
+function isRelevantDiscoverySearchResult(
+  question: string,
+  title: string,
+  excerpt: string,
+): boolean {
   if (!isPyramidDiscoveryQuestion(question)) return true;
   const resultText = normalizeResearchQuery(`${title} ${excerpt}`);
   const mentionsTarget =
-    /(?:pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|اهرام|هرم|جيزه|سقاره|пирамид|ピラミッド|ギザ|サッカラ|金字塔)/u.test(resultText);
+    /(?:pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|اهرام|هرم|جيزه|سقاره|пирамид|ピラミッド|ギザ|サッカラ|金字塔)/u.test(
+      resultText,
+    );
   const mentionsFinding =
-    /(?:discover|find|excavat|uncover|corridor|void|muon|hallazgo|descubr|découverte|decouverte|trouve|fund|entdeck|открыт|находк|発見|发现|اكتشاف|عثور|حفائر|ممر|فراغ)/u.test(resultText);
+    /(?:discover|find|excavat|uncover|corridor|void|muon|hallazgo|descubr|découverte|decouverte|trouve|fund|entdeck|открыт|находк|発見|发现|اكتشاف|عثور|حفائر|ممر|فراغ)/u.test(
+      resultText,
+    );
   return mentionsTarget && mentionsFinding;
 }
 
@@ -419,8 +494,12 @@ function extractReadableResearchText(html: string): string {
     .replace(/&amp;/giu, "&")
     .replace(/&#39;|&apos;/giu, "'")
     .replace(/&quot;/giu, '"')
-    .replace(/&#x([0-9a-f]{1,6});/giu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/&#([0-9]{1,7});/gu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]{1,6});/giu, (_, code: string) =>
+      String.fromCodePoint(Number.parseInt(code, 16)),
+    )
+    .replace(/&#([0-9]{1,7});/gu, (_, code: string) =>
+      String.fromCodePoint(Number.parseInt(code, 10)),
+    )
     .replace(/\s+/gu, " ")
     .trim();
 }
@@ -439,48 +518,59 @@ async function searchWithChatSpecialists(
 
   // The three independent search indexes run together. One provider's outage
   // or quota limit must not block useful results from the other two.
-  const providerResults = await Promise.all(providers.map(async (provider) => {
-    try {
-      const response = await binding.websearch({
-        gatewayId: "default",
-        query,
-        provider,
-        limit: 4,
-      });
-      if (!response.ok) {
-        console.warn("[Chat research] Search provider returned an error", {
+  const providerResults = await Promise.all(
+    providers.map(async (provider) => {
+      try {
+        const response = await binding.websearch({
+          gatewayId: "default",
+          query,
           provider,
-          httpStatus: response.status,
+          limit: 4,
+        });
+        if (!response.ok) {
+          console.warn("[Chat research] Search provider returned an error", {
+            provider,
+            httpStatus: response.status,
+          });
+          return { provider, results: [] as Array<ChatWebSearchResult> };
+        }
+        const payload = (await response.json().catch(() => null)) as {
+          items?: ChatWebSearchResult[];
+          results?: ChatWebSearchResult[];
+        } | null;
+        const results = (
+          Array.isArray(payload?.items)
+            ? payload.items
+            : Array.isArray(payload?.results)
+              ? payload.results
+              : []
+        )
+          .filter(
+            (item) =>
+              Boolean(item) &&
+              typeof item.url === "string" &&
+              typeof (item.description ?? item.snippet) === "string",
+          )
+          .slice(0, 4);
+        return { provider, results };
+      } catch (error) {
+        console.warn("[Chat research] Search provider failed", {
+          provider,
+          reason: error instanceof Error ? error.message : "unknown",
         });
         return { provider, results: [] as Array<ChatWebSearchResult> };
       }
-      const payload = await response.json().catch(() => null) as {
-        items?: ChatWebSearchResult[];
-        results?: ChatWebSearchResult[];
-      } | null;
-      const results = (Array.isArray(payload?.items) ? payload.items :
-        Array.isArray(payload?.results) ? payload.results : [])
-        .filter((item) =>
-          Boolean(item) &&
-          typeof item.url === "string" &&
-          typeof (item.description ?? item.snippet) === "string",
-        )
-        .slice(0, 4);
-      return { provider, results };
-    } catch (error) {
-      console.warn("[Chat research] Search provider failed", {
-        provider,
-        reason: error instanceof Error ? error.message : "unknown",
-      });
-      return { provider, results: [] as Array<ChatWebSearchResult> };
-    }
-  }));
+    }),
+  );
 
-  const candidateMap = new Map<string, {
-    item: ChatWebSearchResult;
-    providers: string[];
-    searchExcerpt: string;
-  }>();
+  const candidateMap = new Map<
+    string,
+    {
+      item: ChatWebSearchResult;
+      providers: string[];
+      searchExcerpt: string;
+    }
+  >();
   for (const group of providerResults) {
     for (const item of group.results) {
       const url = isSafeResearchUrl(item.url);
@@ -507,58 +597,69 @@ async function searchWithChatSpecialists(
   const candidates = [...candidateMap.entries()].slice(0, 12);
   if (!candidates.length) {
     console.warn("[Chat research] No safe public-web source results were returned", {
-      successfulProviders: providerResults.filter((group) => group.results.length > 0).map((group) => group.provider),
+      successfulProviders: providerResults
+        .filter((group) => group.results.length > 0)
+        .map((group) => group.provider),
     });
     return { context: "", sources: [] };
   }
 
-  const verified = await Promise.all(candidates.map(async ([urlValue, candidate]) => {
-    const requestedUrl = isSafeResearchUrl(urlValue);
-    if (!requestedUrl) return null;
-    let sourceUrl = requestedUrl;
-    let pageExcerpt = "";
-    try {
-      const pageTimeout = AbortSignal.timeout(7_000);
-      const fetched = await fetchPublicResearchPage(
-        requestedUrl,
-        fetcher,
-        AbortSignal.any([requestSignal, pageTimeout]),
-      );
-      const page = fetched?.response;
-      const contentType = page?.headers.get("content-type") || "";
-      if (page && fetched && /text\/html|application\/xhtml\+xml/i.test(contentType)) {
-        sourceUrl = fetched.url;
-        const html = (await page.text()).slice(0, 600_000);
-        const readable = extractReadableResearchText(html);
-        if (readable.length >= 240) pageExcerpt = readable.slice(0, 3_200);
+  const verified = await Promise.all(
+    candidates.map(async ([urlValue, candidate]) => {
+      const requestedUrl = isSafeResearchUrl(urlValue);
+      if (!requestedUrl) return null;
+      let sourceUrl = requestedUrl;
+      let pageExcerpt = "";
+      try {
+        const pageTimeout = AbortSignal.timeout(7_000);
+        const fetched = await fetchPublicResearchPage(
+          requestedUrl,
+          fetcher,
+          AbortSignal.any([requestSignal, pageTimeout]),
+        );
+        const page = fetched?.response;
+        const contentType = page?.headers.get("content-type") || "";
+        if (page && fetched && /text\/html|application\/xhtml\+xml/i.test(contentType)) {
+          sourceUrl = fetched.url;
+          const html = (await page.text()).slice(0, 600_000);
+          const readable = extractReadableResearchText(html);
+          if (readable.length >= 240) pageExcerpt = readable.slice(0, 3_200);
+        }
+      } catch {
+        // Some trusted institutions block automated fetching. Their provider-
+        // returned search excerpt remains usable, but is labelled as a snippet.
       }
-    } catch {
-      // Some trusted institutions block automated fetching. Their provider-
-      // returned search excerpt remains usable, but is labelled as a snippet.
-    }
-    const evidence = pageExcerpt || candidate.searchExcerpt;
-    if (evidence.length < (pageExcerpt ? 240 : 80)) return null;
-    return {
-      source: sourceFromTrustedUrl(sourceUrl, candidate.item.title),
-      excerpt: evidence,
-      evidenceType: pageExcerpt ? "retrieved page text" : "search-index excerpt (page fetch unavailable)",
-      providers: candidate.providers,
-    };
-  }));
+      const evidence = pageExcerpt || candidate.searchExcerpt;
+      if (evidence.length < (pageExcerpt ? 240 : 80)) return null;
+      return {
+        source: sourceFromTrustedUrl(sourceUrl, candidate.item.title),
+        excerpt: evidence,
+        evidenceType: pageExcerpt
+          ? "retrieved page text"
+          : "search-index excerpt (page fetch unavailable)",
+        providers: candidate.providers,
+      };
+    }),
+  );
 
   const usable = verified.filter((item): item is NonNullable<typeof item> => item !== null);
-  const ranked = usable.sort((first, second) => {
-    const evidenceRank = (item: typeof first) => item.evidenceType === "retrieved page text" ? 2 : 1;
-    const sourceRank = (item: typeof first) => {
-      const host = new URL(item.source.url).hostname;
-      // Curated, government, academic, and international domains rank higher,
-      // but credible open-web sources remain eligible and are never discarded.
-      return isTrustedResearchHost(host) ? 2 : 1;
-    };
-    return sourceRank(second) - sourceRank(first) ||
-      evidenceRank(second) - evidenceRank(first) ||
-      second.providers.length - first.providers.length;
-  }).slice(0, 8);
+  const ranked = usable
+    .sort((first, second) => {
+      const evidenceRank = (item: typeof first) =>
+        item.evidenceType === "retrieved page text" ? 2 : 1;
+      const sourceRank = (item: typeof first) => {
+        const host = new URL(item.source.url).hostname;
+        // Curated, government, academic, and international domains rank higher,
+        // but credible open-web sources remain eligible and are never discarded.
+        return isTrustedResearchHost(host) ? 2 : 1;
+      };
+      return (
+        sourceRank(second) - sourceRank(first) ||
+        evidenceRank(second) - evidenceRank(first) ||
+        second.providers.length - first.providers.length
+      );
+    })
+    .slice(0, 8);
   if (!ranked.length) return { context: "", sources: [] };
 
   const uniqueProviders = providerResults
@@ -566,9 +667,11 @@ async function searchWithChatSpecialists(
     .map((group) => group.provider);
   const corrections = correctKnownResearchEntities(question);
   const correctionContext = corrections.length
-    ? "Likely spelling/entity normalization for this query: " + corrections
+    ? "Likely spelling/entity normalization for this query: " +
+      corrections
         .map((item) => item.matched + " → " + item.canonical + " (" + item.english + ")")
-        .join("; ") + ". Treat this as a high-confidence search normalization, not as permission to change the question's meaning."
+        .join("; ") +
+      ". Treat this as a high-confidence search normalization, not as permission to change the question's meaning."
     : "";
   const sourceGuide = describeTrustedSourcesForQuestion(question, 12);
   const context = [
@@ -578,15 +681,30 @@ async function searchWithChatSpecialists(
     "A result surfaced by multiple providers is not automatically independent corroboration: distinguish multiple search indexes pointing to one page from genuinely separate publications. Compare the claims and explain any disagreement. Do not count two pages from the same publisher as independent institutions.",
     correctionContext,
     sourceGuide,
-    ...ranked.map((item, index) =>
-      "SOURCE " + (index + 1) + ": " + item.source.title + " — " + item.source.organization +
-      "\nURL: " + item.source.url +
-      "\nEvidence type: " + item.evidenceType +
-      "\nSearch providers that found this page: " + item.providers.join(", ") +
-      "\n" + (item.evidenceType === "retrieved page text" ? "Retrieved page text" : "Search-index excerpt") +
-      ": " + item.excerpt
+    ...ranked.map(
+      (item, index) =>
+        "SOURCE " +
+        (index + 1) +
+        ": " +
+        item.source.title +
+        " — " +
+        item.source.organization +
+        "\nURL: " +
+        item.source.url +
+        "\nEvidence type: " +
+        item.evidenceType +
+        "\nSearch providers that found this page: " +
+        item.providers.join(", ") +
+        "\n" +
+        (item.evidenceType === "retrieved page text"
+          ? "Retrieved page text"
+          : "Search-index excerpt") +
+        ": " +
+        item.excerpt,
     ),
-  ].filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   console.info("[Chat research] Combined independent specialist search results", {
     providersWithResults: uniqueProviders.length,
@@ -625,8 +743,13 @@ function trustedSourcesFromOpenRouter(message: {
     if (annotation.type !== "url_citation") return [];
     const citation = annotation.url_citation;
     const url = isSafeResearchUrl(citation?.url);
-    if (!url || !isTrustedResearchHost(url.hostname) ||
-        typeof citation?.content !== "string" || citation.content.trim().length < 40) return [];
+    if (
+      !url ||
+      !isTrustedResearchHost(url.hostname) ||
+      typeof citation?.content !== "string" ||
+      citation.content.trim().length < 40
+    )
+      return [];
     return [sourceFromTrustedUrl(url, citation.title)];
   });
 }
@@ -650,9 +773,19 @@ function parseGroqSearchCitations(content: string): {
       citations = parsed.flatMap((item): GroqSearchCitation[] => {
         if (!item || typeof item !== "object") return [];
         const value = item as Record<string, unknown>;
-        if (typeof value.url !== "string" || typeof value.title !== "string" ||
-            typeof value.evidence !== "string") return [];
-        return [{ title: value.title.slice(0, 180), url: value.url, evidence: value.evidence.slice(0, 500) }];
+        if (
+          typeof value.url !== "string" ||
+          typeof value.title !== "string" ||
+          typeof value.evidence !== "string"
+        )
+          return [];
+        return [
+          {
+            title: value.title.slice(0, 180),
+            url: value.url,
+            evidence: value.evidence.slice(0, 500),
+          },
+        ];
       });
     }
   } catch {
@@ -669,8 +802,12 @@ function normalizeEvidenceText(value: string): string {
     .replace(/&amp;/giu, "&")
     .replace(/&#39;|&apos;/giu, "'")
     .replace(/&quot;/giu, '"')
-    .replace(/&#x([0-9a-f]{1,6});/giu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/&#([0-9]{1,7});/gu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]{1,6});/giu, (_, code: string) =>
+      String.fromCodePoint(Number.parseInt(code, 16)),
+    )
+    .replace(/&#([0-9]{1,7});/gu, (_, code: string) =>
+      String.fromCodePoint(Number.parseInt(code, 10)),
+    )
     .replace(/<[^>]*>/gu, " ")
     .replace(/[’‘]/gu, "'")
     .replace(/[“”]/gu, '"')
@@ -684,33 +821,39 @@ async function verifyGroqSearchCitations(
   fetcher: typeof fetch,
   requestSignal: AbortSignal,
 ): Promise<Array<{ title: string; organization: string; url: string }>> {
-  const verified = await Promise.all(citations.slice(0, 5).map(async (citation) => {
-    const requestedUrl = isSafeResearchUrl(citation.url);
-    const normalizedEvidence = normalizeEvidenceText(citation.evidence || "");
-    if (!requestedUrl || normalizedEvidence.length < 40) return null;
-    try {
-      const timeout = AbortSignal.timeout(8_000);
-      const response = await fetcher(requestedUrl.href, {
-        method: "GET",
-        headers: { accept: "text/html,application/xhtml+xml" },
-        redirect: "follow",
-        signal: AbortSignal.any([requestSignal, timeout]),
-      });
-      const finalUrl = isSafeResearchUrl(response.url || requestedUrl.href);
-      const contentType = response.headers.get("content-type") || "";
-      if (!response.ok || !finalUrl || !/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
-      const html = (await response.text()).slice(0, 900_000);
-      const readable = normalizeEvidenceText(
-        html.replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/giu, " ")
-          .replace(/<[^>]*>/gu, " "),
-      );
-      if (!readable.includes(normalizedEvidence)) return null;
-      return sourceFromTrustedUrl(finalUrl, citation.title);
-    } catch {
-      return null;
-    }
-  }));
-  return verified.filter((source): source is { title: string; organization: string; url: string } => source !== null);
+  const verified = await Promise.all(
+    citations.slice(0, 5).map(async (citation) => {
+      const requestedUrl = isSafeResearchUrl(citation.url);
+      const normalizedEvidence = normalizeEvidenceText(citation.evidence || "");
+      if (!requestedUrl || normalizedEvidence.length < 40) return null;
+      try {
+        const timeout = AbortSignal.timeout(8_000);
+        const response = await fetcher(requestedUrl.href, {
+          method: "GET",
+          headers: { accept: "text/html,application/xhtml+xml" },
+          redirect: "follow",
+          signal: AbortSignal.any([requestSignal, timeout]),
+        });
+        const finalUrl = isSafeResearchUrl(response.url || requestedUrl.href);
+        const contentType = response.headers.get("content-type") || "";
+        if (!response.ok || !finalUrl || !/text\/html|application\/xhtml\+xml/i.test(contentType))
+          return null;
+        const html = (await response.text()).slice(0, 900_000);
+        const readable = normalizeEvidenceText(
+          html
+            .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/giu, " ")
+            .replace(/<[^>]*>/gu, " "),
+        );
+        if (!readable.includes(normalizedEvidence)) return null;
+        return sourceFromTrustedUrl(finalUrl, citation.title);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return verified.filter(
+    (source): source is { title: string; organization: string; url: string } => source !== null,
+  );
 }
 
 function mergeResearchSources(
@@ -739,10 +882,10 @@ function createUnverifiedHeritageReply(language: LangCode): string {
 
 function createUnverifiedResearchReply(language: LangCode): string {
   const messages: Record<LangCode, string> = {
-    ar: "مش لاقي دليل موثوق يثبت المعلومة دي، فمش هخمن. لو تحددلي المكان أو الشيء أو الفترة المقصودة، أقدر أضيّق الإجابة وأكمل معاك.",
-    en: "I couldn't verify this specific detail from reliable sources, so I won't guess. If you specify the place, object, or period, I can narrow it down and continue.",
-    fr: "Je ne peux pas vérifier ce détail précis à partir de sources fiables, donc je préfère ne pas deviner. Si vous précisez le lieu, l’objet ou la période, je pourrai cibler la réponse et poursuivre.",
-    es: "No puedo verificar este dato concreto con fuentes fiables, así que no voy a adivinar. Si indicas el lugar, el objeto o la época, puedo precisar la respuesta y continuar.",
+    ar: "المعلومة العامة المستقرة متاحة، لكن الجزء الدقيق يحتاج مصدرًا أدق أو توضيحًا. لو قلتلي المكان أو العصر أو العبارة المقصودة أقدر أضيّق الإجابة وأكمل.",
+    en: "The stable general context is available, but the precise detail needs a clearer source or clarification. If you specify the place, period, object, or exact wording, I can narrow the answer.",
+    fr: "Le contexte général établi est disponible, mais le détail précis nécessite une source plus claire ou une précision. Indiquez le lieu, la période, l’objet ou les termes exacts.",
+    es: "El contexto general establecido está disponible, pero el dato preciso necesita una fuente más clara o una aclaración. Indica el lugar, el período, el objeto o la formulación exacta.",
     it: "Non posso verificare questo dettaglio specifico con fonti affidabili, quindi non farò supposizioni. Se indichi il luogo, l'oggetto o il periodo, posso circoscrivere la risposta e continuare.",
     de: "Dieses konkrete Detail kann ich anhand zuverlässiger Quellen nicht überprüfen und möchte nicht raten. Wenn Sie den Ort, das Objekt oder den Zeitraum nennen, kann ich die Antwort eingrenzen und fortfahren.",
     ru: "Мне не удалось проверить эту конкретную деталь по надежным источникам, поэтому я не буду гадать. Если уточните место, предмет или период, я смогу сузить ответ и продолжить.",
@@ -815,7 +958,12 @@ export async function handleChatPost(
   const heritageQuestion = isEgyptianHeritageQuery(parsed.data.messages);
   const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
   const liveResearchRequested = heritageQuestion || isLiveResearchRequest(latestQuestion);
-  const includeSources = wantsSources || liveResearchRequested;
+  const verifiedEvidenceRequired = requiresVerifiedEvidence(
+    latestQuestion,
+    heritageQuestion,
+    wantsSources,
+  );
+  const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
         "MANDATORY THREE-STAGE VERIFIED RESEARCH — use Exa, Linkup, and Ceramic in parallel when the Cloudflare Web Search binding is available:",
@@ -823,18 +971,34 @@ export async function handleChatPost(
         "Choose sources from the shared categorized trusted-source directory that match the subject. Official sources, universities, national libraries and archives, museums, peer-reviewed journals, and recognized specialist publications have priority. Encyclopedias are orientation sources, not substitutes for primary evidence.",
         "Search, compare, and synthesize evidence from the current turn. Distinguish directly opened page text from provider snippets. A snippet is limited evidence, not proof that the full page was read. Compare separate publications rather than counting multiple search providers that return the same page as independent corroboration.",
         "If providers disagree, explain the disagreement. State dates and current facts only when the retrieved evidence supports them. Correct false premises kindly and explain the supported information. Begin with the direct answer, then explain what supports it.",
-        ...(isDiscoveryResearchQuestion(latestQuestion) ? [
-          "DISCOVERY QUESTIONS: distinguish a peer-reviewed or institutionally confirmed physical finding from a proposed interpretation or an unverified media claim. Give the reported date, location, and detection method only when the retrieved evidence supports them. Do not call an older finding the latest unless the current search verifies that.",
-        ] : []),
+        ...(isDiscoveryResearchQuestion(latestQuestion)
+          ? [
+              "DISCOVERY QUESTIONS: distinguish a peer-reviewed or institutionally confirmed physical finding from a proposed interpretation or an unverified media claim. Give the reported date, location, and detection method only when the retrieved evidence supports them. Do not call an older finding the latest unless the current search verifies that.",
+            ]
+          : []),
         "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
-        "MATCHED TRUSTED SOURCE DIRECTORY FOR THIS QUESTION:\\n" + describeTrustedSourcesForQuestion(latestQuestion, 12),
-        "NORMALIZED RESEARCH QUERY (preserve the user's intent):\\n" + buildSpecialistSearchQuery(latestQuestion),
-        ...(correctKnownResearchEntities(latestQuestion).length ? [
-          "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " + correctKnownResearchEntities(latestQuestion).map((item) => item.matched + " → " + item.canonical + " (" + item.english + ")").join("; "),
-          "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
-        ] : []),
-        "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For questions about scripture, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For religious history and theology, consult primary council or religious texts, official statements of the traditions being described, and academic scholarship; identify whose doctrinal perspective each claim represents, explain disputed terms in their historical context, and do not treat confessional positions as universal historical consensus. For ancient Egyptian religion, distinguish textual and archaeological evidence from modern interpretation, and avoid treating beliefs across all periods and local cults as one unchanging system. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Include only source names and links that actually support the factual answer.",
-        "SEARCH-FAILURE RECOVERY: Before saying a detail cannot be verified, use any directly relevant curated knowledge and verified references already supplied in the conversation context. If neither live results nor relevant curated knowledge support a factual answer, do not guess or finish with a generic source-unavailable refusal; state the specific limit briefly and ask one focused follow-up or offer a useful next step. Include relevant verified references with factual answers; do not invent or expose unrelated links.",
+        "MATCHED TRUSTED SOURCE DIRECTORY FOR THIS QUESTION:\\n" +
+          describeTrustedSourcesForQuestion(latestQuestion, 12),
+        "NORMALIZED RESEARCH QUERY (preserve the user's intent):\\n" +
+          buildSpecialistSearchQuery(latestQuestion),
+        ...(correctKnownResearchEntities(latestQuestion).length
+          ? [
+              "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " +
+                correctKnownResearchEntities(latestQuestion)
+                  .map((item) => item.matched + " → " + item.canonical + " (" + item.english + ")")
+                  .join("; "),
+              "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
+            ]
+          : []),
+        "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Use retrieved evidence whenever available. For stable general knowledge questions that do not require current or primary-source verification, a cautious explanation from established general knowledge is acceptable if live results fail; clearly state that live verification was unavailable when relevant. Do not invent citations, links, or claims that a search succeeded. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For questions about scripture, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For religious history and theology, consult primary council or religious texts, official statements of the traditions being described, and academic scholarship; identify whose doctrinal perspective each claim represents, explain disputed terms in their historical context, and do not treat confessional positions as universal historical consensus. For ancient Egyptian religion, distinguish textual and archaeological evidence from modern interpretation, and avoid treating beliefs across all periods and local cults as one unchanging system. For disputed claims, compare independent sources.",
+        "SCRIPTURE SCOPE: The Bible-text instruction above applies only to biblical questions. For the Qur'an, hadith, Jewish texts, or other traditions, retrieve the requested passage from a recognized text in that tradition; distinguish the primary text from translation, commentary, later interpretation, and historical scholarship. Identify a hadith collection and grading only when verified, and never present one school's interpretation as universal.",
+        verifiedEvidenceRequired
+          ? "VERIFIED-EVIDENCE REQUIREMENT: This question requires current, primary, high-impact, Egyptian-heritage, scriptural, or explicitly requested source verification. If no usable evidence is retrieved, do not guess or present model memory as verified; state the specific verification limit."
+          : "GENERAL-KNOWLEDGE FALLBACK: This is a stable general-knowledge question. If all search tools fail or return no usable results, answer helpfully from well-established general knowledge, state the key limits briefly, and never fabricate sources or citations.",
+        wantsSources
+          ? "The user explicitly requested sources. Include only verified source names and links that directly support the answer."
+          : "The user did not request sources. Do not include source names, citations, URLs, or a sources section in the reply; use the retrieved evidence only to ground the answer. Exception: if the user supplied a source and specifically asks for an answer based on it, place that supplied link beside the claim it supports.",
+        "SEARCH-FAILURE RECOVERY: Before saying a detail cannot be verified, use any directly relevant curated knowledge and verified references already supplied in the conversation context. If sources are unavailable for a stable general question, provide the most useful cautious explanation you can without pretending it was verified. If this query requires verified evidence, do not guess; state the specific limit and offer a useful next step. Include relevant verified references only when requested, except when the user supplied a source and specifically asks for an answer based on it; do not invent or expose unrelated links.",
       ].join("\n")
     : "";
 
@@ -881,7 +1045,9 @@ export async function handleChatPost(
           );
         }
       } else {
-        searchContext = [searchContext, formatHeritageSearchContext(results)].filter(Boolean).join("\n\n");
+        searchContext = [searchContext, formatHeritageSearchContext(results)]
+          .filter(Boolean)
+          .join("\n\n");
         searchedSources = mergeResearchSources(
           searchedSources,
           results.map(({ title, organization, url }) => ({ title, organization, url })),
@@ -911,16 +1077,21 @@ export async function handleChatPost(
     .slice(0, 8);
   let responseSources = includeSources ? knowledgeSources : [];
   let verifiedTurnSources = [...searchedSources];
+  const stableGeneralDirectQuestion =
+    /(?:مين|من)\s+(?:هما|هم)\s+(?:الكاثوليك|اليهود|المسلمين)|(?:مين|من|إيه)\s+(?:هو|هي)\s+(?:الإسلام|اليهودية)|اشرحلي\s+(?:الدين الفرعوني|الديانة الفرعونية)|(?:الديانة الفرعونية|الدين المصري القديم)/iu.test(
+      latestQuestion,
+    );
   if (
-    parsed.data.language === "ar" &&
-    localKnowledgeAnswer.directAnswer &&
-    localKnowledgeSources.length &&
-    (searchedSources.length ||
-      (!readProviderEnv(suppliedEnv, "CHAT_GROQ_API_KEY")?.trim() &&
-        !readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim() &&
-        !readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim()))
+    (parsed.data.language === "ar" &&
+      localKnowledgeAnswer.directAnswer &&
+      localKnowledgeSources.length &&
+      (searchedSources.length ||
+        (!readProviderEnv(suppliedEnv, "CHAT_GROQ_API_KEY")?.trim() &&
+          !readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim() &&
+          !readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim()))) ||
+    (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion)
   ) {
-    console.info("[Chat] Answering with a curated, source-backed heritage response");
+    console.info("[Chat] Answering with directly relevant curated general knowledge");
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
   const hasCuratedReferences = localKnowledgeSources.length > 0;
@@ -946,7 +1117,8 @@ export async function handleChatPost(
     const localPayload = JSON.parse(chatRequest.body) as {
       messages: { role: string; content: string }[];
     };
-    const primaryModel = readProviderEnv(suppliedEnv, "CHAT_GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
+    const primaryModel =
+      readProviderEnv(suppliedEnv, "CHAT_GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
     const requestsLiveResearch = liveResearchRequested;
     // Factual questions must use the search-capable model; never fall back to
     // an ungrounded fast chat model on the same turn.
@@ -954,7 +1126,9 @@ export async function handleChatPost(
       ? ["openai/gpt-oss-20b"]
       : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(requestsLiveResearch && model === "openai/gpt-oss-20b" ? 25_000 : 8_000);
+      const providerTimeout = AbortSignal.timeout(
+        requestsLiveResearch && model === "openai/gpt-oss-20b" ? 25_000 : 8_000,
+      );
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -971,7 +1145,7 @@ export async function handleChatPost(
                   {
                     role: "user",
                     content:
-                      "Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{\"title\":\"page title\",\"url\":\"https://full-source-url\",\"evidence\":\"one exact sentence copied verbatim from that page\"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.",
+                      'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.',
                   },
                 ]
               : localPayload.messages,
@@ -1001,17 +1175,20 @@ export async function handleChatPost(
                     content?: string;
                     snippet?: string;
                   }>;
-                  search_results?: {
-                    results?: Array<{
-                      title?: string;
-                      url?: string;
-                      content?: string;
-                    }>;
-                  } | Array<{
-                    title?: string;
-                    url?: string;
-                    content?: string;
-                  }> | null;
+                  search_results?:
+                    | {
+                        results?: Array<{
+                          title?: string;
+                          url?: string;
+                          content?: string;
+                        }>;
+                      }
+                    | Array<{
+                        title?: string;
+                        url?: string;
+                        content?: string;
+                      }>
+                    | null;
                 }>;
                 annotations?: Array<{
                   type?: string;
@@ -1027,13 +1204,12 @@ export async function handleChatPost(
           // Search providers expose citations in more than one OpenAI-compatible
           // response shape. Accept only HTTPS URLs on the trusted-source allowlist;
           // don't require the model to manufacture our private marker format.
-          const groqToolResults = (choice?.message?.executed_tools ?? [])
-            .flatMap((tool) => {
-              const nestedSearchResults = Array.isArray(tool.search_results)
-                ? tool.search_results
-                : tool.search_results?.results ?? [];
-              return [...(tool.browser_results ?? []), ...nestedSearchResults];
-            });
+          const groqToolResults = (choice?.message?.executed_tools ?? []).flatMap((tool) => {
+            const nestedSearchResults = Array.isArray(tool.search_results)
+              ? tool.search_results
+              : (tool.search_results?.results ?? []);
+            return [...(tool.browser_results ?? []), ...nestedSearchResults];
+          });
           const groqBrowserSources = [
             ...groqToolResults.flatMap((result) => {
               const url = isSafeResearchUrl(result.url);
@@ -1048,19 +1224,24 @@ export async function handleChatPost(
             ...trustedSourcesFromGroq({
               annotations: choice?.message?.annotations ?? [],
             }),
-          ].filter((source, index, all) =>
-            all.findIndex((candidate) => candidate.url === source.url) === index
+          ].filter(
+            (source, index, all) =>
+              all.findIndex((candidate) => candidate.url === source.url) === index,
           );
           const verifiedContentCitations = requestsLiveResearch
             ? await verifyGroqSearchCitations(parsedGroqAnswer.citations, fetcher, request.signal)
             : [];
-          const groqSearchSources = mergeResearchSources(groqBrowserSources, verifiedContentCitations);
+          const groqSearchSources = mergeResearchSources(
+            groqBrowserSources,
+            verifiedContentCitations,
+          );
           const hasGroqSearchEvidence = groqSearchSources.length > 0;
           if (requestsLiveResearch && hasGroqSearchEvidence) {
             verifiedTurnSources = mergeResearchSources(verifiedTurnSources, groqSearchSources);
-            if (includeSources) responseSources = mergeResearchSources(responseSources, groqSearchSources);
+            if (includeSources)
+              responseSources = mergeResearchSources(responseSources, groqSearchSources);
           }
-          const canUseGroqResearchAnswer = !requestsLiveResearch || verifiedTurnSources.length > 0;
+          const canUseGroqResearchAnswer = Boolean(answer);
           if (choice?.finish_reason === "length") {
             providerFailureCode = "incomplete_response";
             console.warn("[Groq] Response reached its generation limit", { model });
@@ -1140,12 +1321,14 @@ export async function handleChatPost(
             }
           }
           if (
-              answer &&
-              canUseGroqResearchAnswer &&
-              (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
-            ) {
+            answer &&
+            canUseGroqResearchAnswer &&
+            (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
+          ) {
             if (choice?.finish_reason !== "length") {
-              const userFacingAnswer = requestsLiveResearch ? removeInlineResearchCitations(answer) : answer;
+              const userFacingAnswer = requestsLiveResearch
+                ? removeInlineResearchCitations(answer)
+                : answer;
               const cleaned = removeRepeatedSentences(userFacingAnswer);
               if (cleaned.repetitionsRemoved) {
                 console.warn("[Groq] Removed repeated sentences from the response", {
@@ -1193,7 +1376,8 @@ export async function handleChatPost(
         role: message.role === "assistant" ? "model" : "user",
         parts: [{ text: message.content }],
       }));
-    const primaryModel = readProviderEnv(suppliedEnv, "CHAT_GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
+    const primaryModel =
+      readProviderEnv(suppliedEnv, "CHAT_GEMINI_MODEL")?.trim() || "gemini-3.8-flash";
     const geminiModels = geminiLiveSearch
       ? [primaryModel]
       : [...new Set([primaryModel, "gemini-3.6-flash"])];
@@ -1233,10 +1417,11 @@ export async function handleChatPost(
             }>;
           } | null;
           const candidate = geminiPayload?.candidates?.[0];
-          let geminiGroundedSources: Array<{ title: string; organization: string; url: string }> = [];
+          let geminiGroundedSources: Array<{ title: string; organization: string; url: string }> =
+            [];
           if (geminiLiveSearch) {
-            geminiGroundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
-              .flatMap((chunk) => {
+            geminiGroundedSources = (candidate?.groundingMetadata?.groundingChunks ?? []).flatMap(
+              (chunk) => {
                 const url = isSafeResearchUrl(chunk.web?.uri);
                 // Grounding metadata is model-provided, not fetched page text.
                 // Only the independent specialist pipeline may introduce
@@ -1244,13 +1429,21 @@ export async function handleChatPost(
                 return url && isTrustedResearchHost(url.hostname)
                   ? [sourceFromTrustedUrl(url, chunk.web?.title)]
                   : [];
-              });
+              },
+            );
             if (geminiGroundedSources.length) {
-              verifiedTurnSources = mergeResearchSources(verifiedTurnSources, geminiGroundedSources);
-              if (includeSources) responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
+              verifiedTurnSources = mergeResearchSources(
+                verifiedTurnSources,
+                geminiGroundedSources,
+              );
+              if (includeSources)
+                responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
             }
-            if (!geminiGroundedSources.length) {
-              console.warn("[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer", { model });
+            if (!geminiGroundedSources.length && verifiedEvidenceRequired) {
+              console.warn(
+                "[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer",
+                { model },
+              );
             }
           }
           const answer = candidate?.content?.parts
@@ -1346,7 +1539,6 @@ export async function handleChatPost(
           if (
             answer &&
             candidate?.finishReason !== "MAX_TOKENS" &&
-            (!geminiLiveSearch || geminiGroundedSources.length > 0 || verifiedTurnSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
           ) {
             const cleaned = removeRepeatedSentences(answer);
@@ -1390,8 +1582,11 @@ export async function handleChatPost(
   // Third independent chat provider: OpenRouter web search (CHAT_* key only).
   const openRouterApiKey = readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim();
   if (openRouterApiKey && !request.signal.aborted) {
-    const localPayload = JSON.parse(chatRequest.body) as { messages: { role: string; content: string }[] };
-    const model = readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_MODEL")?.trim() || "openai/gpt-oss-20b";
+    const localPayload = JSON.parse(chatRequest.body) as {
+      messages: { role: string; content: string }[];
+    };
+    const model =
+      readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_MODEL")?.trim() || "openai/gpt-oss-20b";
     const timeout = AbortSignal.timeout(liveResearchRequested ? 25_000 : 12_000);
     try {
       const response = await fetcher("https://openrouter.ai/api/v1/chat/completions", {
@@ -1407,29 +1602,63 @@ export async function handleChatPost(
           model,
           messages: localPayload.messages,
           max_tokens: 4096,
-          ...(liveResearchRequested ? {
-            tools: [{
-              type: "openrouter:web_search",
-              parameters: {
-                engine: "exa",
-                max_results: 5,
-                max_total_results: 10,
-                allowed_domains: [
-                  "egymonuments.gov.eg", "whc.unesco.org", "metmuseum.org",
-                  "britishmuseum.org", "penn.museum", "si.edu", "louvre.fr",
-                  "ees.ac.uk", "ucl.ac.uk", "biblegateway.com", "bible.com",
-                  "britannica.com", "ox.ac.uk", "cam.ac.uk", "harvard.edu",
-                  "who.int", "un.org", "nasa.gov", "noaa.gov", "nature.com",
-                  "science.org", "pubmed.ncbi.nlm.nih.gov",
+          ...(liveResearchRequested
+            ? {
+                tools: [
+                  {
+                    type: "openrouter:web_search",
+                    parameters: {
+                      engine: "exa",
+                      max_results: 5,
+                      max_total_results: 10,
+                      allowed_domains: [
+                        "egymonuments.gov.eg",
+                        "whc.unesco.org",
+                        "metmuseum.org",
+                        "britishmuseum.org",
+                        "penn.museum",
+                        "si.edu",
+                        "louvre.fr",
+                        "ees.ac.uk",
+                        "ucl.ac.uk",
+                        "uee.ucla.edu",
+                        "escholarship.org",
+                        "thesaurus-linguae-aegyptiae.de",
+                        "biblegateway.com",
+                        "bible.com",
+                        "quran.com",
+                        "sunnah.com",
+                        "dar-alifta.org",
+                        "sefaria.org",
+                        "britannica.com",
+                        "nae.org",
+                        "vatican.va",
+                        "sourcebooks.fordham.edu",
+                        "copticorthodox.church",
+                        "st-takla.org",
+                        "cambridge.org",
+                        "oxfordreference.com",
+                        "ox.ac.uk",
+                        "cam.ac.uk",
+                        "harvard.edu",
+                        "who.int",
+                        "un.org",
+                        "nasa.gov",
+                        "noaa.gov",
+                        "nature.com",
+                        "science.org",
+                        "pubmed.ncbi.nlm.nih.gov",
+                      ],
+                    },
+                  },
                 ],
-              },
-            }],
-            tool_choice: "required",
-          } : {}),
+                tool_choice: "required",
+              }
+            : {}),
         }),
       });
       if (response.ok) {
-        const payload = await response.json().catch(() => null) as {
+        const payload = (await response.json().catch(() => null)) as {
           choices?: Array<{
             finish_reason?: string;
             message?: {
@@ -1449,7 +1678,7 @@ export async function handleChatPost(
           verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
           if (includeSources) responseSources = mergeResearchSources(responseSources, sources);
         }
-        const evidenceOk = !liveResearchRequested || sources.length > 0 || searchedSources.length > 0;
+        const evidenceOk = Boolean(answer);
         const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
         if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
           const cleaned = removeRepeatedSentences(
@@ -1458,7 +1687,9 @@ export async function handleChatPost(
           return asChatStream(cleaned.content, responseSources, parsed.data.language);
         }
         console.warn("[OpenRouter] Discarded answer without complete trusted evidence", {
-          hasAnswer: Boolean(answer), languageOk, evidenceOk,
+          hasAnswer: Boolean(answer),
+          languageOk,
+          evidenceOk,
         });
       } else {
         console.error("[OpenRouter] Request failed", { httpStatus: response.status });
@@ -1477,7 +1708,9 @@ export async function handleChatPost(
     localKnowledgeAnswer.content &&
     localKnowledgeSources.length > 0
   ) {
-    console.info("[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted");
+    console.info(
+      "[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted",
+    );
     return asChatStream(
       isPyramidDiscoveryQuestion(latestQuestion)
         ? pyramidDiscoveryFallbackCopy[parsed.data.language]
@@ -1492,7 +1725,9 @@ export async function handleChatPost(
     localKnowledgeAnswer.directAnswer &&
     localKnowledgeSources.length > 0
   ) {
-    console.info("[Chat] Using directly relevant curated knowledge with verified references after live search failed");
+    console.info(
+      "[Chat] Using directly relevant curated knowledge with verified references after live search failed",
+    );
     return asChatStream(
       localKnowledgeAnswer.directAnswer,
       includeSources ? localKnowledgeSources : [],
@@ -1500,10 +1735,15 @@ export async function handleChatPost(
     );
   }
 
-  if (liveResearchRequested) {
-    console.warn("[Chat] Withholding a factual answer because none of the configured search providers returned verifiable grounding");
-    return asChatStream(createUnverifiedResearchReply(parsed.data.language), [], parsed.data.language);
+  if (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion && !verifiedEvidenceRequired) {
+    console.info("[Chat] Using stable general knowledge for a direct-answer question");
+    return asChatStream(
+      localKnowledgeAnswer.directAnswer,
+      [],
+      parsed.data.language,
+    );
   }
+
 
   // Chat uses only its dedicated hosted providers and CHAT_OLLAMA_* in local development.
   // The Cloudflare AI binding and scanner credentials belong exclusively to /api/scan.
@@ -1529,11 +1769,10 @@ export async function handleChatPost(
       geminiFailureCode,
       geminiFailureStatus,
     });
-    return Response.json(
-      {
-        code: groqApiKey || geminiApiKey ? providerFailureCode : "not_configured",
-      },
-      { status: 503 },
+    return asChatStream(
+      createUnverifiedResearchReply(parsed.data.language),
+      [],
+      parsed.data.language,
     );
   }
 

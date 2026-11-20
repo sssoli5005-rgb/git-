@@ -50,6 +50,9 @@ const TRUSTED_SOURCE_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
   "ucl.ac.uk",
+  "uee.ucla.edu",
+  "escholarship.org",
+  "thesaurus-linguae-aegyptiae.de",
   "metmuseum.org",
   "britishmuseum.org",
   "penn.museum",
@@ -72,6 +75,9 @@ const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
   "whc.unesco.org",
   "ucl.ac.uk",
+  "uee.ucla.edu",
+  "escholarship.org",
+  "thesaurus-linguae-aegyptiae.de",
   "metmuseum.org",
   "britishmuseum.org",
   "penn.museum",
@@ -419,6 +425,7 @@ function parseVisionObservation(rawVisual) {
     "visibleText",
     "transliteration",
     "translation",
+    "signAnalysis",
     "interpretation",
     "scriptType",
     "objectOrTextPurpose",
@@ -496,7 +503,7 @@ function combineVisionObservations(observations) {
   const combined = {};
   const fields = [
     "visualDescription", "sceneDescription", "objectType", "material", "style", "possibleLocation",
-    "printedLabels", "identity", "country", "city", "place", "siteLocation", "period", "visibleText", "transliteration", "translation", "interpretation",
+    "printedLabels", "identity", "country", "city", "place", "siteLocation", "period", "visibleText", "transliteration", "translation", "signAnalysis", "interpretation",
     "scriptType", "objectOrTextPurpose", "identityEvidence", "contextualStory",
     "writingHistory", "placeType", "placeEvidence", "siteHistory", "foodAssessment",
     "significance", "keyFeatures", "visualHighlights", "builder", "creator", "additionalInformation",
@@ -1244,6 +1251,7 @@ function officialVisualMatchResponse(officialVisualMatch, observation = null) {
     trusted: true,
   }];
   const exactOfficialFingerprint = officialVisualMatch.engine === "Exact official Ministry image fingerprint";
+  const identificationStatus = exactOfficialFingerprint ? "confirmed" : "probable";
   return {
     ok: true,
     analysis: sourceStory || item.description || "",
@@ -1251,8 +1259,8 @@ function officialVisualMatchResponse(officialVisualMatch, observation = null) {
     sources,
     trustedSourcesAvailable: true,
     wikipediaAvailable: null,
-    resultType: "reference_match",
-    identificationStatus: "confirmed",
+    resultType: exactOfficialFingerprint ? "reference_match" : "probable",
+    identificationStatus,
     reverseImageSearchStatus: "match",
     confidence: exactOfficialFingerprint ? "high" : "medium",
     confidenceByField: {
@@ -1436,12 +1444,12 @@ function scannerIndexArtifactResult(indexHit) {
   return {
     ok: true,
     analysis: description,
-    resultType: "reference_match",
-    identificationStatus: "confirmed",
+    resultType: "probable",
+    identificationStatus: "probable",
     reverseImageSearchStatus: "match",
-    confidence: "high",
+    confidence: "medium",
     confidenceByField: {
-      identity: "high",
+      identity: "medium",
       place: location ? "medium" : "low",
       period: artifact.period ? "medium" : "low",
     },
@@ -1454,7 +1462,7 @@ function scannerIndexArtifactResult(indexHit) {
       trusted: true,
     }],
     candidates: [],
-    visualMatchMethod: "OpenCLIP ViT-B-32 + FAISS",
+    visualMatchMethod: "OpenCLIP ViT-B-32 + FAISS; probable visual candidate",
   };
 }
 
@@ -2977,6 +2985,9 @@ function formatScannerResult(observation, sources, mode, language, confidenceByF
       (language === "ar" ? "الترجمة الحرفية المقترحة: " : "Suggested literal translation: ") +
       observation.translation;
   }
+  if (mode === "hieroglyphs" && observation.signAnalysis) {
+    storyText = [storyText, observation.signAnalysis].filter(Boolean).join("\n");
+  }
   const highlightsText = [observation.significance, observation.keyFeatures, observation.visualHighlights]
     .filter((part) => typeof part === "string" && part.trim()).join("\n");
   if (mode === "objects" && observation.visualCandidateIdentity) {
@@ -3603,7 +3614,14 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
       const mode = body?.mode === "hieroglyphs" ? "hieroglyphs" : "objects";
       const openRouterConfigured = typeof env.SCANNER_OPENROUTER_API_KEY === "string" && Boolean(env.SCANNER_OPENROUTER_API_KEY.trim());
       const reverseImageSearchConfigured = geminiConfigured || groqVisionConfigured || openRouterConfigured || Boolean(env.SCANNER_INDEX_URL) || typeof env.AI?.websearch === "function";
-      if (mode === "hieroglyphs" && !env.AI && !localOllama && !geminiConfigured) {
+      if (
+        mode === "hieroglyphs" &&
+        !env.AI &&
+        !localOllama &&
+        !geminiConfigured &&
+        !groqVisionConfigured &&
+        !openRouterConfigured
+      ) {
         return json(
           {
             ok: true,
@@ -3695,15 +3713,15 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
         const sameEntity = Boolean(best && runnerUp && best.entityId === runnerUp.entityId);
         const threshold = scannerIndexThreshold(env);
         if (best) {
-          const decision = best.similarity >= threshold && sameEntity ? "confirmed" : "candidate";
+          const decision = best.similarity >= threshold && sameEntity ? "probable" : "candidate";
           console.info("[Image scanner] FAISS decision:", {
             decision,
-            reason: decision === "confirmed" ? "threshold-and-top-two-entity-agreement" : "insufficient-score-or-entity-agreement",
+            reason: decision === "probable" ? "threshold-and-top-two-entity-agreement" : "insufficient-score-or-entity-agreement",
             threshold,
             bestSimilarity: best.similarity,
             topTwoSameEntity: sameEntity,
           });
-          if (decision === "confirmed") {
+          if (decision === "probable") {
             const result = scannerIndexArtifactResult(best);
             if (result) {
               // The indexed record is already the trusted source; a second LLM
@@ -3882,7 +3900,10 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
         mode === "hieroglyphs"
           ? `أنت محلل متخصص في الكتابات والآثار المصرية القديمة؛ استفد من معرفتك الداخلية والتاريخية، حتى لو لم تتوفر مراجع على الإنترنت. اتبع هذا الترتيب: (1) حدّد هل الصورة كتابة مصرية فعلًا أم لغة/خط آخر، وميّز الهيروغليفية عن الهيراطيقية والديموطيقية واليونانية والقبطية إن أمكن؛ لا تسمّ كل كتابة قديمة هيروغليفية. (2) صف العلامات واتجاه القراءة، واقرأ فقط ما يظهر بوضوح، ثم قدّم نقلًا صوتيًا وترجمة حرفية ومعنى النص عند توافر القرائن، واذكر هل يبدو النص دينيًا أو ملكيًا أو جنائزيًا أو إداريًا أو غير ذلك ولماذا. (3) رشّح أقرب نص أو أثر معروف فقط كاحتمال مع قرينة محددة؛ لا تدّعِ تطابقًا بصريًا. (4) لا تذكر اسم موقع محدد إلا إذا كانت هناك قرينة فريدة ومقروءة في الصورة؛ الرمز الشائع أو الأسلوب الفني أو نتيجة البحث النصي لا يثبت الموقع. وإلا اترك place فارغًا واكتفِ بنوع عام مثل معبد أو مقبرة أو لوحة، مع التنبيه أن الموقع غير مؤكد. لا تخلط مكان التصوير أو العثور بمكان العرض. (5) افصل النص الظاهر عن التحقق التاريخي المستقل؛ انقل العنوان المطبوع حرفيًا في printedLabels وترجم معناه بدقة في printedTextTranslation، ولا تعتبر تاريخًا أو ملكًا مدونًا في الصورة نهائيًا قبل مقارنته بالدراسات الحديثة. افحص أسماء الملوك والأسر والمواقع من المصادر المتخصصة؛ لا تصف جبانة بأنها مدينة. اشرح وظيفة المنظر والنقش وسياقه بدقة. عند تعارض المراجع اذكر الاختلاف دون تحيز. لا تخترع قراءة أو اسمًا أو تاريخًا أو مكانًا. أنشئ searchTerms قصيرة ودقيقة، وقدّم تهجئة عربية ولاتينية للاسم فقط إذا ظهرت قرينة واضحة. أخرج JSON فقط بالشكل: {"visualDescription":"وصف ما يظهر","scriptType":"نوع اللغة أو الخط، أو غير محسوم","visibleText":"العلامات المقروءة فقط أو فارغ","printedLabels":"العنوان أو بيانات القطعة المطبوعة حرفيًا، أو فارغ","printedTextTranslation":"ترجمة دقيقة للنص الظاهر أو فارغ","transliteration":"النقل الصوتي أو فارغ","translation":"الترجمة الحرفية أو فارغ","interpretation":"المعنى والسياق المقترح أو فارغ","objectOrTextPurpose":"الغرض الوظيفي والسياق المقيد بالأدلة أو غير محسوم","identity":"أقرب نص أو أثر معروف، أو فارغ","identityEvidence":"قرينة الترشيح أو سبب تعذر المطابقة","historicalVerification":"ما ثبت تاريخيًا من المصادر المستقلة وما يُفصل عن النص الظاهر","sourceConflicts":"اختلاف موثق بين المصادر أو فارغ","place":"الموقع المحدد أو فارغ","placeType":"نوع المكان العام، لا اسم موقع، أو غير محسوم","placeEvidence":"قرينة مرئية محددة أو سبب عدم كفايتها","period":"الفترة المحتملة أو فارغ","contextualStory":"سياق تاريخي عام لا ينسب النقش إلى موقع غير مؤكد","writingHistory":"تاريخ الخط واستخداماته","siteHistory":"تاريخ نوع المكان فقط، دون ادعاء تاريخ موقع محدد غير مثبت","searchTerms":["مصطلحات قصيرة ومميزة للبحث"],"confidence":"high أو medium أو low","confidenceByField":{"inscription":"high أو medium أو low","translation":"high أو medium أو low","place":"high أو medium أو low"},"keywords":["موضوعات ظاهرة"],"periodClues":[]}. لا تدّع إجراء بحث خارجي أو ترجمة أكاديمية مؤكدة.`
           : `حلل الصورة باعتبارها أثرًا مصريًا قديمًا أو صورة له من كتاب أو شاشة. ابدأ بأقرب اسم معروف يمكن أن يفسر السمات المميزة، لا بمجرد وصف عام؛ اذكره كاحتمال إذا لم توجد علامة فريدة، واتركه فارغًا فقط إذا تعذر اقتراح احتمال مفيد. حدّد نوع الأثر وخامته والرموز أو النقوش والحقبة والموقع المحتمل، واذكر القرينة التي جعلتك تقترح الاسم. افصل التعليقات المطبوعة عن الأثر نفسه. لا تخترع اسمًا أو قصة أو تاريخًا أو مكانًا. يمكن اقتراح اسم ومكان محتملين بصريًا للبحث، لكن لا تصفهما بالمؤكدين إلا بعد دعم صفحة متحف/آثار موثوقة أو مطابقة صورة مرجعية. عند توفر مصدر موثوق في السياق، لخّص منه قصة الأثر ومكان عرضه، ولا تنسب للمصدر معلومات لا يقولها. اترك حقائق القصة والمكان فارغة إذا لم يوجد سند. أخرج JSON فقط بالشكل: {"identity":"أقرب اسم محتمل، أو فارغ إذا تعذر","identityEvidence":"السمات الفارقة التي تدعم الاحتمال أو سبب تعذر التحديد","visualDescription":"وصف مختصر للسمات المرئية","objectType":"نوع الأثر","material":"الخامة المحتملة أو غير متأكد","symbols":["رموز أو نقوش ظاهرة"],"style":"الأسلوب أو غير متأكد","possibleLocation":"المتحف أو الموقع المحتمل أو غير متأكد","country":"الدولة المحتملة أو غير متأكد","city":"المدينة المحتملة أو غير متأكد","place":"المتحف أو الموقع المحتمل أو غير متأكد","period":"العصر المحتمل أو غير متأكد","contextualStory":"القصة/الوظيفة المحتملة فقط إن كنت تعرفها، وإلا فارغ","significance":"الأهمية المحتملة أو فارغ","keyFeatures":"تفاصيل فارقة تساعد في التحقق","searchTerms":["اسم أو كلمات بحث قصيرة بالعربية والإنجليزية"],"keywords":["كلمات دقيقة للبحث"],"possibilities":["حتى 3 أسماء محتملة مع قرينة قصيرة لكل منها"],"confidence":"high أو medium أو low","confidenceByField":{"identity":"high أو medium أو low","place":"high أو medium أو low","period":"high أو medium أو low"}}. لا تدّع أن الاحتمال حقيقة، ولا تدّع إجراء بحث لم يُجرَ.`;
-      const visualOnlyPrompt = visionPrompt;
+      const visualOnlyPrompt =
+        mode === "hieroglyphs"
+          ? `${visionPrompt}\n\nSIGN-BY-SIGN ACCURACY: The earlier permission to use internal knowledge allows only a tentative reading, never a verified translation. If the inscription is not legible or no reliable reference supports a reading, leave transliteration and translation empty and explain the limitation. Add "signAnalysis" as a string in the requested language: discuss each clearly visible sign separately, give its conventional value or depicted subject only when identifiable, distinguish phonetic value from determinative/logogram use, and label any uncertain identification. Do not invent a story for an isolated sign; explain its attested role only when context supports it. For rotated or oblique photographs, consider plausible reading directions but do not force a reading.`
+          : `${visionPrompt}\n\nANGLE ROBUSTNESS: The photograph may show an artifact from the side, at an oblique angle, rotated, partially occluded, or as a page/screen image. Describe visible distinguishing features from the available view; do not infer a precise identity from generic shape or style. If the angle hides unique details, give the broad object type and state what additional view would help rather than guessing.`;
       const visionAttempts = [];
       const geminiVisionKey = typeof env.SCANNER_GEMINI_API_KEY === "string" ? env.SCANNER_GEMINI_API_KEY.trim() : "";
       const groqVisionKey = typeof env.SCANNER_GROQ_API_KEY === "string" ? env.SCANNER_GROQ_API_KEY.trim() : "";
@@ -4518,8 +4539,8 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
                   sources: [source],
                   trustedSourcesAvailable: true,
                   wikipediaAvailable: null,
-                  resultType: "reference_match",
-                  identificationStatus: "confirmed",
+                  resultType: "probable",
+                  identificationStatus: "probable",
                   reverseImageSearchStatus: "match",
                   confidence: "medium",
                   confidenceByField: {
@@ -4611,9 +4632,16 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
               .join(" ")]
               .filter(Boolean)
               .map((query) => ({ query: query.slice(0, 180), language }))
-          : searchQueries;
+          : [
+              searchQueries[0],
+              ...(likelyLatin
+                ? [{ query: likelyLatin.slice(0, 180), language: "en" }]
+                : language !== "en"
+                  ? [{ query: visualSearchParts.slice(0, 180), language: "en" }]
+                  : []),
+            ].filter((item) => item?.query);
         const searchResults = await Promise.all(
-          selectedSearchQueries.slice(0, 1).map(({ query, language: queryLanguage }) =>
+          selectedSearchQueries.slice(0, mode === "hieroglyphs" ? 2 : 1).map(({ query, language: queryLanguage }) =>
             searchHeritageSources(query, queryLanguage),
           ),
         );

@@ -146,6 +146,7 @@ describe("trusted Egyptian heritage search", () => {
 
   it("limits pyramid-specific discovery handling to questions about pyramids", () => {
     expect(isPyramidDiscoveryQuestion("هل فيه اكتشافات حديثة في الهرم؟")).toBe(true);
+    expect(isPyramidDiscoveryQuestion("هل عُثر على مومياء خوفو؟")).toBe(false);
     expect(isPyramidDiscoveryQuestion("What did researchers discover in the Rosetta Stone?")).toBe(false);
     expect(isPyramidDiscoveryQuestion("هل ثبت اكتشاف غرفة في مقبرة توت عنخ آمون؟")).toBe(false);
     expect(isPyramidDiscoveryQuestion("¿Qué descubrimientos hay en las pirámides?")).toBe(true);

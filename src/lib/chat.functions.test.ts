@@ -9,17 +9,21 @@ import {
 
 describe("Egypt Smart Guide conversation instructions", () => {
   it("applies the specialist protocol to every provider request and conversation", () => {
-    const request = JSON.parse(createOllamaChatRequest({
-      language: "ar",
-      messages: [
-        { role: "user", content: "ما الفرق بين طيبة والكرنك؟" },
-        { role: "assistant", content: "طيبة اسم إقليمي قديم للمدن المحيطة بالأقصر." },
-        { role: "user", content: "ثم ماذا كان يقال عن معبد الكرنك؟" },
-      ],
-    }).body);
+    const request = JSON.parse(
+      createOllamaChatRequest({
+        language: "ar",
+        messages: [
+          { role: "user", content: "ما الفرق بين طيبة والكرنك؟" },
+          { role: "assistant", content: "طيبة اسم إقليمي قديم للمدن المحيطة بالأقصر." },
+          { role: "user", content: "ثم ماذا كان يقال عن معبد الكرنك؟" },
+        ],
+      }).body,
+    );
 
     expect(request.messages[0].role).toBe("system");
-    expect(request.messages[0].content).toContain("GENERAL KNOWLEDGE, EGYPT SPECIALISM, AND CONVERSATION PROTOCOL");
+    expect(request.messages[0].content).toContain(
+      "GENERAL KNOWLEDGE, EGYPT SPECIALISM, AND CONVERSATION PROTOCOL",
+    );
     expect(request.messages[0].content).toContain("UNDERSTANDING AND CONVERSATION");
     expect(request.messages.map((message: { role: string }) => message.role)).toEqual([
       "system",
@@ -69,9 +73,7 @@ describe("Egypt Smart Guide conversation instructions", () => {
     expect(systemMessage).toContain(
       "Use English, the selected interface language, for the entire reply",
     );
-    expect(payload.messages.at(-1)?.content).toBe(
-      "I would like to know about the pyramids.",
-    );
+    expect(payload.messages.at(-1)?.content).toBe("I would like to know about the pyramids.");
   });
 
   it("keeps the distinction between verified facts, hypotheses and legends", () => {
@@ -92,7 +94,9 @@ describe("Egypt Smart Guide conversation instructions", () => {
     expect(prompt).toContain(
       "distinguish established general knowledge from facts verified during this turn",
     );
-    expect(prompt).toContain("include the verified source names and links used to support the answer");
+    expect(prompt).toContain(
+      "do not show source names, citations, URLs, or a sources section unless the user explicitly asks for sources or references",
+    );
   });
 
   it("explains archaeological terms and English spellings for first-time Arabic visitors", () => {
@@ -184,8 +188,12 @@ describe("Egypt Smart Guide conversation instructions", () => {
     };
 
     expect(payload.messages[0]?.content).toContain("RETRIEVED HERITAGE KNOWLEDGE");
-    expect(payload.messages[0]?.content).toContain("لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها");
-    expect(payload.messages[0]?.content).toContain("لا يثبت مساواة في السلطة السياسية أو استقلال الحكم");
+    expect(payload.messages[0]?.content).toContain(
+      "لا تحدد عدد تماثيل واجهة المعبد الصغير أو وضعياتها",
+    );
+    expect(payload.messages[0]?.content).toContain(
+      "لا يثبت مساواة في السلطة السياسية أو استقلال الحكم",
+    );
     expect(payload.messages[0]?.content).toContain(
       "https://egymonuments.gov.eg/en/archaeological-sites/abu-simbel/",
     );

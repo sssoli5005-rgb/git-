@@ -503,7 +503,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const sourceBacked = lead.sourceBacked === true &&
                 data.sources?.some((source) => source.trusted && source.url === lead.url);
               const leadStatus = sourceBacked
-                ? (lang === "ar" ? "تم التعرف على الأثر بنجاح — تطابق مرجّح" : resultCopy.probableStatus)
+                ? (lang === "ar" ? "اسم مرجّح مدعوم بسجل؛ يحتاج تأكيد مطابقة الصورة" : resultCopy.probableStatus)
                 : (lang === "ar" ? "اسم مرشح يحتاج مراجعة" : resultCopy.unverifiedStatus);
               const leadName = String(lead.name || "")
                 .replace(/\s*[-–—]\s*(?:إكتشف|اكتشف)\s+الآثار(?:\s+المصرية)?(?:\s*[-–—].*)?$/iu, "")

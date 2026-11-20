@@ -64,6 +64,22 @@ describe("retrieveRelevantKnowledge", () => {
     expect(answer.content).not.toContain("قياسات أدق لممر خلف منطقة الشيفرون");
   });
 
+  it("does not answer a specific Khufu mummy question with general pyramid discoveries", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content: "هل عُثر على مومياء خوفو؟ وما الفرق بين وجود تابوت في الهرم والعثور على مومياء؟",
+      },
+    ]);
+
+    expect(answer.content).not.toContain("قياسات أدق لممر خلف منطقة الشيفرون");
+    expect(answer.sources).not.toContainEqual(
+      expect.objectContaining({
+        url: "https://www.nature.com/articles/s41467-023-36351-0",
+      }),
+    );
+  });
+
   it.each([
     "هل لسه في الاهرامات اكتشافات؟",
     "What new discoveries have been made at the Giza pyramids?",
@@ -615,6 +631,35 @@ describe("retrieveRelevantKnowledge", () => {
     expect(result).toContain("صامتين أو ثلاثة");
     expect(result).toContain("المصري القديم ما كانش بيكتب الضمائر بس");
     expect(result).toContain("لا يعطي نطقًا كاملًا مؤكدًا للحركات القديمة");
+  });
+
+  it.each([
+    [
+      "إزاي أعرف اتجاه قراءة الهيروغليفية؟ هل لازم أبدأ من اليمين دائمًا؟",
+      "وجوه البشر والحيوانات",
+    ],
+    [
+      "إيه الفرق بين العلامة الصوتية والعلامة المحددة في الهيروغليفية؟",
+      "Determinative",
+    ],
+    [
+      "هل كل علامة هيروغليفية تمثل حرفًا واحدًا؟ اشرح أحادية وثنائية وثلاثية الصوت.",
+      "أحادية أو ثنائية أو ثلاثية الصوامت",
+    ],
+    [
+      "هل أكتب اسم رمسيس الثاني بالهيروغليفية حرفًا بحرف؟",
+      "تقريبًا صوتيًا",
+    ],
+  ])("retrieves a focused, sourced hieroglyphic answer for %s", (question, expected) => {
+    const answer = getRelevantKnowledgeAnswer([{ role: "user", content: question }], 1);
+
+    expect(answer.content).toContain(expected);
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "University College London",
+        url: expect.stringContaining("digitalegypt/writing/"),
+      }),
+    );
   });
 
   it("distinguishes the Greek meaning of hieroglyphs from hieratic and religious use", () => {
