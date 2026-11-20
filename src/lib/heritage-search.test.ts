@@ -47,6 +47,19 @@ describe("trusted Egyptian heritage search", () => {
         { role: "user", content: "ギザとサッカラのピラミッドで最近発見されたものはありますか？" },
       ]),
     ).toBe(true);
+    expect(
+      isEgyptianHeritageQuery([
+        {
+          role: "user",
+          content: "ما الفرق بين ميافيزية كيرلس وتعليم أوطاخي في مجمع أفسس وخلقيدونية؟",
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      isEgyptianHeritageQuery([
+        { role: "user", content: "ما معتقدات المصريين القدماء عن الآلهة والطقوس؟" },
+      ]),
+    ).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "How do I make tea?" }])).toBe(false);
   });
 
@@ -75,6 +88,50 @@ describe("trusted Egyptian heritage search", () => {
         { role: "user", content: "طب إيه الأقدم؟" },
       ]),
     ).toContain("إيه أهم الآثار في سقارة؟");
+  });
+
+  it("builds a focused research query for the Coptic Christology councils question", () => {
+    const query = buildHeritageSearchQuery([
+      {
+        role: "user",
+        content: "ما الفرق بين ميافيزية كيرلس وتعليم أوطاخي في مجمع أفسس وخلقيدونية؟",
+      },
+    ]);
+
+    expect(query).toContain("Cyril of Alexandria mia physis");
+    expect(query).toContain("Council of Ephesus 431");
+    expect(query).toContain("Council of Chalcedon 451");
+  });
+
+  it("retrieves a curated primary council source from the university allowlist", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      expect(new URL(String(input)).hostname).toBe("sourcebooks.fordham.edu");
+      return new Response(
+        "<html><head><title>Council of Chalcedon</title></head><body><main>" +
+          "The council definition confesses one and the same Christ in two natures without confusion, change, division, or separation, preserving the properties of each nature in one person and hypostasis. " +
+          "Cyril's letter to John also confesses perfect divinity and perfect humanity, united in one Christ." +
+          "</main></body></html>",
+        { headers: { "Content-Type": "text/html; charset=utf-8" } },
+      );
+    });
+
+    const results = await searchTrustedEgyptianHeritage(
+      "ما الفرق بين ميافيزية كيرلس وتعليم أوطاخي في مجمع أفسس وخلقيدونية؟",
+      "ar",
+      fetcher,
+      undefined,
+      [
+        {
+          title: "Council of Chalcedon",
+          organization: "Fordham University Internet History Sourcebooks",
+          url: "https://sourcebooks.fordham.edu/basis/chalcedon.asp",
+        },
+      ],
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.organization).toBe("Fordham University Internet History Sourcebooks");
+    expect(results[0]?.content).toContain("without confusion, change, division, or separation");
   });
 
   it("recognizes discovery questions as evidence-seeking research", () => {

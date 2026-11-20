@@ -155,6 +155,50 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("distinguishes Cyril's miaphysite formula from Eutychianism in the Chalcedonian dispute", () => {
+    const answer = getRelevantKnowledgeAnswer(
+      [
+        {
+          role: "user",
+          content:
+            "في مجمع أفسس الأول (431م) ومجمع خلقيدونية (451م)، دار جدل لاهوتي حاد حول مصطلحات يونانية دقيقة لوصف طبيعة السيد المسيح. السؤال الدقيق هنا: ما هو الفرق الجوهري بين تعبير 'طبيعة واحدة متجسدة لله الكلمة' (Mia Physis) الذي استخدمه القديس كيرلس السكندري، وبين مفهوم 'الطبيعة الواحدة' (Monophysis) الذي نُسب لأوطاخي؟ ولماذا رفضت الكنيسة القبطية الأرثوذكسية الصيغة الخلقيدونية رغم أنها لا تتبنى عقيدة أوطاخي؟",
+        },
+      ],
+      1,
+    );
+
+    expect(answer.directAnswer).toContain("لا يصح مساواة هذا الاستخدام الكيرلسي تلقائيًا بمذهب أوطاخي");
+    expect(answer.directAnswer).toContain("كامل في لاهوته وكامل في ناسوته");
+    expect(answer.directAnswer).toContain("بلا اختلاط ولا تغيير ولا انقسام ولا انفصال");
+    expect(answer.directAnswer).toContain("لا يجعل الخلاف مجرد اختلاف ترجمة");
+    expect(answer.directAnswer).not.toContain("الكنيسة القبطية تتبنى أوطاخي");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://sourcebooks.fordham.edu/basis/chalcedon.asp",
+      }),
+    );
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://st-takla.org/books/en/pope-shenouda-iii/nature-of-christ/eutychianism.html",
+      }),
+    );
+  });
+
+  it("answers broad ancient Egyptian religion questions with context-specific references", () => {
+    const answer = getRelevantKnowledgeAnswer(
+      [{ role: "user", content: "ما معتقدات المصريين القدماء عن الآلهة والطقوس؟" }],
+      1,
+    );
+
+    expect(answer.directAnswer).toContain("المعتقدات والطقوس اتغيرت عبر العصور");
+    expect(answer.directAnswer).toContain("لا تمثل بالضرورة تجربة كل فرد أو كل مجتمع");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/religion/deitiesindex.html",
+      }),
+    );
+  });
+
   it("answers who built the Great Hypostyle Hall and distinguishes its construction phases", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "في الكرنك، مين بنى صالة الأعمدة الكبرى؟ وإيه مراحل بنائها؟" },

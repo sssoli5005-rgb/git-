@@ -2,6 +2,7 @@ export type ResearchTopic =
   | "egyptology"
   | "archaeology"
   | "world-history"
+  | "religion"
   | "scripture"
   | "health"
   | "science"
@@ -21,7 +22,9 @@ export const TRUSTED_SOURCE_CATALOG: readonly TrustedSource[] = [
   { domain: "egymonuments.gov.eg", name: "وزارة السياحة والآثار المصرية", topics: ["egyptology", "archaeology", "world-history", "geography"], purpose: "المواقع الأثرية المصرية والمتاحف والتاريخ الرسمي" },
   { domain: "whc.unesco.org", name: "مركز التراث العالمي باليونسكو", topics: ["egyptology", "archaeology", "world-history", "geography"], purpose: "مواقع التراث العالمي وملفات تسجيلها" },
   { domain: "unesco.org", name: "منظمة اليونسكو", topics: ["egyptology", "archaeology", "world-history", "science", "general"], purpose: "التراث والثقافة والتعليم والعلوم" },
-  { domain: "ucl.ac.uk", name: "جامعة لندن – كلية لندن الجامعية", topics: ["egyptology", "archaeology", "world-history"], purpose: "علم المصريات واللغة والآثار" },
+  { domain: "ucl.ac.uk", name: "جامعة لندن – كلية لندن الجامعية", topics: ["egyptology", "archaeology", "world-history", "religion"], purpose: "علم المصريات واللغة والآثار وتاريخ المعتقدات" },
+  { domain: "escholarship.org", name: "UCLA eScholarship – موسوعة علم المصريات", topics: ["egyptology", "archaeology", "world-history", "religion"], purpose: "مقالات موسوعة علم المصريات المحكمة، ومنها دراسات الدين والنصوص والطقوس" },
+  { domain: "uee.ucla.edu", name: "UCLA Encyclopedia of Egyptology", topics: ["egyptology", "archaeology", "world-history", "religion"], purpose: "دليل للمقالات المحكمة عن الديانة المصرية القديمة؛ النسخ المنشورة محفوظة في eScholarship" },
   { domain: "britishmuseum.org", name: "المتحف البريطاني", topics: ["egyptology", "archaeology", "world-history"], purpose: "فهارس المجموعات والقطع وتاريخها" },
   { domain: "metmuseum.org", name: "متحف المتروبوليتان للفنون", topics: ["egyptology", "archaeology", "world-history"], purpose: "سجلات القطع والمجموعات الفنية والأثرية" },
   { domain: "penn.museum", name: "متحف بنّ بجامعة بنسلفانيا", topics: ["egyptology", "archaeology", "world-history"], purpose: "المجموعات والبعثات والآثار" },
@@ -39,9 +42,13 @@ export const TRUSTED_SOURCE_CATALOG: readonly TrustedSource[] = [
   { domain: "thebanmappingproject.com", name: "مشروع خريطة طيبة", topics: ["egyptology", "archaeology"], purpose: "خرائط ومقابر طيبة ووادي الملوك" },
   { domain: "biblegateway.com", name: "Bible Gateway", topics: ["scripture", "world-history"], purpose: "النصوص الكتابية ومقارنة الترجمات" },
   { domain: "bible.com", name: "YouVersion Bible", topics: ["scripture"], purpose: "النص الكتابي بلغات وترجمات متعددة" },
-  { domain: "vatican.va", name: "الكرسي الرسولي – الفاتيكان", topics: ["scripture", "world-history", "general"], purpose: "وثائق وتعاليم ومصادر كاثوليكية رسمية" },
-  { domain: "britannica.com", name: "Encyclopaedia Britannica", topics: ["egyptology", "archaeology", "world-history", "scripture", "science", "geography", "economy", "general"], purpose: "مرجع موسوعي للمعلومات العامة والخلفيات" },
-  { domain: "oxfordreference.com", name: "Oxford Reference", topics: ["world-history", "scripture", "science", "geography", "general"], purpose: "تعريفات ومراجع أكاديمية" },
+  { domain: "copticorthodox.church", name: "الكنيسة القبطية الأرثوذكسية – الموقع الرسمي", topics: ["religion", "world-history"], purpose: "المصادر الرسمية ومواقف الكنيسة القبطية كما تعرضها الكنيسة، لا بوصفها إجماعًا تاريخيًا" },
+  { domain: "st-takla.org", name: "موقع الأنبا تكلا هيمانوت القبطي الأرثوذكسي", topics: ["religion", "scripture", "world-history"], purpose: "مكتبة ومراجع قبطية بالعربية والإنجليزية؛ تُنسب الآراء العقائدية إلى تقليدها الكنسي" },
+  { domain: "sourcebooks.fordham.edu", name: "Fordham University Internet History Sourcebooks", topics: ["religion", "scripture", "world-history"], purpose: "نصوص تاريخية أولية، ومنها وثائق مجامع أفسس وخلقيدونية" },
+  { domain: "vatican.va", name: "الكرسي الرسولي – الفاتيكان", topics: ["scripture", "religion", "world-history", "general"], purpose: "وثائق وتعاليم ومصادر كاثوليكية رسمية؛ تُعرض بوصفها موقف الكنيسة الكاثوليكية" },
+  { domain: "britannica.com", name: "Encyclopaedia Britannica", topics: ["egyptology", "archaeology", "world-history", "religion", "scripture", "science", "geography", "economy", "general"], purpose: "مرجع موسوعي للخلفية العامة، لا بديل عن النصوص الأولية أو البحث الأكاديمي" },
+  { domain: "oxfordreference.com", name: "Oxford Reference", topics: ["world-history", "religion", "scripture", "science", "geography", "general"], purpose: "تعريفات ومراجع أكاديمية" },
+  { domain: "cambridge.org", name: "Cambridge University Press", topics: ["world-history", "religion", "scripture", "general"], purpose: "كتب وأبحاث أكاديمية محكّمة في التاريخ والدراسات الدينية" },
   { domain: "loc.gov", name: "مكتبة الكونغرس الأمريكي", topics: ["world-history", "scripture", "general"], purpose: "المجموعات والمخطوطات والوثائق التاريخية" },
   { domain: "archives.gov", name: "الأرشيف الوطني الأمريكي", topics: ["world-history", "law", "general"], purpose: "الوثائق والسجلات الرسمية" },
   { domain: "who.int", name: "منظمة الصحة العالمية", topics: ["health", "science"], purpose: "الصحة العامة والتوصيات الدولية" },
@@ -67,21 +74,22 @@ export const TRUSTED_SOURCE_CATALOG: readonly TrustedSource[] = [
   { domain: "legislation.gov.uk", name: "التشريعات البريطانية الرسمية", topics: ["law"], purpose: "النصوص القانونية والتشريعات" },
   { domain: "congress.gov", name: "الكونغرس الأمريكي", topics: ["law", "world-history"], purpose: "مشروعات القوانين وسجلات التشريع" },
   { domain: "gov.uk", name: "الحكومة البريطانية", topics: ["law", "health", "geography", "general"], purpose: "الخدمات والسياسات واللوائح الرسمية" },
-  { domain: "ox.ac.uk", name: "جامعة أكسفورد", topics: ["egyptology", "archaeology", "world-history", "scripture", "science", "general"], purpose: "المراجع والبحوث الأكاديمية" },
-  { domain: "cam.ac.uk", name: "جامعة كامبريدج", topics: ["egyptology", "archaeology", "world-history", "scripture", "science", "general"], purpose: "المراجع والبحوث الأكاديمية" },
+  { domain: "ox.ac.uk", name: "جامعة أكسفورد", topics: ["egyptology", "archaeology", "world-history", "religion", "scripture", "science", "general"], purpose: "المراجع والبحوث الأكاديمية" },
+  { domain: "cam.ac.uk", name: "جامعة كامبريدج", topics: ["egyptology", "archaeology", "world-history", "religion", "scripture", "science", "general"], purpose: "المراجع والبحوث الأكاديمية" },
   { domain: "harvard.edu", name: "جامعة هارفارد", topics: ["egyptology", "archaeology", "world-history", "science", "general"], purpose: "المراجع والبحوث الأكاديمية" },
   { domain: "stanford.edu", name: "جامعة ستانفورد", topics: ["world-history", "science", "law", "economy", "general"], purpose: "البحوث والمراجع الجامعية" },
   { domain: "mit.edu", name: "معهد ماساتشوستس للتكنولوجيا", topics: ["science", "technology", "general"], purpose: "الأبحاث العلمية والهندسية والتقنية" },
 ] as const;
 
 const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
-  { topic: "scripture", pattern: /(?:يوسف الصديق|يوسف بن يعقوب|جسد يوسف|عظام يوسف|joseph|كتاب مقدس|الكتاب المقدس|الانجيل|إنجيل|انجيل|تكوين|خروج|يشوع|مزامير|رسالة بولس|عقيده مسيحيه|كنيسه|الكنيسة|المسيح|يسوع|مريم العذراء|Bible|biblical|scripture|gospel|christian|church|theology)/iu },
+  { topic: "scripture", pattern: /(?:يوسف الصديق|يوسف بن يعقوب|جسد يوسف|عظام يوسف|joseph|كتاب مقدس|الكتاب المقدس|الانجيل|إنجيل|انجيل|تكوين|خروج|يشوع|مزامير|رسالة بولس|Bible|biblical|scripture|gospel)/iu },
   { topic: "health", pattern: /(?:صحه|صحة|طبي|مرض|دواء|علاج|اعراض|أعراض|جراحه|جراحة|تغذيه|تغذية|حمل|قلب|سكر|ضغط الدم|medical|health|disease|medicine|symptom|treatment|clinical|drug|nutrition)/iu },
   { topic: "law", pattern: /(?:قانون|تشريع|محكمه|محكمة|حكم قضائي|حقوق|عقد|لائحه|لائحة|قانوني|legal|law|regulation|court|legislation|rights|contract)/iu },
   { topic: "economy", pattern: /(?:اقتصاد|اقتصادي|تضخم|سعر صرف|عمله|عملة|بنك|استثمار|بطاله|بطالة|ناتج محلي|economy|economic|inflation|exchange rate|currency|bank|investment|gdp)/iu },
-  { topic: "egyptology", pattern: /(?:مصر القديمه|مصر القديمة|فرعون|فراعنه|فراعنة|هيروغليف|تحنيط|مومياء|اهرام|أهرام|سقاره|سقارة|الجيزه|الجيزة|الاقصر|الأقصر|اسوان|أسوان|سانت كاترين|سانت كترين|سان كترين|جبل موسى|جبل موسي|ابو سمبل|أبو سمبل|نفرتيتي|توت عنخ|رمسيس|حتشبسوت|خوفو|اخناتون|إخناتون|أخناتون|إمحوتب|ايمحتب|حجر رشيد|روزيته|egyptolog|pharaoh|hieroglyph|mumm|saqqara|giza|luxor|aswan|tutankhamun|ramesses|nefertiti|hatshepsut|akhenaten|amarna|rosetta|imhotep|djoser|kv62)/iu },
+  { topic: "egyptology", pattern: /(?:مصر القديمه|مصر القديمة|معتقدات المصريين القدماء|ديانه المصريين|ديانة المصريين|الدين المصري|المعتقدات المصريه|المعتقدات المصرية|الالهه المصريه|الآلهة المصرية|فرعون|فراعنه|فراعنة|هيروغليف|تحنيط|مومياء|اهرام|أهرام|سقاره|سقارة|الجيزه|الجيزة|الاقصر|الأقصر|اسوان|أسوان|سانت كاترين|سانت كترين|سان كترين|جبل موسى|جبل موسي|ابو سمبل|أبو سمبل|نفرتيتي|توت عنخ|رمسيس|حتشبسوت|خوفو|اخناتون|إخناتون|أخناتون|إمحوتب|ايمحتب|حجر رشيد|روزيته|egyptolog|ancient egyptian religion|egyptian beliefs|pharaoh|hieroglyph|mumm|saqqara|giza|luxor|aswan|tutankhamun|ramesses|nefertiti|hatshepsut|akhenaten|amarna|rosetta|imhotep|djoser|kv62)/iu },
   { topic: "archaeology", pattern: /(?:اثار|آثار|اثري|أثري|تنقيب|حفائر|مقبره|مقبرة|معبد|قطعه اثريه|قطعة أثرية|مخطوطه|مخطوطة|نقش|artifact|archaeolog|excavation|tomb|temple|inscription|manuscript)/iu },
   { topic: "world-history", pattern: /(?:تاريخ|حضاره|حضارة|ملوك|امبراطور|إمبراطور|حرب|معركه|معركة|دوله قديمه|دولة قديمة|history|historical|civilization|king|queen|emperor|war|battle)/iu },
+  { topic: "religion", pattern: /(?:دين|ديني|ديانه|ديانة|معتقد|عقيده|عقيدة|لاهوت|الكنيسه|الكنيسة|قبطي|المسيح|يسوع|كيرلس|اوطاخ|افسس|خلقيدون|طبيعه واحده|طبيعة واحدة|لاهوت المسيح|christian|church|christ|christology|theolog|coptic|cyril|ephesus|chalcedon|eutyches|eutychian|miaphys|monophys|incarnate|hypostasis|nature of christ)/iu },
   { topic: "science", pattern: /(?:علم|علوم|فيزياء|كيمياء|احياء|أحياء|فضاء|فلك|كوكب|مناخ|تغير مناخي|جيولوجيا|ثقب اسود|ثقب أسود|ثقوب سوداء|الثقوب السوداء|black hole|black holes|science|physics|chemistry|biology|space|astronomy|planet|climate|geology|research)/iu },
   { topic: "geography", pattern: /(?:اين تقع|أين تقع|موقع|مكان|مدينه|مدينة|دوله|دولة|جبل|نهر|بحر|جزيره|جزيرة|طقس|مناخ|خريطه|خريطة|where is|located|geography|mountain|river|sea|island|weather|map)/iu },
 ];
@@ -117,6 +125,10 @@ const ENTITY_ALIASES: Array<{ canonical: string; english: string; aliases: strin
   { canonical: "حتشبسوت", english: "Hatshepsut", aliases: ["حتشبسوت", "حتشبسوت"] },
   { canonical: "سنفرو", english: "Sneferu", aliases: ["سنفرو", "سنفرا"] },
   { canonical: "زوسر", english: "Djoser", aliases: ["زوسر", "زوزر"] },
+  { canonical: "مجمع أفسس", english: "Council of Ephesus (431), Cyril of Alexandria", aliases: ["مجمع أفسس", "مجمع افسس", "أفسس الأول", "افسس الاول", "Council of Ephesus", "Ephesus"] },
+  { canonical: "مجمع خلقيدونية", english: "Council of Chalcedon (451)", aliases: ["مجمع خلقيدونية", "مجمع خلقدونية", "مجمع خلقيدون", "Council of Chalcedon", "Chalcedon"] },
+  { canonical: "كيرلس الإسكندري", english: "Cyril of Alexandria", aliases: ["كيرلس الإسكندري", "كيرلس السكندري", "كيرلس الاسكندري", "Cyril of Alexandria"] },
+  { canonical: "أوطاخي", english: "Eutyches and Eutychianism", aliases: ["أوطاخي", "اوطاخي", "أوطاخيوس", "اوطاخيوس", "Eutyches", "Eutychianism"] },
 ];
 function normalizeForMatching(value: string): string {
   return value
@@ -148,6 +160,24 @@ export function getTrustedSourcesForQuestion(question: string): TrustedSource[] 
   const matches = TRUSTED_SOURCE_CATALOG.filter((source) =>
     source.topics.some((topic) => topics.includes(topic)),
   );
+  if (topics.includes("religion")) {
+    const priority = topics.includes("egyptology")
+      ? ["uee.ucla.edu", "escholarship.org", "ucl.ac.uk", "egymonuments.gov.eg", "sourcebooks.fordham.edu"]
+      : [
+          "sourcebooks.fordham.edu",
+          "copticorthodox.church",
+          "st-takla.org",
+          "vatican.va",
+          "cambridge.org",
+          "oxfordreference.com",
+          "britannica.com",
+        ];
+    matches.sort((first, second) => {
+      const firstIndex = priority.indexOf(first.domain);
+      const secondIndex = priority.indexOf(second.domain);
+      return (firstIndex < 0 ? priority.length : firstIndex) - (secondIndex < 0 ? priority.length : secondIndex);
+    });
+  }
   return matches.length
     ? matches
     : TRUSTED_SOURCE_CATALOG.filter((source) => source.topics.includes("general"));
@@ -257,6 +287,7 @@ export function buildResearchSearchQuery(question: string, maxLength = 1024): st
     archaeology: "official museum collections, archaeological missions, university research, excavation reports",
     "world-history": "primary historical documents, university history departments, museum or archive catalogues, established reference works",
     scripture: "exact Bible text, book chapter and verse, Bible Gateway, Bible.com; separate scripture from later tradition and archaeological claims",
+    religion: "primary religious and council texts, official statements of the relevant tradition, and peer-reviewed scholarship; distinguish a church's doctrinal position from historical consensus and explain disputed terms in context",
     health: "official health authority guidance, WHO, CDC, NIH, PubMed, systematic reviews and clinical guidelines",
     science: "peer-reviewed research, university laboratories, NASA, NOAA, USGS, recognized scientific agencies",
     law: "official legislation, courts, government legal publications, treaty texts and recognized legal references",

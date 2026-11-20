@@ -13,6 +13,14 @@ const TRUSTED_DOMAINS = [
   "egymonuments.gov.eg",
   "ucl.ac.uk",
   "griffith.ox.ac.uk",
+  "sourcebooks.fordham.edu",
+  "copticorthodox.church",
+  "st-takla.org",
+  "vatican.va",
+  "cambridge.org",
+  "oxfordreference.com",
+  "escholarship.org",
+  "uee.ucla.edu",
   "metmuseum.org",
   "britishmuseum.org",
   "penn.museum",
@@ -36,6 +44,14 @@ const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
   "whc.unesco.org",
   "ucl.ac.uk",
+  "uee.ucla.edu",
+  "escholarship.org",
+  "sourcebooks.fordham.edu",
+  "copticorthodox.church",
+  "st-takla.org",
+  "vatican.va",
+  "cambridge.org",
+  "oxfordreference.com",
   "griffith.ox.ac.uk",
   "metmuseum.org",
   "britishmuseum.org",
@@ -226,6 +242,43 @@ const HERITAGE_QUERY_TERMS = [
   "ptolemaic egypt",
   "egyptian kingship",
   "egyptian religion",
+  "ديانه المصريين القدماء",
+  "الديانه المصريه القديمه",
+  "معتقدات المصريين القدماء",
+  "الالهه المصريه",
+  "طقوس مصريه قديمه",
+  "egyptian religious beliefs",
+  "ancient egyptian beliefs",
+  "religion in ancient egypt",
+  "egyptian gods",
+  "ميافيزيه",
+  "الميافيزيه",
+  "طبيعه واحده متجسده",
+  "الطبيعه الواحده",
+  "طبيعة واحدة متجسدة",
+  "الطبيعة الواحدة",
+  "أوطاخي",
+  "اوطاخي",
+  "اوطاخيوس",
+  "كيرلس الاسكندري",
+  "كيرلس السكندري",
+  "مجمع افسس",
+  "مجمع أفسس",
+  "افسس الاول",
+  "مجمع خلقيدونيه",
+  "مجمع خلقيدونية",
+  "الكنيسه القبطيه الارثوذكسيه",
+  "christian theology",
+  "coptic orthodox",
+  "cyril of alexandria",
+  "council of ephesus",
+  "council of chalcedon",
+  "miaphysitism",
+  "monophysitism",
+  "eutychianism",
+  "eutyches",
+  "mia physis",
+  "christology",
   "old kingdom",
   "middle kingdom",
   "new kingdom",
@@ -557,6 +610,14 @@ function organizationForHost(hostname: string): string {
     "whc.unesco.org": "UNESCO World Heritage Centre",
     "egymonuments.gov.eg": "Egyptian Ministry of Tourism and Antiquities",
     "ucl.ac.uk": "University College London",
+    "uee.ucla.edu": "UCLA Encyclopedia of Egyptology",
+    "escholarship.org": "UCLA eScholarship",
+    "sourcebooks.fordham.edu": "Fordham University Internet History Sourcebooks",
+    "copticorthodox.church": "Coptic Orthodox Church",
+    "st-takla.org": "St-Takla.org Coptic Orthodox Library",
+    "vatican.va": "The Holy See",
+    "cambridge.org": "Cambridge University Press",
+    "oxfordreference.com": "Oxford Reference",
     "griffith.ox.ac.uk": "The Griffith Institute, University of Oxford",
     "metmuseum.org": "The Metropolitan Museum of Art",
     "britishmuseum.org": "The British Museum",
@@ -737,6 +798,20 @@ export function buildHeritageSearchQuery(
 
 function focusedHeritageSearchQuery(query: string): string {
   const normalized = normalizeSearchText(query);
+  if (
+    /(?:افسس|ephesus|خلقيدون|chalcedon|كيرلس|cyril|اوطاخ|eutyches|miaphys|monophys|mia physis)/u.test(
+      normalized,
+    )
+  ) {
+    return "Cyril of Alexandria mia physis physis incarnate Eutyches Eutychianism Council of Ephesus 431 Council of Chalcedon 451 Coptic Orthodox Christology primary texts";
+  }
+  if (
+    /(?:ديانه|دين|معتقد|عباده|طقس|طقوس|الالهه|egyptian religion|egyptian gods|afterlife)/u.test(
+      normalized,
+    )
+  ) {
+    return "ancient Egyptian religion beliefs gods goddesses rituals temple cult afterlife primary texts Egyptology";
+  }
   if (/(?:حجر رشيد|rosetta stone|rosetta)/u.test(normalized)) {
     return "Rosetta Stone British Museum 1799 Champollion Thomas Young hieroglyphs";
   }

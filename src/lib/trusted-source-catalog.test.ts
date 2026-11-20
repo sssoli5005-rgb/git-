@@ -22,6 +22,8 @@ describe("trusted source directory", () => {
   it.each([
     ["ما الموجود في سانت كترين؟", "egyptology"],
     ["ما معنى سفر يشوع 24:32؟", "scripture"],
+    ["ما الفرق بين الميافيزية والأوطاخية في مجمع خلقيدونية؟", "religion"],
+    ["ما معتقدات المصريين القدماء عن الآلهة والطقوس؟", "egyptology"],
     ["ما أعراض نقص الحديد؟", "health"],
     ["ما آخر تعديل في قانون العمل؟", "law"],
     ["كيف تتكون الثقوب السوداء؟", "science"],
@@ -34,6 +36,16 @@ describe("trusted source directory", () => {
     expect(getPreferredResearchDomains("ما الموجود في سانت كترين؟")).toContain("egymonuments.gov.eg");
     expect(getPreferredResearchDomains("ما أعراض نقص الحديد؟")).toContain("who.int");
     expect(getPreferredResearchDomains("ما معنى سفر يشوع؟")).toContain("biblegateway.com");
+    const christologySources = getPreferredResearchDomains(
+      "ما الفرق بين الميافيزية والأوطاخية في مجمع خلقيدونية؟",
+    );
+    expect(christologySources).toContain("sourcebooks.fordham.edu");
+    expect(christologySources).toContain("copticorthodox.church");
+    expect(christologySources).toContain("st-takla.org");
+    expect(christologySources).toContain("vatican.va");
+    expect(getPreferredResearchDomains("ما معتقدات المصريين القدماء عن الآلهة والطقوس؟")).toContain(
+      "uee.ucla.edu",
+    );
   });
 
   it.each([
@@ -57,6 +69,8 @@ describe("trusted source directory", () => {
   it("only approves exact source domains and their subdomains", () => {
     expect(isTrustedResearchHost("www.metmuseum.org")).toBe(true);
     expect(isTrustedResearchHost("whc.unesco.org")).toBe(true);
+    expect(isTrustedResearchHost("sourcebooks.fordham.edu")).toBe(true);
+    expect(isTrustedResearchHost("copticorthodox.church")).toBe(true);
     expect(isTrustedResearchHost("notmetmuseum.org")).toBe(false);
     expect(isTrustedResearchHost("random.example")).toBe(false);
   });
@@ -66,5 +80,16 @@ describe("trusted source directory", () => {
     expect(guide).toContain("وزارة السياحة والآثار المصرية");
     expect(guide).toContain("مركز التراث العالمي باليونسكو");
     expect(guide).toContain("Research topic classification: egyptology");
+  });
+
+  it("distinguishes doctrinal sources from scripture-only sources", () => {
+    const guide = describeTrustedSourcesForQuestion(
+      "ما الفرق بين ميا فيسيس وأوطاخي في مجمع أفسس وخلقيدونية؟",
+    );
+
+    expect(guide).toContain("Research topic classification: religion");
+    expect(guide).toContain("نصوص تاريخية أولية");
+    expect(guide).toContain("مواقف الكنيسة القبطية");
+    expect(guide).not.toContain("Bible Gateway");
   });
 });

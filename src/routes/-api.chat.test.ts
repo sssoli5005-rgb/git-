@@ -923,6 +923,17 @@ describe("handleChatPost hosted Groq provider", () => {
       expected: "يُنسب تصميم الهرم تقليديًا إلى إمحوتب",
       source: "https://egymonuments.gov.eg/en/archaeological-sites/saqqara/",
     },
+    {
+      question:
+        "في مجمع أفسس الأول (431م) ومجمع خلقيدونية (451م)، دار جدل لاهوتي حاد حول مصطلحات يونانية دقيقة لوصف طبيعة السيد المسيح. السؤال الدقيق هنا: ما هو الفرق الجوهري بين تعبير 'طبيعة واحدة متجسدة لله الكلمة' (Mia Physis) الذي استخدمه القديس كيرلس السكندري، وبين مفهوم 'الطبيعة الواحدة' (Monophysis) الذي نُسب لأوطاخي؟ ولماذا رفضت الكنيسة القبطية الأرثوذكسية الصيغة الخلقيدونية رغم أنها لا تتبنى عقيدة أوطاخي؟",
+      expected: "لا يصح مساواة هذا الاستخدام الكيرلسي تلقائيًا بمذهب أوطاخي",
+      source: "https://sourcebooks.fordham.edu/basis/chalcedon.asp",
+    },
+    {
+      question: "ما معتقدات المصريين القدماء عن الآلهة والطقوس؟",
+      expected: "المعتقدات والطقوس اتغيرت عبر العصور",
+      source: "https://www.ucl.ac.uk/museums-static/digitalegypt/religion/deitiesindex.html",
+    },
   ])("answers the reviewed $question question instead of refusing when live pages are unavailable", async ({
     question,
     expected,
@@ -2098,7 +2109,10 @@ describe("general web research across non-Egypt topics", () => {
       expect(payload.tools).toEqual([{ type: "browser_search" }]);
       expect(payload.tool_choice).toBe("required");
       expect(payload.messages[0]?.content).toContain(
-        "For biblical or religious questions, retrieve the exact passage",
+        "For questions about scripture, retrieve the exact passage",
+      );
+      expect(payload.messages[0]?.content).toContain(
+        "For religious history and theology, consult primary council or religious texts",
       );
       return Response.json({
         choices: [{
