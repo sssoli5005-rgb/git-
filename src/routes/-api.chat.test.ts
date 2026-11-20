@@ -648,6 +648,76 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("https://whc.unesco.org/en/list/86/");
   });
 
+  it("searches current pyramid discoveries instead of returning a general Saqqara summary", async () => {
+    const queries: string[] = [];
+    const searchBinding = {
+      websearch: vi.fn(async ({ query }: { query: string }) => {
+        queries.push(query);
+        return Response.json({
+          items: [{
+            title: "Precise characterization of a corridor-shaped structure in Khufu's Pyramid",
+            url: "https://www.nature.com/articles/s41467-023-36351-0",
+            description:
+              "A peer-reviewed ScanPyramids study reports a corridor-shaped structure about 9 metres long in Khufu's Pyramid, detected with cosmic-ray muon measurements.",
+          }],
+        });
+      }),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "www.nature.com") {
+        return new Response(
+          "<html><head><title>Precise characterization of a corridor-shaped structure in Khufu's Pyramid</title></head><body><main>" +
+            "The ScanPyramids team reported discoveries of previously unknown voids by cosmic-ray muon radiography. " +
+            "New measurements reveal a corridor-shaped structure of about 9 m length with a transverse section of about 2.0 m by 2.0 m. " +
+            "The study characterizes the structure; it does not establish its original function." +
+            "</main></body></html>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url.hostname === "ar.wikipedia.org") {
+        return Response.json({ query: { search: [] } });
+      }
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
+        expect(payload.messages[0]?.content).toContain("9 m length");
+        expect(payload.messages[0]?.content).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content:
+                "أيوه، من الاكتشافات المؤكدة ممر داخل هرم خوفو كُشف عنه بقياسات أشعة الميون، وقدّرت الدراسة طوله بنحو ٩ أمتار. ده يثبت وجود الممر وأبعاده، لكن وظيفته الأصلية غير محسومة.",
+            },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest(
+        "لسه فيه اكتشافات في الأهرامات؟ أقصد أحدث ما كُشف في أهرامات الجيزة وسقارة، وما الدليل ودرجة اليقين؟",
+      ),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("ممر داخل هرم خوفو");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(queries[0]).toContain("recent archaeological discovery");
+  });
+
   it("withholds an unverified heritage detail and offers a focused follow-up when no sources are available", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");

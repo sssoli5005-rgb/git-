@@ -24,6 +24,7 @@ import {
   enhanceImageContrast,
   isLikelyMonochrome,
 } from "@/lib/image-enhancement";
+import { needsOfficialArtifactTranslation } from "@/lib/scanner-language";
 
 type ScanConfidence = Record<string, "high" | "medium" | "low" | "unavailable">;
 type ScanDiagnostics = {
@@ -342,6 +343,52 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           };
           const sourceAnalysis = data.analysis || "";
           let analysis = sourceAnalysis;
+          let localizedOfficialGuide = "";
+          let translationUnavailable = false;
+          const matchedArtifact = data.matchedArtifact;
+          const trustedMatchSource = matchedArtifact?.url
+            ? data.sources?.find((source) => source.trusted && source.url === matchedArtifact.url)
+            : undefined;
+          if (
+            scanMode === "objects" &&
+            (data.identificationStatus === "confirmed" ||
+              data.identificationStatus === "probable") &&
+            matchedArtifact?.name &&
+            matchedArtifact.url &&
+            trustedMatchSource &&
+            needsOfficialArtifactTranslation(matchedArtifact.url, lang)
+          ) {
+            const reference = [
+              `Catalog name: ${matchedArtifact.name}`,
+              `Current display location: ${matchedArtifact.currentLocation || matchedArtifact.location || matchedArtifact.museum || ""}`,
+              matchedArtifact.period ? `Period: ${matchedArtifact.period}` : "",
+              `Official catalog description: ${data.sourceStory || matchedArtifact.description || trustedMatchSource.snippet || ""}`,
+            ].filter(Boolean).join("\n");
+            try {
+              const guideResponse = await fetch("/api/guide", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  artifact: matchedArtifact.name,
+                  language: lang,
+                  mode: "official",
+                  reference,
+                }),
+                signal: controller.signal,
+              });
+              const guideData = await guideResponse.json() as { answer?: unknown };
+              if (!guideResponse.ok || typeof guideData.answer !== "string" || !guideData.answer.trim()) {
+                throw new Error(`Artifact guide translation failed with HTTP ${guideResponse.status}.`);
+              }
+              localizedOfficialGuide = guideData.answer.trim();
+            } catch (error) {
+              if (controller.signal.aborted) throw error;
+              console.warn("[Image scanner] Official artifact guide translation failed", {
+                reason: error instanceof Error ? error.message : "unknown",
+              });
+              translationUnavailable = true;
+            }
+          }
           if (data.visualDescription) {
             const visual = data.visualDescription;
             const details = [
@@ -420,12 +467,14 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const details = story || (artifact.period
                 ? `${resultCopy.periodLabel}: ${artifact.period}`
                 : "");
-              analysis = [
-                identificationLabel,
-                `${resultCopy.nameLabel}: ${artifact.name}`,
-                displayLocation ? `${resultCopy.locationLabel}: ${displayLocation}` : "",
-                details ? `${resultCopy.storyLabel}: ${details}` : "",
-              ].filter(Boolean).join("\n\n");
+              analysis = localizedOfficialGuide
+                ? [identificationLabel, localizedOfficialGuide].join("\n\n")
+                : [
+                    identificationLabel,
+                    `${resultCopy.nameLabel}: ${artifact.name}`,
+                    displayLocation ? `${resultCopy.locationLabel}: ${displayLocation}` : "",
+                    details ? `${resultCopy.storyLabel}: ${details}` : "",
+                  ].filter(Boolean).join("\n\n");
             } else if (data.researchCandidate?.name) {
               // A source-backed visual candidate is useful to the visitor, but
               // keep its status distinct from a direct reference-photo confirmation.
@@ -530,6 +579,9 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                 reliableLocation ? `المكان الوارد في المصدر: ${reliableLocation}` : "",
                 fallbackDetails ? `${resultCopy.storyLabel}: ${fallbackDetails}` : "",
               ].filter(Boolean).join("\n\n");
+            }
+            if (translationUnavailable) {
+              analysis = [analysis, resultCopy.translationUnavailable].filter(Boolean).join("\n\n");
             }
           }
 

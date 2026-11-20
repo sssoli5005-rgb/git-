@@ -2753,6 +2753,27 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(response.status).toBe(400);
   });
 
+  it("generates an official artifact guide in the requested language from the supplied reference", async () => {
+    const run = vi.fn().mockResolvedValue({ response: "La statuette est conservée au musée." });
+    const response = await worker.fetch(
+      post("/api/guide", {
+        artifact: "Osiris Statuette",
+        language: "fr",
+        mode: "official",
+        reference: "Current display location: Mummification Museum, Luxor",
+      }),
+      { AI: { run }, ASSETS: { fetch: vi.fn() } },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, answer: "La statuette est conservée au musée." });
+    expect(run).toHaveBeenCalledTimes(1);
+    const prompt = JSON.stringify(run.mock.calls);
+    expect(prompt).toContain("Mummification Museum, Luxor");
+    expect(prompt).toContain("French");
+  });
+
   it("retries a transient Gemini Vision 503 before using the successful response", async () => {
     let geminiCalls = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

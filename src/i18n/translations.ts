@@ -802,6 +802,7 @@ export const scannerResultCopy = {
     locationLabel: "الموقع",
     periodLabel: "الفترة التاريخية",
     storyLabel: "التفاصيل التاريخية",
+    translationUnavailable: "تعذرت ترجمة بطاقة الأثر؛ النص التالي معروض بلغة المصدر.",
     notIdentified: "لم أستطع تحديد القطعة من الصورة؛ لا توجد حتى الآن مطابقة بصرية موثوقة تؤكد اسمها أو مكانها.",
   },
   en: {
@@ -815,6 +816,7 @@ export const scannerResultCopy = {
     locationLabel: "Location",
     periodLabel: "Historical period",
     storyLabel: "Historical details",
+    translationUnavailable: "The artifact card could not be translated; the following text is in the source language.",
     notIdentified: "No trusted source identified the artifact and its location.",
   },
   fr: {
@@ -828,6 +830,7 @@ export const scannerResultCopy = {
     locationLabel: "Lieu",
     periodLabel: "Période historique",
     storyLabel: "Détails historiques",
+    translationUnavailable: "La fiche de l’objet n’a pas pu être traduite ; le texte suivant est dans la langue source.",
     notIdentified: "Aucune source fiable n’a identifié l’objet et son lieu.",
   },
   es: {
@@ -841,6 +844,7 @@ export const scannerResultCopy = {
     locationLabel: "Ubicación",
     periodLabel: "Periodo histórico",
     storyLabel: "Detalles históricos",
+    translationUnavailable: "No se pudo traducir la ficha del objeto; el texto siguiente está en el idioma de la fuente.",
     notIdentified: "Ninguna fuente fiable identificó el objeto y su ubicación.",
   },
   it: {
@@ -854,6 +858,7 @@ export const scannerResultCopy = {
     locationLabel: "Luogo",
     periodLabel: "Periodo storico",
     storyLabel: "Dettagli storici",
+    translationUnavailable: "Impossibile tradurre la scheda del reperto; il testo seguente è nella lingua della fonte.",
     notIdentified: "Nessuna fonte attendibile ha identificato il reperto e il luogo.",
   },
   de: {
@@ -867,6 +872,7 @@ export const scannerResultCopy = {
     locationLabel: "Standort",
     periodLabel: "Historische Epoche",
     storyLabel: "Historische Details",
+    translationUnavailable: "Die Objektbeschreibung konnte nicht übersetzt werden; der folgende Text ist in der Quellsprache.",
     notIdentified: "Keine vertrauenswürdige Quelle hat das Objekt und den Ort identifiziert.",
   },
   ru: {
@@ -880,6 +886,7 @@ export const scannerResultCopy = {
     locationLabel: "Местонахождение",
     periodLabel: "Исторический период",
     storyLabel: "Исторические сведения",
+    translationUnavailable: "Не удалось перевести описание предмета; далее приведён текст на языке источника.",
     notIdentified: "Надёжный источник не определил предмет и его местоположение.",
   },
   ja: {
@@ -893,6 +900,7 @@ export const scannerResultCopy = {
     locationLabel: "所在地",
     periodLabel: "歴史的時代",
     storyLabel: "歴史的な詳細",
+    translationUnavailable: "遺物の説明を翻訳できませんでした。以下は資料の原文です。",
     notIdentified: "信頼できる資料から遺物と場所を特定できませんでした。",
   },
   zh: {
@@ -906,6 +914,7 @@ export const scannerResultCopy = {
     locationLabel: "地点",
     periodLabel: "历史时期",
     storyLabel: "历史详情",
+    translationUnavailable: "无法翻译文物介绍；以下内容为来源语言。",
     notIdentified: "没有可信来源确认文物及其地点。",
   },
 } as const;

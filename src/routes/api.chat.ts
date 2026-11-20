@@ -19,6 +19,7 @@ import { isSourceRequest } from "@/lib/source-request";
 import {
   buildHeritageSearchQuery,
   formatHeritageSearchContext,
+  isDiscoveryResearchQuestion,
   isEgyptianHeritageQuery,
   searchTrustedEgyptianHeritage,
 } from "@/lib/heritage-search";
@@ -376,6 +377,12 @@ type ChatWebSearchResult = {
 function buildSpecialistSearchQuery(question: string): string {
   const normalized = normalizeResearchQuery(question);
   const directoryQuery = buildResearchSearchQuery(question);
+  if (isDiscoveryResearchQuestion(question)) {
+    const pyramidContext = /(?:اهرام|pyramid|khufu|cheops|giza|saqqara)/u.test(normalized)
+      ? "pyramids Giza Saqqara"
+      : "Egyptian archaeology";
+    return `${directoryQuery} Egypt recent archaeological discovery research ${pyramidContext}`.slice(0, 1024);
+  }
   if (/(?:يوسف|joseph|shechem|شكيم)/u.test(normalized)) {
     return (directoryQuery + " Genesis 50:25-26 Exodus 13:19 Joshua 24:32 exact Bible passages Shechem Joseph bones").slice(0, 1024);
   }
@@ -793,6 +800,9 @@ export async function handleChatPost(
         "Choose sources from the shared categorized trusted-source directory that match the subject. Official sources, universities, national libraries and archives, museums, peer-reviewed journals, and recognized specialist publications have priority. Encyclopedias are orientation sources, not substitutes for primary evidence.",
         "Search, compare, and synthesize evidence from the current turn. Distinguish directly opened page text from provider snippets. A snippet is limited evidence, not proof that the full page was read. Compare separate publications rather than counting multiple search providers that return the same page as independent corroboration.",
         "If providers disagree, explain the disagreement. State dates and current facts only when the retrieved evidence supports them. Correct false premises kindly and explain the supported information. Begin with the direct answer, then explain what supports it.",
+        ...(isDiscoveryResearchQuestion(latestQuestion) ? [
+          "DISCOVERY QUESTIONS: distinguish a peer-reviewed or institutionally confirmed physical finding from a proposed interpretation or an unverified media claim. Give the reported date, location, and detection method only when the retrieved evidence supports them. Do not call an older finding the latest unless the current search verifies that.",
+        ] : []),
         "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
         "MATCHED TRUSTED SOURCE DIRECTORY FOR THIS QUESTION:\\n" + describeTrustedSourcesForQuestion(latestQuestion, 12),
         "NORMALIZED RESEARCH QUERY (preserve the user's intent):\\n" + buildSpecialistSearchQuery(latestQuestion),

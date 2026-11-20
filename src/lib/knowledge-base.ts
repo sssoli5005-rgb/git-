@@ -10,8 +10,32 @@ export type KnowledgeEntry = {
 import { HERITAGE_FACTS } from "./heritage-facts";
 import { isSourceRequest } from "./source-request";
 import { correctKnownResearchEntities } from "./trusted-source-catalog";
+import { isDiscoveryResearchQuestion } from "./heritage-search";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
+  {
+    id: "karnak-great-hypostyle-hall",
+    title: "صالة الأعمدة الكبرى في الكرنك",
+    directResponse: true,
+    keywords: [
+      "صالة الأعمدة الكبرى",
+      "قاعة الأعمدة الكبرى",
+      "مين بنى صالة الأعمدة الكبرى",
+      "مراحل بنائها",
+      "مراحل بناء صالة الأعمدة",
+      "Great Hypostyle Hall",
+      "hypostyle hall Karnak",
+    ],
+    content:
+      "صالة الأعمدة الكبرى جزء من معبد آمون في الكرنك، وفيها ١٣٤ عمودًا. بدأت أعمال بنائها في عهد أمنحتب الثالث، لكن البناء الرئيسي والزخارف ارتبطا بعهد سيتي الأول ورمسيس الثاني؛ فالأدق نقول إنها اتنفذت على مراحل، مش إن ملكًا واحدًا بناها كلها. بعض الأعمدة يصل ارتفاعها إلى ١٥ مترًا، والأعمدة الكبرى في المنتصف تصل إلى ٢١ مترًا.",
+    sources: [
+      {
+        title: "الكرنك",
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/karnak/",
+      },
+    ],
+  },
   {
     id: "karnak-temple-complex",
     title: "مجمع معابد الكرنك",
@@ -1352,6 +1376,7 @@ function getRelevantEntries(
   const userMessages = messages.filter((message) => message.role === "user");
   const latest = userMessages.at(-1)?.content ?? "";
   const previous = userMessages.at(-2)?.content ?? "";
+  if (isDiscoveryResearchQuestion(latest)) return [];
   const sourceRequest = isSourceRequest(latest);
   const rawQuery =
     isContextualFollowUp(latest, previous) || sourceRequest

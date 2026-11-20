@@ -75,6 +75,8 @@ const HERITAGE_QUERY_TERMS = [
   "اثار",
   "اثري",
   "هرم",
+  "اهرامات",
+  "هرامات",
   "سقاره",
   "الجيزه",
   "الاقصر",
@@ -369,6 +371,13 @@ function normalizeSearchText(value: string): string {
     .replace(/<[^>]*>/gu, " ")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+const DISCOVERY_QUERY_PATTERN =
+  /(?:اكتشاف|مكتشف|عثور|عثر|discover(?:y|ies|ed)?|findings?|found|hallazgo|descubr|découverte|decouverte|trouvé|trouve|scopert|entdeck|fund|открыт|находк|発見|发现)/iu;
+
+export function isDiscoveryResearchQuestion(value: string): boolean {
+  return DISCOVERY_QUERY_PATTERN.test(normalizeSearchText(value));
 }
 
 function matchesHeritageQuery(value: string): boolean {

@@ -25,6 +25,32 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("does not substitute a general Saqqara summary for a pyramid-discoveries question", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "لسه فيه اكتشافات في الأهرامات؟ أقصد الجيزة وسقارة." },
+    ]);
+
+    expect(answer.content).toBe("");
+    expect(answer.directAnswer).toBeUndefined();
+    expect(answer.sources).toEqual([]);
+  });
+
+  it("answers who built the Great Hypostyle Hall and distinguishes its construction phases", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "في الكرنك، مين بنى صالة الأعمدة الكبرى؟ وإيه مراحل بنائها؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("بدأت أعمال بنائها في عهد أمنحتب الثالث");
+    expect(answer.directAnswer).toContain("البناء الرئيسي والزخارف ارتبطا بعهد سيتي الأول ورمسيس الثاني");
+    expect(answer.directAnswer).not.toContain("مش كله اتبنى في عهد ملك واحد");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/karnak/",
+      }),
+    );
+  });
+
   it("answers the Luxor archaeological-sites question from reviewed sources", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "ايه الاماكن الاثريه الي الاقيها في الاقصر ؟" },

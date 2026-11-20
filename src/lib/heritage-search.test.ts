@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildHeritageSearchQuery,
   formatHeritageSearchContext,
+  isDiscoveryResearchQuestion,
   isEgyptianHeritageQuery,
   searchTrustedEgyptianHeritage,
 } from "./heritage-search";
@@ -10,6 +11,9 @@ import {
 describe("trusted Egyptian heritage search", () => {
   it("recognizes Arabic and English heritage questions", () => {
     expect(isEgyptianHeritageQuery([{ role: "user", content: "إيه آثار سقارة؟" }])).toBe(true);
+    expect(
+      isEgyptianHeritageQuery([{ role: "user", content: "لسه فيه اكتشافات في الأهرامات؟" }]),
+    ).toBe(true);
     expect(
       isEgyptianHeritageQuery([{ role: "user", content: "How were hieroglyphs written?" }]),
     ).toBe(true);
@@ -65,6 +69,16 @@ describe("trusted Egyptian heritage search", () => {
         { role: "user", content: "طب إيه الأقدم؟" },
       ]),
     ).toContain("إيه أهم الآثار في سقارة؟");
+  });
+
+  it("recognizes discovery questions as evidence-seeking research", () => {
+    expect(isDiscoveryResearchQuestion("لسه فيه اكتشافات في الأهرامات؟")).toBe(true);
+    expect(isDiscoveryResearchQuestion("What are the latest discoveries at Giza?")).toBe(true);
+    expect(isDiscoveryResearchQuestion("¿Qué hallazgos recientes hay en las pirámides?")).toBe(true);
+    expect(isDiscoveryResearchQuestion("What does the Great Pyramid look like?")).toBe(false);
+    expect(
+      buildHeritageSearchQuery([{ role: "user", content: "لسه فيه اكتشافات في الأهرامات؟" }]),
+    ).toContain("الأهرامات");
   });
 
   it("finds approved references for a long, nuanced hieroglyphic question", async () => {
