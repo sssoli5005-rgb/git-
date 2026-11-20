@@ -2774,6 +2774,35 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(prompt).toContain("French");
   });
 
+  it("translates official descriptions without rewriting artifact identity or factual relationships", async () => {
+    const source =
+      "Nephthys and her sister Isis mourned their brother Osiris. This is most likely a wooden statue.";
+    const run = vi.fn().mockResolvedValue({
+      response: "نفثيس وأختها إيزيس رثتا أخاهما أوزيريس. والأرجح إنه تمثال خشبي.",
+    });
+    const response = await worker.fetch(
+      post("/api/guide", {
+        artifact: "Statue of Nephthys",
+        language: "ar",
+        mode: "official",
+        reference: source,
+        question: "Was Osiris their sister?",
+      }),
+      { AI: { run }, ASSETS: { fetch: vi.fn() } },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.answer).toBe("نفثيس وأختها إيزيس رثتا أخاهما أوزيريس. والأرجح إنه تمثال خشبي.");
+    expect(run).toHaveBeenCalledTimes(1);
+    const prompt = JSON.stringify(run.mock.calls);
+    expect(prompt).toContain(source);
+    expect(prompt).toContain("العلاقات بينهم (مثل أخ/أخت)");
+    expect(prompt).toContain("لا تحوّل تمثالًا أو نموذجًا أو تابوتًا إلى مومياء");
+    expect(prompt).toContain("لا تكتب عنوانًا أو اسمًا أو مكان عرض");
+    expect(prompt).not.toContain("Was Osiris their sister?");
+  });
+
   it("retries a transient Gemini Vision 503 before using the successful response", async () => {
     let geminiCalls = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

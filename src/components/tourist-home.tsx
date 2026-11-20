@@ -24,7 +24,10 @@ import {
   enhanceImageContrast,
   isLikelyMonochrome,
 } from "@/lib/image-enhancement";
-import { needsOfficialArtifactTranslation } from "@/lib/scanner-language";
+import {
+  formatMatchedArtifactCard,
+  needsOfficialArtifactTranslation,
+} from "@/lib/scanner-language";
 
 type ScanConfidence = Record<string, "high" | "medium" | "low" | "unavailable">;
 type ScanDiagnostics = {
@@ -349,21 +352,21 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           const trustedMatchSource = matchedArtifact?.url
             ? data.sources?.find((source) => source.trusted && source.url === matchedArtifact.url)
             : undefined;
-          if (
+          const officialDescription = (
+            trustedMatchSource?.snippet ||
+            matchedArtifact?.description ||
+            data.sourceStory ||
+            ""
+          ).trim();
+          const shouldTranslateOfficialDescription =
             scanMode === "objects" &&
             (data.identificationStatus === "confirmed" ||
               data.identificationStatus === "probable") &&
             matchedArtifact?.name &&
             matchedArtifact.url &&
             trustedMatchSource &&
-            needsOfficialArtifactTranslation(matchedArtifact.url, lang)
-          ) {
-            const reference = [
-              `Catalog name: ${matchedArtifact.name}`,
-              `Current display location: ${matchedArtifact.currentLocation || matchedArtifact.location || matchedArtifact.museum || ""}`,
-              matchedArtifact.period ? `Period: ${matchedArtifact.period}` : "",
-              `Official catalog description: ${data.sourceStory || matchedArtifact.description || trustedMatchSource.snippet || ""}`,
-            ].filter(Boolean).join("\n");
+            needsOfficialArtifactTranslation(matchedArtifact.url, lang);
+          if (shouldTranslateOfficialDescription) {
             try {
               const guideResponse = await fetch("/api/guide", {
                 method: "POST",
@@ -372,7 +375,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
                   artifact: matchedArtifact.name,
                   language: lang,
                   mode: "official",
-                  reference,
+                  reference: officialDescription,
                 }),
                 signal: controller.signal,
               });
@@ -457,24 +460,26 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               // A museum or publisher is not automatically the archaeological site's location.
               const displayLocation =
                 artifact.currentLocation || artifact.location || "";
-              const story = (data.sourceStory || artifact.description ||
-                data.sources?.find((source) => source.trusted)?.snippet || "")
+              const storySource = shouldTranslateOfficialDescription
+                ? (localizedOfficialGuide || officialDescription)
+                : (data.sourceStory || artifact.description || trustedMatchSource?.snippet || "");
+              const story = storySource
                 .replace(/https?:\/\/\S+/g, "")
                 .replace(/^(?:قصتها|القصة|من وصف المصدر|Story|Description|From the source description)\s*[:：-]\s*/i, "")
                 .replace(/\n{3,}/g, "\n\n")
                 .trim()
                 .slice(0, 1800);
-              const details = story || (artifact.period
-                ? `${resultCopy.periodLabel}: ${artifact.period}`
-                : "");
-              analysis = localizedOfficialGuide
-                ? [identificationLabel, localizedOfficialGuide].join("\n\n")
-                : [
-                    identificationLabel,
-                    `${resultCopy.nameLabel}: ${artifact.name}`,
-                    displayLocation ? `${resultCopy.locationLabel}: ${displayLocation}` : "",
-                    details ? `${resultCopy.storyLabel}: ${details}` : "",
-                  ].filter(Boolean).join("\n\n");
+              analysis = formatMatchedArtifactCard({
+                identificationLabel,
+                nameLabel: resultCopy.nameLabel,
+                name: artifact.name,
+                locationLabel: resultCopy.locationLabel,
+                location: displayLocation,
+                periodLabel: resultCopy.periodLabel,
+                period: artifact.period || "",
+                detailsLabel: resultCopy.storyLabel,
+                details: story,
+              });
             } else if (data.researchCandidate?.name) {
               // A source-backed visual candidate is useful to the visitor, but
               // keep its status distinct from a direct reference-photo confirmation.
