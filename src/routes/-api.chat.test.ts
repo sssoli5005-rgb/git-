@@ -1779,6 +1779,7 @@ describe("general web research across non-Egypt topics", () => {
     const body = await response.text();
     expect(body).toContain("توضح المصادر");
     expect(body).toContain("https://www.biblegateway.com/passage/");
+    expect(body).toContain("https://www.bible.com/bible/111/JOS.24.32.NIV");
   });
 
   it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {
@@ -2051,7 +2052,13 @@ describe("general web research across non-Egypt topics", () => {
             description: "Joshua 24:32 records the burial of Joseph's bones at Shechem.",
           }],
         });
-        throw new Error("Ceramic should not be needed after Linkup succeeds.");
+        return Response.json({
+          items: [{
+            title: "Joshua 24:32 — Bible.com",
+            url: "https://www.bible.com/bible/111/JOS.24.32.NIV",
+            description: "The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem.",
+          }],
+        });
       }),
     };
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
@@ -2064,6 +2071,12 @@ describe("general web research across non-Egypt topics", () => {
           "for one hundred pieces of money. It became an inheritance of the descendants of Joseph. " +
           "This passage is the scriptural account of the burial place named in the book of Joshua." +
           "</main></body></html>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url.hostname === "www.bible.com") {
+        return new Response(
+          "<html><body><main>The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem. This is the Bible.com text of Joshua 24:32. The burial account appears near the end of the book of Joshua.</main></body></html>",
           { headers: { "Content-Type": "text/html; charset=utf-8" } },
         );
       }
@@ -2087,7 +2100,7 @@ describe("general web research across non-Egypt topics", () => {
     );
     const body = await response.text();
     expect(response.status).toBe(200);
-    expect(specialistProviders).toEqual(["exa", "linkup"]);
+    expect(specialistProviders).toEqual(["exa", "linkup", "ceramic"]);
     expect(body).toContain("سفر يشوع 24:32");
     expect(body).toContain("شكيم");
     expect(body).toContain("المصادر:");

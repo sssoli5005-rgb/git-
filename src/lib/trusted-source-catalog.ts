@@ -74,11 +74,11 @@ export const TRUSTED_SOURCE_CATALOG: readonly TrustedSource[] = [
 ] as const;
 
 const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
-  { topic: "scripture", pattern: /(?:كتاب مقدس|الكتاب المقدس|الانجيل|إنجيل|انجيل|تكوين|خروج|يشوع|مزامير|رسالة بولس|عقيده مسيحيه|كنيسه|الكنيسة|المسيح|يسوع|مريم العذراء|Bible|biblical|scripture|gospel|christian|church|theology)/iu },
+  { topic: "scripture", pattern: /(?:يوسف الصديق|يوسف بن يعقوب|جسد يوسف|عظام يوسف|joseph|كتاب مقدس|الكتاب المقدس|الانجيل|إنجيل|انجيل|تكوين|خروج|يشوع|مزامير|رسالة بولس|عقيده مسيحيه|كنيسه|الكنيسة|المسيح|يسوع|مريم العذراء|Bible|biblical|scripture|gospel|christian|church|theology)/iu },
   { topic: "health", pattern: /(?:صحه|صحة|طبي|مرض|دواء|علاج|اعراض|أعراض|جراحه|جراحة|تغذيه|تغذية|حمل|قلب|سكر|ضغط الدم|medical|health|disease|medicine|symptom|treatment|clinical|drug|nutrition)/iu },
   { topic: "law", pattern: /(?:قانون|تشريع|محكمه|محكمة|حكم قضائي|حقوق|عقد|لائحه|لائحة|قانوني|legal|law|regulation|court|legislation|rights|contract)/iu },
   { topic: "economy", pattern: /(?:اقتصاد|اقتصادي|تضخم|سعر صرف|عمله|عملة|بنك|استثمار|بطاله|بطالة|ناتج محلي|economy|economic|inflation|exchange rate|currency|bank|investment|gdp)/iu },
-  { topic: "egyptology", pattern: /(?:مصر القديمه|مصر القديمة|فرعون|فراعنه|فراعنة|هيروغليف|تحنيط|مومياء|اهرام|أهرام|سقاره|سقارة|الجيزه|الجيزة|الاقصر|الأقصر|اسوان|أسوان|سانت كاترين|جبل موسى|ابو سمبل|أبو سمبل|نفرتيتي|توت عنخ|رمسيس|حتشبسوت|خوفو|egyptolog|pharaoh|hieroglyph|mumm|saqqara|giza|luxor|aswan|tutankhamun|ramesses|nefertiti|hatshepsut)/iu },
+  { topic: "egyptology", pattern: /(?:مصر القديمه|مصر القديمة|فرعون|فراعنه|فراعنة|هيروغليف|تحنيط|مومياء|اهرام|أهرام|سقاره|سقارة|الجيزه|الجيزة|الاقصر|الأقصر|اسوان|أسوان|سانت كاترين|سانت كترين|سان كترين|جبل موسى|جبل موسي|ابو سمبل|أبو سمبل|نفرتيتي|توت عنخ|رمسيس|حتشبسوت|خوفو|egyptolog|pharaoh|hieroglyph|mumm|saqqara|giza|luxor|aswan|tutankhamun|ramesses|nefertiti|hatshepsut)/iu },
   { topic: "archaeology", pattern: /(?:اثار|آثار|اثري|أثري|تنقيب|حفائر|مقبره|مقبرة|معبد|قطعه اثريه|قطعة أثرية|مخطوطه|مخطوطة|نقش|artifact|archaeolog|excavation|tomb|temple|inscription|manuscript)/iu },
   { topic: "world-history", pattern: /(?:تاريخ|حضاره|حضارة|ملوك|امبراطور|إمبراطور|حرب|معركه|معركة|دوله قديمه|دولة قديمة|history|historical|civilization|king|queen|emperor|war|battle)/iu },
   { topic: "science", pattern: /(?:علم|علوم|فيزياء|كيمياء|احياء|أحياء|فضاء|فلك|كوكب|مناخ|تغير مناخي|جيولوجيا|science|physics|chemistry|biology|space|astronomy|planet|climate|geology|research)/iu },
@@ -115,7 +115,12 @@ function normalizeForMatching(value: string): string {
 }
 
 export function inferResearchTopics(question: string): ResearchTopic[] {
-  const topics = TOPIC_RULES.filter(({ pattern }) => pattern.test(question)).map(({ topic }) => topic);
+  const corrections = correctKnownResearchEntities(question);
+  const searchable = [
+    question,
+    ...corrections.map((item) => item.canonical + " " + item.english),
+  ].join(" ");
+  const topics = TOPIC_RULES.filter(({ pattern }) => pattern.test(searchable)).map(({ topic }) => topic);
   return topics.length ? [...new Set(topics)] : ["general"];
 }
 
