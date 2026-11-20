@@ -87,19 +87,35 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
 ];
 
 const ENTITY_ALIASES: Array<{ canonical: string; english: string; aliases: string[] }> = [
-  { canonical: "سانت كاترين", english: "Saint Catherine's Monastery and Saint Catherine Area, South Sinai", aliases: ["سانت كترين", "سانت كاثرين", "سان كترين", "سانتا كترين", "دير سانت كترين"] },
-  { canonical: "جبل موسى", english: "Jebel Musa / Mount Sinai", aliases: ["جبل موسي", "جبل موسا", "جبل موسى"] },
-  { canonical: "سقارة", english: "Saqqara", aliases: ["سقاره", "سقارة"] },
-  { canonical: "أبو سمبل", english: "Abu Simbel", aliases: ["ابو سمبل", "ابو سنبل", "ابوسمبل"] },
-  { canonical: "الأقصر", english: "Luxor", aliases: ["الاقصر", "الأقصر"] },
+  { canonical: "سانت كاترين", english: "Saint Catherine's Monastery and Saint Catherine Area, South Sinai", aliases: ["سانت كترين", "سانت كاثرين", "سان كترين", "سانتا كترين", "دير سانت كترين", "سانت كتيرين"] },
+  { canonical: "جبل موسى", english: "Jebel Musa / Mount Sinai", aliases: ["جبل موسي", "جبل موسا", "جبل موسى", "جبل سينا"] },
+  { canonical: "سقارة", english: "Saqqara", aliases: ["سقاره", "سقارة", "سقاره"] },
+  { canonical: "أبو سمبل", english: "Abu Simbel", aliases: ["ابو سمبل", "ابو سنبل", "ابوسمبل", "ابو سمبل"] },
+  { canonical: "الأقصر", english: "Luxor", aliases: ["الاقصر", "الأقصر", "الاقصر"] },
   { canonical: "أسوان", english: "Aswan", aliases: ["اسوان", "أسوان"] },
   { canonical: "الجيزة", english: "Giza", aliases: ["الجيزه", "الجيزة"] },
-  { canonical: "توت عنخ آمون", english: "Tutankhamun", aliases: ["توت عنخ امون", "توت عنخ آمون", "توتانخ امون"] },
-  { canonical: "نفرتيتي", english: "Nefertiti", aliases: ["نفرتيتي", "نفرتيتى"] },
+  { canonical: "توت عنخ آمون", english: "Tutankhamun", aliases: ["توت عنخ امون", "توت عنخ آمون", "توتانخ امون", "توت عنخ امن"] },
+  { canonical: "نفرتيتي", english: "Nefertiti", aliases: ["نفرتيتي", "نفرتيتى", "نفرتيت"] },
   { canonical: "خوفو", english: "Khufu / Cheops", aliases: ["خوفو", "خوفه"] },
   { canonical: "يوسف الصديق", english: "Joseph son of Jacob in the Bible", aliases: ["يوسف الصديق", "يوسف بن يعقوب", "جسد يوسف", "عظام يوسف"] },
+  { canonical: "أبو الهول", english: "Great Sphinx of Giza", aliases: ["ابو الهول", "أبو الهول", "ابوالهول", "ابو هول"] },
+  { canonical: "وادي الملوك", english: "Valley of the Kings", aliases: ["وادي الملوك", "وادى الملوك", "وادي الملك"] },
+  { canonical: "وادي الملكات", english: "Valley of the Queens", aliases: ["وادي الملكات", "وادى الملكات", "وادي الملكه"] },
+  { canonical: "الكرنك", english: "Karnak Temple Complex", aliases: ["الكرنك", "كرنك", "الكرانك"] },
+  { canonical: "دهشور", english: "Dahshur", aliases: ["دهشور", "دهشور"] },
+  { canonical: "تل العمارنة", english: "Tell el-Amarna / Amarna", aliases: ["تل العمارنه", "العمارنه", "تل العمارنة"] },
+  { canonical: "معبد فيلة", english: "Philae Temple", aliases: ["معبد فيله", "فيله", "فيلة"] },
+  { canonical: "معبد إدفو", english: "Edfu Temple", aliases: ["معبد ادفو", "ادفو", "إدفو"] },
+  { canonical: "أبيدوس", english: "Abydos", aliases: ["ابيدوس", "أبيدوس"] },
+  { canonical: "معبد دندرة", english: "Dendera Temple", aliases: ["دندره", "دندرة", "معبد دندره"] },
+  { canonical: "رمسيس الثاني", english: "Ramesses II", aliases: ["رمسيس الثاني", "رمسيس التاني", "رامسس التاني"] },
+  { canonical: "تحتمس الثالث", english: "Thutmose III", aliases: ["تحتمس الثالث", "تحتمس التالت", "تحت موس الثالث"] },
+  { canonical: "أمنحتب الثالث", english: "Amenhotep III", aliases: ["امنحتب الثالث", "امنحتب التالت", "أمنحتب الثالث"] },
+  { canonical: "أخناتون", english: "Akhenaten", aliases: ["اخناتون", "اخناتن", "أخناتون"] },
+  { canonical: "حتشبسوت", english: "Hatshepsut", aliases: ["حتشبسوت", "حتشبسوت"] },
+  { canonical: "سنفرو", english: "Sneferu", aliases: ["سنفرو", "سنفرا"] },
+  { canonical: "زوسر", english: "Djoser", aliases: ["زوسر", "زوزر"] },
 ];
-
 function normalizeForMatching(value: string): string {
   return value
     .toLocaleLowerCase()
@@ -163,11 +179,67 @@ export function describeTrustedSourcesForQuestion(question: string, limit = 8): 
   ].join("\n");
 }
 
+function hasOneEditDifference(first: string, second: string): boolean {
+  if (first === second) return true;
+  if (Math.abs(first.length - second.length) > 1) return false;
+  let left = 0;
+  let right = 0;
+  let edits = 0;
+  while (left < first.length && right < second.length) {
+    if (first[left] === second[right]) {
+      left += 1;
+      right += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (first.length > second.length) left += 1;
+    else if (second.length > first.length) right += 1;
+    else {
+      left += 1;
+      right += 1;
+    }
+  }
+  if (left < first.length || right < second.length) edits += 1;
+  return edits <= 1;
+}
+
+function matchesKnownAliasWithOneTypo(question: string, alias: string): boolean {
+  const questionWords = question.split(/\\s+/u);
+  const aliasWords = alias.split(/\\s+/u);
+  if (aliasWords.length > questionWords.length) return false;
+  for (let start = 0; start <= questionWords.length - aliasWords.length; start += 1) {
+    let hasCorrection = false;
+    let matches = true;
+    for (let index = 0; index < aliasWords.length; index += 1) {
+      const queryWord = questionWords[start + index] ?? "";
+      const aliasWord = aliasWords[index] ?? "";
+      if (queryWord === aliasWord) continue;
+      if (
+        queryWord.length >= 4 &&
+        aliasWord.length >= 4 &&
+        hasOneEditDifference(queryWord, aliasWord)
+      ) {
+        hasCorrection = true;
+        continue;
+      }
+      matches = false;
+      break;
+    }
+    if (matches && hasCorrection) return true;
+  }
+  return false;
+}
+
 export function correctKnownResearchEntities(question: string): Array<{ canonical: string; english: string; matched: string }> {
   const normalized = normalizeForMatching(question);
   const corrections: Array<{ canonical: string; english: string; matched: string }> = [];
   for (const entry of ENTITY_ALIASES) {
-    const match = entry.aliases.find((alias) => normalized.includes(normalizeForMatching(alias)));
+    const match = entry.aliases.find((alias) => {
+      const normalizedAlias = normalizeForMatching(alias);
+      return normalized.includes(normalizedAlias) ||
+        matchesKnownAliasWithOneTypo(normalized, normalizedAlias);
+    });
     if (match) corrections.push({ canonical: entry.canonical, english: entry.english, matched: match });
   }
   return corrections;
