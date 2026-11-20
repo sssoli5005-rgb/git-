@@ -1003,7 +1003,10 @@ export async function handleChatPost(
             ...groqToolResults.flatMap((result) => {
               const url = isSafeResearchUrl(result.url);
               const evidence = result.content ?? result.snippet ?? "";
-              return url && evidence.trim().length >= 40
+              // Browser-tool output is model supplied and is not page-verified.
+              // Open-web sources are accepted via the specialist pipeline,
+              // which fetches and records the destination page text.
+              return url && isTrustedResearchHost(url.hostname) && evidence.trim().length >= 40
                 ? [sourceFromTrustedUrl(url, result.title)]
                 : [];
             }),
