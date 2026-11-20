@@ -8,6 +8,23 @@ import {
 } from "./knowledge-base";
 
 describe("retrieveRelevantKnowledge", () => {
+  it("answers the Karnak question from the Egyptian Ministry reference", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "ايه الي موجود في الكرنك ؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("مجمع كبير على الضفة الشرقية للأقصر");
+    expect(answer.directAnswer).toContain("صالة الأعمدة الكبرى");
+    expect(answer.directAnswer).toContain("البحيرة المقدسة");
+    expect(answer.directAnswer).toContain("عيد الأوبت");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/karnak/",
+      }),
+    );
+  });
+
   it("answers the Luxor archaeological-sites question from reviewed sources", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "ايه الاماكن الاثريه الي الاقيها في الاقصر ؟" },

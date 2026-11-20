@@ -145,6 +145,38 @@ function createHeritageSearchFetcher(
 }
 
 describe("general research fallbacks", () => {
+  it("answers the Karnak question with verified sources when live search fails", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "No verified search result was available." },
+          }],
+        });
+      }
+      if (url.hostname.endsWith("wikipedia.org")) {
+        return Response.json({ query: { search: [] } });
+      }
+      return new Response("Temporarily unavailable", { status: 503 });
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("ايه الي موجود في الكرنك ؟"),
+      fetcher,
+      { CHAT_GROQ_API_KEY: "test-groq-key" },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("صالة الأعمدة الكبرى");
+    expect(body).toContain("البحيرة المقدسة");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://egymonuments.gov.eg/ar/archaeological-sites/karnak/");
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+  });
+
   it("answers the Luxor sites question from reviewed references when live search fails", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
@@ -186,7 +218,8 @@ describe("general research fallbacks", () => {
     expect(body).toContain("وادي الملوك ووادي الملكات");
     expect(body).toContain("معبد مدينة هابو");
     expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
-    expect(body).not.toContain("whc.unesco.org");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://whc.unesco.org/en/list/87/");
   });
 
   it("answers the Saint Catherine question from reviewed references when live search fails", async () => {
@@ -349,7 +382,8 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("أشعة تنتهي بأيدٍ");
     expect(body).toContain("اختلاف تصوير الإله المصري بين عصرين");
     expect(body).not.toContain("ماقدرتش أتحقق");
-    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/ideology.html");
     expect(body).not.toContain("كان آمون يُصوّر برأس ثور");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
       false,
@@ -435,8 +469,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("ارتباطًا دينيًا");
-    expect(body).not.toContain("المصادر:");
-    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
     expect(
       fetcher.mock.calls.some(([input]) =>
@@ -445,7 +479,7 @@ describe("handleChatPost hosted Groq provider", () => {
     ).toBe(true);
   });
 
-  it("searches trusted sources without showing citations unless requested", async () => {
+  it("includes trusted-source citations with factual heritage answers", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("سقارة جزء من جبانة منف القديمة.");
 
@@ -453,8 +487,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     const body = await response.text();
-    expect(body).not.toContain("المصادر:");
-    expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://whc.unesco.org/en/list/86/");
     const requestedUrls = fetcher.mock.calls.map(([url]) => String(url));
     expect(requestedUrls.some((url) => url.includes("whc.unesco.org"))).toBe(true);
     expect(requestedUrls.some((url) => url.includes("ucl.ac.uk"))).toBe(true);
@@ -502,7 +536,8 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("ارتباط الهيروغليفية بعقيدة المصري القديم يُفهم من سياق استخدامها");
     expect(body).not.toContain("عصر العمارنة");
     expect(body).not.toContain("الارتباط بالعقيدة يظهر في سياق النقوش الجنائزية");
-    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
   });
 
@@ -533,7 +568,8 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("توزيع الخبز والبيرة كحصص غذائية");
     expect(body).not.toContain("الرد توقف قبل أن يكتمل");
-    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("aeraweb.org/feeding-pyramid-workers/");
     expect(
       fetcher.mock.calls.filter(([input]) => String(input).includes("api.groq.com")),
     ).toHaveLength(1);
@@ -594,21 +630,22 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("شواهد من الأسرة الأولى");
     expect(body).not.toContain("الكتابة ساعدت في تسجيل الأسماء والألقاب");
     expect(body).not.toContain("رد غير موثق من Gemini");
-    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/administration/index.html");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
-  it("does not show source links for English heritage answers unless requested", async () => {
+  it("shows sources for English heritage answers too", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     const fetcher = createHeritageSearchFetcher("Saqqara is part of the Memphis necropolis.");
 
     const response = await handleChatPost(createChatRequest("What is in Saqqara?", "en"), fetcher);
 
     const body = await response.text();
-    expect(body).not.toContain("Sources:");
-    expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
+    expect(body).toContain("Sources:");
+    expect(body).toContain("https://whc.unesco.org/en/list/86/");
   });
 
   it("withholds an unverified heritage detail and offers a focused follow-up when no sources are available", async () => {
@@ -964,8 +1001,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("السياق الديني ظاهر");
-    expect(body).not.toContain("المصادر:");
-    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/writing/");
   });
 
   it("uses the current stable Gemini model when the primary is unavailable", async () => {
@@ -1390,9 +1427,9 @@ describe("handleChatPost Ollama stream handling", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("سقارة هي المقبرة الرئيسية لمدينة منف.");
-    expect(body).not.toContain("المصادر:");
-    expect(body).not.toContain("Digital Egypt");
-    expect(body).not.toContain(
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("Digital Egypt");
+    expect(body).toContain(
       "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
     );
     expect(
@@ -1802,8 +1839,8 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("الخروج 13:19");
     expect(body).toContain("يشوع 24:32");
     expect(body).toContain("شكيم");
-    expect(body).not.toContain("https://www.biblegateway.com/");
-    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("https://www.biblegateway.com/");
+    expect(body).toContain("المصادر:");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
@@ -2041,8 +2078,8 @@ describe("general web research across non-Egypt topics", () => {
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(body).toContain("لو تقصدي قصة باريس");
-    expect(body).not.toContain("المصادر:");
-    expect(body).not.toContain("britannica.com");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("britannica.com");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 

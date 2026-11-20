@@ -92,9 +92,7 @@ describe("Egypt Smart Guide conversation instructions", () => {
     expect(prompt).toContain(
       "distinguish established general knowledge from facts verified during this turn",
     );
-    expect(prompt).toContain(
-      "do not display or list source names, links, citations, or a sources section unless the user explicitly asks",
-    );
+    expect(prompt).toContain("include the verified source names and links used to support the answer");
   });
 
   it("explains archaeological terms and English spellings for first-time Arabic visitors", () => {

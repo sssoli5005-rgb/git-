@@ -13,6 +13,40 @@ import { correctKnownResearchEntities } from "./trusted-source-catalog";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
   {
+    id: "karnak-temple-complex",
+    title: "مجمع معابد الكرنك",
+    directResponse: true,
+    keywords: [
+      "الكرنك",
+      "معبد الكرنك",
+      "معبد آمون",
+      "صالة الأعمدة الكبرى",
+      "قاعة الأعمدة الكبرى",
+      "البحيرة المقدسة",
+      "ايه الي موجود في الكرنك",
+      "ماذا يوجد في الكرنك",
+      "ما الموجود في الكرنك",
+      "زيارة الكرنك",
+      "Karnak",
+      "Karnak Temple Complex",
+      "Great Hypostyle Hall",
+    ],
+    content:
+      "الكرنك مش معبد واحد؛ ده مجمع كبير على الضفة الشرقية للأقصر. أهم اللي هتشوفيه:\n- معبد آمون الكبير، وهو الجزء الرئيسي من المجمع.\n- صالة الأعمدة الكبرى، وفيها ١٣٤ عمودًا ضخمًا.\n- البحيرة المقدسة، اللي كان الكهنة بيتطهروا فيها قبل الطقوس.\n- معابد ومقاصير لموت ومونتو وخونسو، ومعبد «آخ منو» اللي بناه تحتمس الثالث.\n\nوكان معبد آمون في الكرنك متصلًا بمعبد الأقصر بطريق احتفالي مزين بتماثيل أبي الهول، وكان الطريق يُستخدم في عيد الأوبت. ملوك من عصور مختلفة أضافوا مباني للمجمع، فمش كله اتبنى في عهد ملك واحد.",
+    sources: [
+      {
+        title: "الكرنك",
+        organization: "وزارة السياحة والآثار المصرية",
+        url: "https://egymonuments.gov.eg/ar/archaeological-sites/karnak/",
+      },
+      {
+        title: "Ancient Thebes with its Necropolis",
+        organization: "UNESCO World Heritage Centre",
+        url: "https://whc.unesco.org/en/list/87/",
+      },
+    ],
+  },
+  {
     id: "luxor-archaeological-sites",
     title: "أبرز المواقع الأثرية في الأقصر",
     directResponse: true,

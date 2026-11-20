@@ -135,9 +135,9 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("only when supported by current verified information");
   });
 
-  it("shows sources only when the user explicitly asks for them", () => {
+  it("includes verified sources with factual answers", () => {
     expect(buildChatSystemInstruction("ar")).toContain(
-      "do not display or list source names, links, citations, or a sources section unless the user explicitly asks",
+      "For factual answers grounded in live search or curated knowledge, include the verified source names and links",
     );
   });
 

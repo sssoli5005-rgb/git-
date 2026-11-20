@@ -785,6 +785,7 @@ export async function handleChatPost(
   const heritageQuestion = isEgyptianHeritageQuery(parsed.data.messages);
   const latestQuestion = parsed.data.messages.at(-1)?.content ?? "";
   const liveResearchRequested = heritageQuestion || isLiveResearchRequest(latestQuestion);
+  const includeSources = wantsSources || liveResearchRequested;
   const generalResearchContext = liveResearchRequested
     ? [
         "MANDATORY THREE-STAGE VERIFIED RESEARCH — use Exa, Linkup, and Ceramic in parallel when the Cloudflare Web Search binding is available:",
@@ -799,8 +800,8 @@ export async function handleChatPost(
           "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " + correctKnownResearchEntities(latestQuestion).map((item) => item.matched + " → " + item.canonical + " (" + item.english + ")").join("; "),
           "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
         ] : []),
-        "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Keep source names and links hidden unless the user explicitly asks for sources.",
-        "SEARCH-FAILURE RECOVERY: Before saying a detail cannot be verified, use any directly relevant curated knowledge and verified references already supplied in the conversation context. If neither live results nor relevant curated knowledge support a factual answer, do not guess or finish with a generic source-unavailable refusal; state the specific limit briefly and ask one focused follow-up or offer a useful next step. Do not reveal source names or links unless the user asks.",
+        "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Do not answer from model memory alone. Build factual claims only from information actually retrieved during this turn. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For biblical or religious questions, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For disputed claims, compare independent sources. Do not invent a citation, link, source, date, or quotation. If the search returns no usable evidence, do not guess; say verification was unavailable. Include only source names and links that actually support the factual answer.",
+        "SEARCH-FAILURE RECOVERY: Before saying a detail cannot be verified, use any directly relevant curated knowledge and verified references already supplied in the conversation context. If neither live results nor relevant curated knowledge support a factual answer, do not guess or finish with a generic source-unavailable refusal; state the specific limit briefly and ask one focused follow-up or offer a useful next step. Include relevant verified references with factual answers; do not invent or expose unrelated links.",
       ].join("\n")
     : "";
 
@@ -875,7 +876,7 @@ export async function handleChatPost(
         sources.findIndex((candidate) => candidate.url === source.url) === index,
     )
     .slice(0, 8);
-  let responseSources = wantsSources ? knowledgeSources : [];
+  let responseSources = includeSources ? knowledgeSources : [];
   let verifiedTurnSources = [...searchedSources];
   if (
     parsed.data.language === "ar" &&
@@ -1024,7 +1025,7 @@ export async function handleChatPost(
           const hasGroqSearchEvidence = groqSearchSources.length > 0;
           if (requestsLiveResearch && hasGroqSearchEvidence) {
             verifiedTurnSources = mergeResearchSources(verifiedTurnSources, groqSearchSources);
-            if (wantsSources) responseSources = mergeResearchSources(responseSources, groqSearchSources);
+            if (includeSources) responseSources = mergeResearchSources(responseSources, groqSearchSources);
           }
           const canUseGroqResearchAnswer = !requestsLiveResearch || verifiedTurnSources.length > 0;
           if (choice?.finish_reason === "length") {
@@ -1213,7 +1214,7 @@ export async function handleChatPost(
               });
             if (geminiGroundedSources.length) {
               verifiedTurnSources = mergeResearchSources(verifiedTurnSources, geminiGroundedSources);
-              if (wantsSources) responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
+              if (includeSources) responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
             }
             if (!geminiGroundedSources.length) {
               console.warn("[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer", { model });
@@ -1413,7 +1414,7 @@ export async function handleChatPost(
         const sources = trustedSourcesFromOpenRouter(message ?? {});
         if (liveResearchRequested && sources.length) {
           verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
-          if (wantsSources) responseSources = mergeResearchSources(responseSources, sources);
+          if (includeSources) responseSources = mergeResearchSources(responseSources, sources);
         }
         const evidenceOk = !liveResearchRequested || sources.length > 0 || searchedSources.length > 0;
         const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
@@ -1446,7 +1447,7 @@ export async function handleChatPost(
     console.info("[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted");
     return asChatStream(
       localKnowledgeAnswer.content,
-      wantsSources ? localKnowledgeSources : [],
+      includeSources ? localKnowledgeSources : [],
       parsed.data.language,
     );
   }
@@ -1459,7 +1460,7 @@ export async function handleChatPost(
     console.info("[Chat] Using directly relevant curated knowledge with verified references after live search failed");
     return asChatStream(
       localKnowledgeAnswer.directAnswer,
-      wantsSources ? localKnowledgeSources : [],
+      includeSources ? localKnowledgeSources : [],
       parsed.data.language,
     );
   }
