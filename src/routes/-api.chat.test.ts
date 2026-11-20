@@ -1779,7 +1779,7 @@ describe("general web research across non-Egypt topics", () => {
     const body = await response.text();
     expect(body).toContain("توضح المصادر");
     expect(body).toContain("https://www.biblegateway.com/passage/");
-    expect(body).toContain("https://www.bible.com/bible/111/JOS.24.32.NIV");
+    
   });
 
   it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {

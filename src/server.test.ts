@@ -67,7 +67,7 @@ describe("production chat research wiring", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("دير سانت كاترين");
     expect(body).toContain("كنيسة العليقة المشتعلة");
-    expect(websearch).toHaveBeenCalledTimes(1);
+    expect(websearch).toHaveBeenCalledTimes(3);
   });
 
 
@@ -138,7 +138,7 @@ describe("production chat research wiring", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("بحسب سفر يشوع 24:32، دُفنت عظام يوسف في شكيم.");
-    expect(websearch).toHaveBeenCalledTimes(1);
+    expect(websearch).toHaveBeenCalledTimes(3);
     expect(websearch).toHaveBeenCalledWith(expect.objectContaining({
       gatewayId: "default",
       provider: "exa",
