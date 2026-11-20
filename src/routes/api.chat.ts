@@ -382,7 +382,7 @@ async function searchWithChatSpecialists(
         gatewayId: "default",
         query,
         provider,
-        limit: 6,
+        limit: 4,
       });
       if (!response.ok) {
         console.warn("[Chat research] Search provider returned an error", {
@@ -402,7 +402,7 @@ async function searchWithChatSpecialists(
           typeof item.url === "string" &&
           typeof (item.description ?? item.snippet) === "string",
         )
-        .slice(0, 6);
+        .slice(0, 4);
       return { provider, results };
     } catch (error) {
       console.warn("[Chat research] Search provider failed", {
