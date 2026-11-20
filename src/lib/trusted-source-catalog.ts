@@ -264,11 +264,10 @@ export function buildResearchSearchQuery(question: string, maxLength = 1024): st
   };
   const topics = inferResearchTopics(question);
   const guidance = [...new Set(topics)].map((topic) => topicHints[topic]).join("; ");
-  const domains = getPreferredResearchDomains(question, 4);
   return [
     question.trim(),
     ...entityHints,
-    `Research evidence preferences: ${guidance}`,
-    `Preferred source domains: ${domains.map((domain) => `site:${domain}`).join(" OR ")}`,
+    `Research evidence preferences (ranking guidance only; search the entire public web): ${guidance}`,
+    "Do not restrict results to a fixed domain list. Include relevant specialist publications, official sources, universities, archives, museums, journals, and other credible sources wherever they are hosted.",
   ].filter(Boolean).join(" ").slice(0, maxLength);
 }

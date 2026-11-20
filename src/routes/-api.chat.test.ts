@@ -2139,4 +2139,62 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+
+  it("accepts relevant public-web research results outside the curated source directory", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-only-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    const openWebUrl = "https://www.nationalgeographic.com/history/article/ark-of-the-covenant";
+    const searchBinding = {
+      websearch: vi.fn(async ({ provider }: { provider: "exa" | "linkup" | "ceramic" }) =>
+        provider === "exa"
+          ? Response.json({
+              items: [{
+                title: "The Ark of the Covenant: historical evidence",
+                url: openWebUrl,
+                description: "A detailed historical overview discussing the Ark of the Covenant, the biblical accounts, the Babylonian destruction of Jerusalem, and the limits of archaeological evidence available to researchers.",
+              }],
+            })
+          : Response.json({ items: [] }),
+      ),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "www.nationalgeographic.com") {
+        return new Response(
+          "<html><body><main>" +
+          "The Ark of the Covenant is described in biblical texts as a sacred chest. " +
+          "Historical accounts connect the loss of the First Temple treasures with the Babylonian capture of Jerusalem. " +
+          "No archaeological discovery has conclusively established the Ark's present location. " +
+          "Scholars distinguish the biblical narrative from later traditions about its fate and location." +
+          "</main></body></html>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] };
+        expect(payload.messages[0]?.content).toContain("No archaeological discovery");
+        expect(payload.messages[0]?.content).toContain(openWebUrl);
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content: "لا يوجد تاريخ مؤكد لاختفاء تابوت العهد، ولا يوجد دليل أثري حاسم يحدد مكانه الحالي.",
+            },
+          }],
+        });
+      }
+      throw new Error("Unexpected request to " + url.hostname);
+    });
+    const response = await handleChatPost(
+      createChatRequest("متى اختفى تابوت العهد؟ مع المصادر"),
+      fetcher,
+      { CHAT_GROQ_API_KEY: "chat-only-groq-key", CHAT_WEB_SEARCH: searchBinding },
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("لا يوجد تاريخ مؤكد");
+    expect(body).toContain(openWebUrl);
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
+
 });
