@@ -692,12 +692,17 @@ export async function handleChatPost(
                     content?: string;
                     snippet?: string;
                   }>;
-                  search_results?: Array<{
+                  search_results?: {
+                    results?: Array<{
+                      title?: string;
+                      url?: string;
+                      content?: string;
+                    }>;
+                  } | Array<{
                     title?: string;
                     url?: string;
                     content?: string;
-                    snippet?: string;
-                  }>;
+                  }> | null;
                 }>;
                 annotations?: Array<{
                   type?: string;
@@ -714,7 +719,12 @@ export async function handleChatPost(
           // response shape. Accept only HTTPS URLs on the trusted-source allowlist;
           // don't require the model to manufacture our private marker format.
           const groqToolResults = (choice?.message?.executed_tools ?? [])
-            .flatMap((tool) => [...(tool.browser_results ?? []), ...(tool.search_results ?? [])]);
+            .flatMap((tool) => {
+              const nestedSearchResults = Array.isArray(tool.search_results)
+                ? tool.search_results
+                : tool.search_results?.results ?? [];
+              return [...(tool.browser_results ?? []), ...nestedSearchResults];
+            });
           const groqBrowserSources = [
             ...groqToolResults.flatMap((result) => {
               const url = isTrustedResearchUrl(result.url);
