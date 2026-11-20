@@ -61,7 +61,7 @@ export default {
       const runtimeEnv = env && typeof env === "object"
         ? env as Record<string, unknown>
         : {};
-      const chatEnv: Record<string, string | undefined> = {};
+      const chatEnv: Record<string, unknown> = {};
       for (const key of [
         "CHAT_GROQ_API_KEY",
         "CHAT_GROQ_MODEL",
@@ -74,6 +74,27 @@ export default {
         "NODE_ENV",
       ]) {
         if (typeof runtimeEnv[key] === "string") chatEnv[key] = runtimeEnv[key] as string;
+      }
+      // Chat gets its own search adapter. It uses only the dedicated CHAT_WEB_SEARCH
+      // interface and never receives scanner credentials, scanner results, or AI models.
+      const chatAiBinding = runtimeEnv.AI;
+      if (
+        chatAiBinding &&
+        typeof chatAiBinding === "object" &&
+        "websearch" in chatAiBinding &&
+        typeof (chatAiBinding as { websearch?: unknown }).websearch === "function"
+      ) {
+        chatEnv.CHAT_WEB_SEARCH = {
+          websearch: (input: {
+            gatewayId: string;
+            query: string;
+            provider: "exa" | "linkup" | "ceramic";
+            limit: number;
+          }) =>
+            (chatAiBinding as {
+              websearch: (args: typeof input) => Promise<Response>;
+            }).websearch(input),
+        };
       }
       try {
         // Never pass the scanner's Cloudflare AI binding or scanner credentials to chat.
