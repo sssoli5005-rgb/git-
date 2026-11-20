@@ -363,11 +363,17 @@ function buildSpecialistSearchQuery(question: string): string {
 }
 
 function extractReadableResearchText(html: string): string {
-  return normalizeEvidenceText(
-    html
-      .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/giu, " ")
-      .replace(/<[^>]*>/gu, " "),
-  );
+  return html
+    .replace(/<(script|style|noscript|svg|nav|header|footer|form)\b[\s\S]*?<\/\1>/giu, " ")
+    .replace(/<[^>]*>/gu, " ")
+    .replace(/&nbsp;|&#160;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&#39;|&apos;/giu, "'")
+    .replace(/&quot;/giu, '"')
+    .replace(/&#x([0-9a-f]{1,6});/giu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#([0-9]{1,7});/gu, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 async function searchWithChatSpecialists(
