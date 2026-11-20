@@ -1948,6 +1948,65 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("uses independent specialist search providers and verified Bible sources before generating the Yusuf answer", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-only-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "");
+    const specialistProviders: string[] = [];
+    const searchBinding = {
+      websearch: vi.fn(async ({ provider, query }: { provider: "exa" | "linkup" | "ceramic"; query: string }) => {
+        specialistProviders.push(provider);
+        expect(query).toContain("Joshua 24:32");
+        if (provider === "exa") return new Response("search unavailable", { status: 503 });
+        if (provider === "linkup") return Response.json({
+          items: [{
+            title: "Joshua 24:32 — Bible text",
+            url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+            description: "Joshua 24:32 records the burial of Joseph's bones at Shechem.",
+          }],
+        });
+        throw new Error("Ceramic should not be needed after Linkup succeeds.");
+      }),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "www.biblegateway.com") {
+        return new Response(
+          "<html><head><title>Joshua 24:32</title></head><body><main>" +
+          "The bones of Joseph, which the Israelites had brought up from Egypt, were buried at Shechem, " +
+          "in the piece of ground that Jacob had bought from the children of Hamor, the father of Shechem, " +
+          "for one hundred pieces of money. It became an inheritance of the descendants of Joseph. " +
+          "This passage is the scriptural account of the burial place named in the book of Joshua." +
+          "</main></body></html>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] };
+        expect(payload.messages[0]?.content).toContain("The bones of Joseph");
+        expect(payload.messages[0]?.content).toContain("SOURCE 1:");
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "بحسب سفر يشوع 24:32، دُفنت عظام يوسف في شكيم." },
+          }],
+        });
+      }
+      throw new Error("Unexpected request to " + url.hostname);
+    });
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
+      fetcher,
+      { CHAT_GROQ_API_KEY: "chat-only-groq-key", CHAT_WEB_SEARCH: searchBinding },
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(specialistProviders).toEqual(["exa", "linkup"]);
+    expect(body).toContain("دُفنت عظام يوسف في شكيم");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.biblegateway.com/passage/");
+  });
+
   it("keeps personal advice conversational instead of forcing web search", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
