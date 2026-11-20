@@ -676,7 +676,18 @@ export async function handleChatPost(
                     title?: string;
                     url?: string;
                     content?: string;
+                    snippet?: string;
                   }>;
+                  search_results?: Array<{
+                    title?: string;
+                    url?: string;
+                    content?: string;
+                    snippet?: string;
+                  }>;
+                }>;
+                annotations?: Array<{
+                  type?: string;
+                  url_citation?: { url?: string; title?: string; content?: string };
                 }>;
               };
             }>;
@@ -685,21 +696,25 @@ export async function handleChatPost(
           const rawAnswer = choice?.message?.content?.trim() ?? "";
           const parsedGroqAnswer = parseGroqSearchCitations(rawAnswer);
           const answer = parsedGroqAnswer.answer;
-          const groqBrowserResults = (choice?.message?.executed_tools ?? [])
-            .flatMap((tool) => tool.browser_results ?? [])
-            .filter((result) => {
-              if (typeof result.url !== "string" || typeof result.title !== "string") return false;
-              if (typeof result.content !== "string" || result.content.trim().length < 40) return false;
-              try {
-                return new URL(result.url).protocol === "https:";
-              } catch {
-                return false;
-              }
-            });
-          const groqBrowserSources = groqBrowserResults.flatMap((result) => {
-            const url = isTrustedResearchUrl(result.url);
-            return url ? [sourceFromTrustedUrl(url, result.title)] : [];
-          });
+          // Search providers expose citations in more than one OpenAI-compatible
+          // response shape. Accept only HTTPS URLs on the trusted-source allowlist;
+          // don't require the model to manufacture our private marker format.
+          const groqToolResults = (choice?.message?.executed_tools ?? [])
+            .flatMap((tool) => [...(tool.browser_results ?? []), ...(tool.search_results ?? [])]);
+          const groqBrowserSources = [
+            ...groqToolResults.flatMap((result) => {
+              const url = isTrustedResearchUrl(result.url);
+              const evidence = result.content ?? result.snippet ?? "";
+              return url && evidence.trim().length >= 40
+                ? [sourceFromTrustedUrl(url, result.title)]
+                : [];
+            }),
+            ...trustedSourcesFromOpenRouter({
+              annotations: choice?.message?.annotations ?? [],
+            }),
+          ].filter((source, index, all) =>
+            all.findIndex((candidate) => candidate.url === source.url) === index
+          );
           const verifiedContentCitations = requestsLiveResearch
             ? await verifyGroqSearchCitations(parsedGroqAnswer.citations, fetcher, request.signal)
             : [];
