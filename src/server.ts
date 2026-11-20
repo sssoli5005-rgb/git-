@@ -61,7 +61,7 @@ export default {
       const runtimeEnv = env && typeof env === "object"
         ? env as Record<string, unknown>
         : {};
-      const chatEnv: Record<string, string | undefined> = {};
+      const chatEnv: Record<string, unknown> = {};
       for (const key of [
         "CHAT_GROQ_API_KEY",
         "CHAT_GROQ_MODEL",
