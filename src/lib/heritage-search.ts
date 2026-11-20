@@ -368,7 +368,7 @@ function normalizeSearchText(value: string): string {
 function matchesHeritageQuery(value: string): boolean {
   const normalized = normalizeSearchText(value);
   return (
-    HERITAGE_QUERY_TERMS.some((term) => normalized.includes(term)) ||
+    HERITAGE_QUERY_TERMS.some((term) => normalized.includes(normalizeSearchText(term))) ||
     /(?:^|\s)رع(?:\s|$)/u.test(normalized)
   );
 }
