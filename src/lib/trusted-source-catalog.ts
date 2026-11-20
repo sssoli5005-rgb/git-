@@ -205,8 +205,8 @@ function hasOneEditDifference(first: string, second: string): boolean {
 }
 
 function matchesKnownAliasWithOneTypo(question: string, alias: string): boolean {
-  const questionWords = question.split(/\\s+/u);
-  const aliasWords = alias.split(/\\s+/u);
+  const questionWords = question.split(/\s+/u);
+  const aliasWords = alias.split(/\s+/u);
   if (aliasWords.length > questionWords.length) return false;
   for (let start = 0; start <= questionWords.length - aliasWords.length; start += 1) {
     let hasCorrection = false;
