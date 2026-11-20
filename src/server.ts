@@ -75,6 +75,20 @@ export default {
       ]) {
         if (typeof runtimeEnv[key] === "string") chatEnv[key] = runtimeEnv[key] as string;
       }
+      // Chat gets its own search adapter. It uses only the dedicated CHAT_WEB_SEARCH
+      // interface and never receives scanner credentials, scanner results, or AI models.
+      const chatAiBinding = runtimeEnv.AI;
+      if (
+        chatAiBinding &&
+        typeof chatAiBinding === "object" &&
+        "websearch" in chatAiBinding &&
+        typeof (chatAiBinding as { websearch?: unknown }).websearch === "function"
+      ) {
+        chatEnv.CHAT_WEB_SEARCH = {
+          websearch: (input) =>
+            (chatAiBinding as { websearch: (args: typeof input) => Promise<Response> }).websearch(input),
+        };
+      }
       try {
         // Never pass the scanner's Cloudflare AI binding or scanner credentials to chat.
         return await handleChatPost(request, fetch, chatEnv);
