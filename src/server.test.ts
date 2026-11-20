@@ -62,7 +62,7 @@ describe("production chat research wiring", () => {
       },
       body: JSON.stringify({
         language: "ar",
-        messages: [{ role: "user", content: "أين جسد يوسف الصديق؟" }],
+        messages: [{ role: "user", content: "ماذا يقول سفر يشوع 24:32 عن مكان دفن العظام؟" }],
       }),
     });
     const response = await server.fetch(
@@ -76,7 +76,7 @@ describe("production chat research wiring", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("دُفنت عظام يوسف في شكيم");
+    expect(body).toContain("بحسب سفر يشوع 24:32، دُفنت عظام يوسف في شكيم.");
     expect(websearch).toHaveBeenCalledTimes(1);
     expect(websearch).toHaveBeenCalledWith(expect.objectContaining({
       gatewayId: "default",
