@@ -25,6 +25,7 @@ import {
   formatHeritageSearchContext,
   isDiscoveryResearchQuestion,
   isEgyptianHeritageQuery,
+  isPyramidDiscoveryQuestion,
   searchTrustedEgyptianHeritage,
 } from "@/lib/heritage-search";
 
@@ -381,12 +382,8 @@ type ChatWebSearchResult = {
 function buildSpecialistSearchQuery(question: string): string {
   const normalized = normalizeResearchQuery(question);
   const directoryQuery = buildResearchSearchQuery(question);
-  if (isDiscoveryResearchQuestion(question)) {
-    const pyramidContext =
-      /(?:اهرام|هرم|pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|пирамид|пирамида|ピラミッド|ギザ|サッカラ|金字塔)/u.test(normalized)
-      ? "pyramids Giza Saqqara"
-      : "Egyptian archaeology";
-    return `${directoryQuery} Egypt recent archaeological discovery research ${pyramidContext}`.slice(0, 1024);
+  if (isPyramidDiscoveryQuestion(question)) {
+    return `${directoryQuery} Egypt recent archaeological discovery research pyramids Giza Saqqara`.slice(0, 1024);
   }
   if (/(?:يوسف|joseph|shechem|شكيم)/u.test(normalized)) {
     return (directoryQuery + " Genesis 50:25-26 Exodus 13:19 Joshua 24:32 exact Bible passages Shechem Joseph bones").slice(0, 1024);
@@ -395,7 +392,7 @@ function buildSpecialistSearchQuery(question: string): string {
 }
 
 function isRelevantDiscoverySearchResult(question: string, title: string, excerpt: string): boolean {
-  if (!isDiscoveryResearchQuestion(question)) return true;
+  if (!isPyramidDiscoveryQuestion(question)) return true;
   const resultText = normalizeResearchQuery(`${title} ${excerpt}`);
   const mentionsTarget =
     /(?:pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|اهرام|هرم|جيزه|سقاره|пирамид|ピラミッド|ギザ|サッカラ|金字塔)/u.test(resultText);
@@ -1472,7 +1469,7 @@ export async function handleChatPost(
   ) {
     console.info("[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted");
     return asChatStream(
-      isDiscoveryResearchQuestion(latestQuestion)
+      isPyramidDiscoveryQuestion(latestQuestion)
         ? pyramidDiscoveryFallbackCopy[parsed.data.language]
         : localKnowledgeAnswer.content,
       includeSources ? localKnowledgeSources : [],

@@ -11,7 +11,7 @@ export type KnowledgeEntry = {
 import { HERITAGE_FACTS } from "./heritage-facts";
 import { isSourceRequest } from "./source-request";
 import { correctKnownResearchEntities } from "./trusted-source-catalog";
-import { isDiscoveryResearchQuestion } from "./heritage-search";
+import { isPyramidDiscoveryQuestion } from "./heritage-search";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
   {
@@ -500,6 +500,7 @@ const KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: "djoser-step-pyramid-source",
     title: "هرم زوسر المدرج في سقارة",
+    directResponse: true,
     keywords: [
       "هرم زوسر",
       "هرم جوسر",
@@ -507,17 +508,69 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "زوسر",
       "جوسر",
       "إيمحتب",
+      "إمحوتب",
+      "إمحوتب مهندس هرم زوسر",
+      "دليل إمحوتب",
+      "Imhotep",
       "سقارة",
       "Djoser",
       "Step Pyramid",
+      "architect of Djoser",
     ],
     content:
-      "تصف اليونسكو هرم زوسر المدرج في سقارة بأنه أول هرم بُني، وتصف مجمعه بأنه يضم أول مبنى حجري ضخم في التاريخ المصري. لا تخلط بين أقدم هرم وأقدم بناء حجري على الإطلاق، ولا تضف تاريخًا دقيقًا أو تفاصيل عن إيمحتب إلا إذا كان لها مصدر مستقل موثوق.",
+      "هرم زوسر المدرج في سقارة هو أقدم هرم معروف، لكنه ليس أقدم بناء حجري من أي نوع. تذكر وزارة السياحة والآثار المصرية أن الهرم بُني في عهد زوسر نحو 2686–2667 قبل الميلاد، وتصف اليونسكو مجمعه بأنه من أوائل المنشآت الحجرية الضخمة. يُنسب تصميم الهرم تقليديًا إلى إمحوتب، لكن المصدرين الرسميين هنا يثبتان الهرم وعهده ولا يقدمان وحدهما دليلًا وثائقيًا مباشرًا على أنه المهندس؛ لذلك ينبغي عرض النسبة بوصفها إسنادًا تاريخيًا لا حقيقة مثبتة بهذين المصدرين.",
     sources: [
+      {
+        title: "Saqqara",
+        organization: "Egyptian Ministry of Tourism and Antiquities",
+        url: "https://egymonuments.gov.eg/en/archaeological-sites/saqqara/",
+      },
       {
         title: "Memphis and its Necropolis",
         organization: "UNESCO World Heritage Centre",
         url: "https://whc.unesco.org/en/list/86/",
+      },
+      {
+        title: "Imhotep",
+        organization: "Encyclopaedia Britannica",
+        url: "https://www.britannica.com/biography/Imhotep",
+      },
+    ],
+  },
+  {
+    id: "akhenaten-atenism-evidence",
+    title: "إخناتون وعبادة آتون والأدلة من العمارنة",
+    directResponse: true,
+    keywords: [
+      "إخناتون",
+      "أخناتون",
+      "اخناتون",
+      "أخناتن",
+      "إخناتن",
+      "تل العمارنة",
+      "العمارنة",
+      "عبادة آتون",
+      "توحيد إخناتون",
+      "اخناتون والتوحيد",
+      "دليل التوحيد في العمارنة",
+      "Akhenaten",
+      "Amarna",
+      "Atenism",
+      "Akhenaten monotheism",
+      "Great Hymn to the Aten",
+    ],
+    content:
+      "الأدلة من العمارنة تُظهر أن إخناتون جعل آتون محور العبادة الملكية، وأسّس عاصمة آخت آتون، وأن ترانيم آتون الملكية استبعدت ذكر معبودات أخرى؛ كما تسجل جامعة لندن محو أسماء وصور آمون عن آثار متاحة في مصر والنوبة. هذه قرائن قوية على إصلاح ديني ملكي حصري وسياسة ضد عبادة آمون، لكنها لا تثبت وحدها أن كل سكان مصر تبنوا توحيدًا بالمعنى الحديث أو أن الممارسة الشعبية كانت واحدة. لذلك الأدق وصفها بعبادة آتون الحصرية في البلاط والدولة، مع اعتبار تصنيفها «توحيدًا» أو «توحيد ملكي» تفسيرًا أكاديميًا يحتاج تعريفًا، لا حقيقة بسيطة متفقًا عليها.",
+    sources: [
+      {
+        title: "Belief in one god in ancient Egypt: The solitary sun-god in the reign of king Akhenaten",
+        organization: "University College London",
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/belief.html",
+      },
+      {
+        title: "Akhenaten (Amenhotep IV)",
+        organization: "University College London",
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/chronology/akhnaton.html",
       },
     ],
   },
@@ -1066,17 +1119,34 @@ const KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: "hieroglyphic-rosetta-stone",
     title: "حجر رشيد وفك رموز الهيروغليفية",
+    directResponse: true,
     keywords: [
       "حجر رشيد",
+      "العثور على حجر رشيد",
       "شامبليون",
       "فك الشفرة",
       "فك الهيروغليفية",
       "توماس يونغ",
       "الكتابة اليونانية",
       "الديموطيقية",
+      "Rosetta Stone",
+      "Thomas Young",
+      "Champollion",
     ],
     content:
       "حجر رشيد لوح يحمل نسخًا متقابلة من مرسوم ملكي صدر في عهد بطليموس الخامس، مكتوبة بالهيروغليفية والديموطيقية واليونانية القديمة. النسخ الثلاث تنقل المرسوم نفسه عمومًا، لكنها مش بالضرورة متطابقة حرفيًا؛ لذلك الأدق وصفها بنصوص متوازية لا بثلاث نسخ حرفية متطابقة. اكتُشف الحجر سنة 1799 خلال الحملة الفرنسية، وساعد النص اليوناني المقروء الباحثين على مقارنة النصوص وفهم الكتابتين المصريتين. قبل شامبليون، ساهم توماس يونج في دراسة الديموطيقية والتعرف على قيم صوتية لبعض العلامات الهيروغليفية، خصوصًا في أسماء ملكية؛ ثم قدّم شامبليون اختراقًا أوسع في فك الهيروغليفية سنة 1822، مستفيدًا من أبحاث سابقة ومن معرفته باللغة القبطية. الحجر موجود حاليًا في المتحف البريطاني بلندن. لازم نفرّق بين اكتشاف الحجر سنة 1799 وبين إسهامات الباحثين المتتابعة وإعلان شامبليون سنة 1822.",
+    sources: [
+      {
+        title: "The Rosetta Stone",
+        organization: "The British Museum",
+        url: "https://www.britishmuseum.org/collection/object/Y_EA24",
+      },
+      {
+        title: "Writing in Egypt",
+        organization: "University College London",
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/writing/index.html",
+      },
+    ],
   },
   {
     id: "hieroglyphic-name-transliteration-limits",
@@ -1330,20 +1400,38 @@ const KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: "tutankhamun-hidden-chamber-theory",
     title: "فرضية الغرف الخفية في مقبرة توت عنخ آمون",
+    directResponse: true,
     keywords: [
       "غرف سرية مقبرة توت عنخ امون",
       "غرفة سرية وراء مقبرة توت",
       "غرفة مخفية وراء مقبرة توت",
+      "غرفة خفية خلف الجدار الشمالي",
+      "غرفة خفية في مقبرة توت عنخ آمون",
       "غرفة نفرتيتي خلف مقبرة توت",
       "نفرتيتي خلف جدار توت",
       "نيكولاس ريفز",
       "رادار مقبرة توت",
       "غرف مخفية توت عنخ آمون",
       "ممر سري مقبرة توت",
+      "مقبرة توت عنخ آمون KV62",
+      "إعادة ختم مقبرة توت",
+      "أختام مقبرة توت",
+      "Tutankhamun KV62",
+      "hidden chambers adjacent to Tutankhamun's tomb",
     ],
     content:
-      "اقترح نيكولاس ريفز سنة 2015 احتمال وجود فراغات خلف جدران مقبرة توت عنخ آمون، وربطها بفرضية دفن نفرتيتي؛ كانت فرضية مبنية على قراءة زخارف الجدار وليست اكتشافًا لمدفن. أعطت مسوحات الرادار نتائج متباينة، ونشرت دراسة المسح الثالث سنة 2019 ولم تجد دليلًا جيوفيزيائيًا على غرف مجاورة. الأدق أن نقول إن وجود غرفة مخفية لم يثبت، لا إن جميع المسوحات أثبتت يقينًا استحالة وجود أي فراغ أو إن الجدار «صخري مصمت» قطعًا. ولم يُعثر على مقبرة نفرتيتي في الموقع.",
+      "سجّل معهد غريفيث أن هوارد كارتر وجد أول درجات المقبرة في 4 نوفمبر 1922، وكتب في 5 نوفمبر أنه عثر على الأختام سليمة؛ كما يوثق الأرشيف مداخل مسدودة وانطباعات أختام. هذا يثبت حالة الإغلاق المسجلة عند الكشف، لكنه لا يكفي وحده لإثبات متى حدثت أي زيارة أقدم أو إعادة ختم. أما الغرف الخفية، فاقترح نيكولاس ريفز سنة 2015 فراغات خلف الجدران وربطها بفرضية دفن نفرتيتي؛ كانت فرضية لا اكتشافًا. اختلفت نتائج الرادار، ولم تجد دراسة المسح الثالث المنشورة سنة 2019 دليلًا جيوفيزيائيًا على غرف مجاورة. الأدق القول إن وجود غرفة مخفية لم يثبت، لا أن جميع المسوحات أثبتت يقينًا استحالة أي فراغ.",
     sources: [
+      {
+        title: "Excavation journals and diaries made by Howard Carter and Arthur Mace",
+        organization: "The Griffith Institute, University of Oxford",
+        url: "https://www.griffith.ox.ac.uk/discoveringTut/journals-and-diaries/",
+      },
+      {
+        title: "First doorway — blocking, sealing, and impressions of seals",
+        organization: "The Griffith Institute, University of Oxford",
+        url: "https://www.griffith.ox.ac.uk/gri/carter/004.html",
+      },
       {
         title:
           "The third KV62 radar scan: Searching for hidden chambers adjacent to Tutankhamun's tomb",
@@ -1442,13 +1530,7 @@ function getRelevantEntries(
   const userMessages = messages.filter((message) => message.role === "user");
   const latest = userMessages.at(-1)?.content ?? "";
   const previous = userMessages.at(-2)?.content ?? "";
-  const discoveryQuestion = isDiscoveryResearchQuestion(latest);
-  const pyramidDiscoveryQuestion =
-    discoveryQuestion &&
-    /(?:اهرام|هرم|جيزه|سقاره|pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|пирамид|ピラミッド|ギザ|サッカラ|金字塔)/iu.test(
-      normalize(latest),
-    );
-  if (discoveryQuestion && !pyramidDiscoveryQuestion) return [];
+  const pyramidDiscoveryQuestion = isPyramidDiscoveryQuestion(latest);
   const sourceRequest = isSourceRequest(latest);
   const rawQuery =
     isContextualFollowUp(latest, previous) || sourceRequest
@@ -1461,7 +1543,7 @@ function getRelevantEntries(
   ].join(" "));
   if (!query) return [];
   const candidateEntries = KNOWLEDGE.filter((entry) =>
-    discoveryQuestion ? entry.discoveryResearch === true : entry.discoveryResearch !== true,
+    pyramidDiscoveryQuestion ? entry.discoveryResearch === true : entry.discoveryResearch !== true,
   );
 
   if (query.includes("الهيروغليفية المصرية")) {

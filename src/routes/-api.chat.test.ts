@@ -902,6 +902,53 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    {
+      question: "حجر رشيد: ما تاريخه وسياق العثور عليه؟ وما دور توماس يونج وشامبليون؟",
+      expected: "اكتُشف الحجر سنة 1799",
+      source: "https://www.britishmuseum.org/collection/object/Y_EA24",
+    },
+    {
+      question: "مقبرة توت عنخ آمون KV62: هل ثبت وجود غرفة خفية خلف الجدار الشمالي؟",
+      expected: "وجود غرفة مخفية لم يثبت",
+      source: "https://www.griffith.ox.ac.uk/discoveringTut/journals-and-diaries/",
+    },
+    {
+      question: "هل إصلاح إخناتون يثبت أنه فرض التوحيد بالمعنى الحديث؟ ناقش الأدلة من العمارنة.",
+      expected: "لا تثبت وحدها أن كل سكان مصر تبنوا توحيدًا",
+      source: "https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/belief.html",
+    },
+    {
+      question: "ما الدليل الذي يربط إمحوتب بمشروع هرم زوسر؟",
+      expected: "يُنسب تصميم الهرم تقليديًا إلى إمحوتب",
+      source: "https://egymonuments.gov.eg/en/archaeological-sites/saqqara/",
+    },
+  ])("answers the reviewed $question question instead of refusing when live pages are unavailable", async ({
+    question,
+    expected,
+    source,
+  }) => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      new Response("temporarily unavailable", { status: 503 }),
+    );
+
+    const response = await handleChatPost(
+      createChatRequest(question, "ar"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(expected);
+    expect(body).toContain(source);
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+  });
+
   it("withholds an unverified heritage detail and offers a focused follow-up when no sources are available", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");

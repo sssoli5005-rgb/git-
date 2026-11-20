@@ -43,6 +43,19 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("retrieves the reviewed discovery answer for a Japanese question", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "ギザとサッカラのピラミッドで最近発見されたものはありますか？" },
+    ], 1);
+
+    expect(answer.content).toContain("طوله نحو 9 أمتار");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://www.nature.com/articles/s41467-023-36351-0",
+      }),
+    );
+  });
+
   it("does not inject discovery fallback facts into ordinary pyramid questions", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "How were the pyramids built?" },
@@ -70,6 +83,76 @@ describe("retrieveRelevantKnowledge", () => {
     ]);
 
     expect(answer.content).toBe("");
+  });
+
+  it("keeps Rosetta knowledge available when the question mentions a discovery", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content:
+          "حجر رشيد: ما تاريخه وسياق العثور عليه؟ وما دور توماس يونج وشامبليون؟",
+      },
+    ]);
+
+    expect(answer.content).toContain("نسخًا متقابلة من مرسوم ملكي");
+    expect(answer.content).toContain("توماس يونج");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({ url: "https://www.britishmuseum.org/collection/object/Y_EA24" }),
+    );
+  });
+
+  it("retrieves the Tutankhamun chamber evidence for a question phrased as a discovery", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content:
+          "هل ثبت وجود غرفة خفية خلف الجدار الشمالي في مقبرة توت عنخ آمون KV62؟",
+      },
+    ]);
+
+    expect(answer.content).toContain("ولم تجد دراسة المسح الثالث المنشورة سنة 2019 دليلًا جيوفيزيائيًا");
+    expect(answer.content).toContain("عثر على الأختام سليمة");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://www.griffith.ox.ac.uk/discoveringTut/journals-and-diaries/",
+      }),
+    );
+  });
+
+  it("answers the Akhenaten evidence question from the reviewed Amarna references", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content:
+          "هل إصلاح إخناتون يثبت أنه فرض التوحيد بالمعنى الحديث؟ ناقش الأدلة من نقوش العمارنة.",
+      },
+    ]);
+
+    expect(answer.directAnswer).toContain("لا تثبت وحدها أن كل سكان مصر تبنوا توحيدًا");
+    expect(answer.directAnswer).toContain("محو أسماء وصور آمون");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/belief.html",
+      }),
+    );
+  });
+
+  it("answers the Imhotep part of a detailed Djoser question instead of only summarizing mastabas", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content:
+          "هل يُعد هرم زوسر أقدم هرم حجري كامل أم أقدم مبنى حجري كبير؟ ما الفرق بين الهرم المدرج والمقبرة المصطبة، وما الدليل الذي يربط إمحوتب بالمشروع؟",
+      },
+    ]);
+
+    expect(answer.directAnswer).toContain("يُنسب تصميم الهرم تقليديًا إلى إمحوتب");
+    expect(answer.directAnswer).toContain("لا يقدمان وحدهما دليلًا وثائقيًا مباشرًا");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        url: "https://egymonuments.gov.eg/en/archaeological-sites/saqqara/",
+      }),
+    );
   });
 
   it("answers who built the Great Hypostyle Hall and distinguishes its construction phases", () => {

@@ -12,6 +12,7 @@ const TRUSTED_DOMAINS = [
   "whc.unesco.org",
   "egymonuments.gov.eg",
   "ucl.ac.uk",
+  "griffith.ox.ac.uk",
   "metmuseum.org",
   "britishmuseum.org",
   "penn.museum",
@@ -28,12 +29,14 @@ const TRUSTED_DOMAINS = [
   "oi.uchicago.edu",
   "thebanmappingproject.com",
   "nature.com",
+  "britannica.com",
 ] as const;
 
 const SOURCE_PRIORITY = [
   "egymonuments.gov.eg",
   "whc.unesco.org",
   "ucl.ac.uk",
+  "griffith.ox.ac.uk",
   "metmuseum.org",
   "britishmuseum.org",
   "penn.museum",
@@ -42,6 +45,7 @@ const SOURCE_PRIORITY = [
   "isac.uchicago.edu",
   "thebanmappingproject.com",
   "nature.com",
+  "britannica.com",
 ] as const;
 
 const HERITAGE_QUERY_TERMS = [
@@ -86,6 +90,19 @@ const HERITAGE_QUERY_TERMS = [
   "ابيدوس",
   "منف",
   "هيروغليف",
+  "حجر رشيد",
+  "ros etta",
+  "rosetta stone",
+  "اخناتون",
+  "akhenaten",
+  "العمارنه",
+  "amarna",
+  "kv62",
+  "tutankhamun",
+  "زوسر",
+  "djoser",
+  "ايمحتب",
+  "imhotep",
   "هيراطيق",
   "ديموطيق",
   "قبطي",
@@ -160,6 +177,13 @@ const HERITAGE_QUERY_TERMS = [
   "egypt",
   "egyptian",
   "egyptology",
+  "ピラミッド",
+  "ギザ",
+  "サッカラ",
+  "金字塔",
+  "吉萨",
+  "萨卡拉",
+  "埃及",
   "early dynastic",
   "egyptian administration",
   "pharaoh",
@@ -366,12 +390,14 @@ function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f\u064b-\u065f\u0670]/gu, "")
+    .replace(/(\p{Script=Latin})[\u0300-\u036f]+/gu, "$1")
+    .replace(/[\u064b-\u065f\u0670]/gu, "")
     .replace(/[أإآ]/gu, "ا")
     .replace(/[ىي]/gu, "ي")
     .replace(/ة/gu, "ه")
     .replace(/<[^>]*>/gu, " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
+    .normalize("NFC")
     .trim();
 }
 
@@ -380,6 +406,13 @@ const DISCOVERY_QUERY_PATTERN =
 
 export function isDiscoveryResearchQuestion(value: string): boolean {
   return DISCOVERY_QUERY_PATTERN.test(normalizeSearchText(value));
+}
+
+const PYRAMID_TOPIC_PATTERN =
+  /(?:اهرام|هرم|pyramid|pir[aá]mid|khufu|cheops|great pyramid|пирамид|ピラミッド|金字塔)/iu;
+
+export function isPyramidDiscoveryQuestion(value: string): boolean {
+  return isDiscoveryResearchQuestion(value) && PYRAMID_TOPIC_PATTERN.test(normalizeSearchText(value));
 }
 
 function matchesHeritageQuery(value: string): boolean {
@@ -524,6 +557,7 @@ function organizationForHost(hostname: string): string {
     "whc.unesco.org": "UNESCO World Heritage Centre",
     "egymonuments.gov.eg": "Egyptian Ministry of Tourism and Antiquities",
     "ucl.ac.uk": "University College London",
+    "griffith.ox.ac.uk": "The Griffith Institute, University of Oxford",
     "metmuseum.org": "The Metropolitan Museum of Art",
     "britishmuseum.org": "The British Museum",
     "penn.museum": "Penn Museum",
@@ -538,6 +572,7 @@ function organizationForHost(hostname: string): string {
     "aeraweb.org": "Ancient Egypt Research Associates",
     "isac.uchicago.edu": "Institute for the Study of Ancient Cultures, University of Chicago",
     "oi.uchicago.edu": "Oriental Institute, University of Chicago",
+    "britannica.com": "Encyclopaedia Britannica",
     "thebanmappingproject.com": "Theban Mapping Project",
   };
   const knownDomain = Object.keys(knownOrganizations).find(
@@ -687,19 +722,35 @@ export function buildHeritageSearchQuery(
       .slice(-13, -1)
       .reverse()
       .find((message) => message.role === "user" && matchesHeritageQuery(message.content));
-    if (previousHeritageQuestion) return previousHeritageQuestion.content.slice(0, 1000);
+    if (previousHeritageQuestion) return focusedHeritageSearchQuery(previousHeritageQuestion.content);
   }
-  if (matchesHeritageQuery(latestQuestion)) return latestQuestion.slice(0, 1000);
+  if (matchesHeritageQuery(latestQuestion)) return focusedHeritageSearchQuery(latestQuestion);
 
   const priorHeritageQuestion = messages
     .slice(-13, -1)
     .reverse()
     .find((message) => message.role === "user" && matchesHeritageQuery(message.content));
   return priorHeritageQuestion
-    ? `${priorHeritageQuestion.content}\nFollow-up: ${latestQuestion}`.slice(0, 1000)
+    ? focusedHeritageSearchQuery(`${priorHeritageQuestion.content}\nFollow-up: ${latestQuestion}`)
     : latestQuestion.slice(0, 1000);
 }
 
+function focusedHeritageSearchQuery(query: string): string {
+  const normalized = normalizeSearchText(query);
+  if (/(?:حجر رشيد|rosetta stone|rosetta)/u.test(normalized)) {
+    return "Rosetta Stone British Museum 1799 Champollion Thomas Young hieroglyphs";
+  }
+  if (/(?:توت عنخ|tutankhamun|tutankhamen|kv62)/u.test(normalized)) {
+    return "Tutankhamun KV62 tomb sealing Carter Griffith Institute hidden chambers radar";
+  }
+  if (/(?:اخناتون|akhenaten|amenhotep iv|amarna|العمارنه)/u.test(normalized)) {
+    return "Akhenaten Amarna Atenism Great Hymn Aten inscriptions Amun";
+  }
+  if (/(?:زوسر|djoser|ايمحتب|امحتب|imhotep|step pyramid)/u.test(normalized)) {
+    return "Djoser Step Pyramid Imhotep evidence inscription Saqqara";
+  }
+  return query.slice(0, 1000);
+}
 export async function searchTrustedEgyptianHeritage(
   query: string,
   language: SearchLanguage,

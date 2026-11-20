@@ -5,6 +5,7 @@ import {
   formatHeritageSearchContext,
   isDiscoveryResearchQuestion,
   isEgyptianHeritageQuery,
+  isPyramidDiscoveryQuestion,
   searchTrustedEgyptianHeritage,
 } from "./heritage-search";
 
@@ -41,6 +42,11 @@ describe("trusted Egyptian heritage search", () => {
     expect(isEgyptianHeritageQuery([{ role: "user", content: "古代エジプトのファラオは？" }])).toBe(
       true,
     );
+    expect(
+      isEgyptianHeritageQuery([
+        { role: "user", content: "ギザとサッカラのピラミッドで最近発見されたものはありますか？" },
+      ]),
+    ).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "How do I make tea?" }])).toBe(false);
   });
 
@@ -79,6 +85,37 @@ describe("trusted Egyptian heritage search", () => {
     expect(
       buildHeritageSearchQuery([{ role: "user", content: "لسه فيه اكتشافات في الأهرامات؟" }]),
     ).toContain("الأهرامات");
+  });
+
+  it("limits pyramid-specific discovery handling to questions about pyramids", () => {
+    expect(isPyramidDiscoveryQuestion("هل فيه اكتشافات حديثة في الهرم؟")).toBe(true);
+    expect(isPyramidDiscoveryQuestion("What did researchers discover in the Rosetta Stone?")).toBe(false);
+    expect(isPyramidDiscoveryQuestion("هل ثبت اكتشاف غرفة في مقبرة توت عنخ آمون؟")).toBe(false);
+    expect(isPyramidDiscoveryQuestion("¿Qué descubrimientos hay en las pirámides?")).toBe(true);
+    expect(
+      isPyramidDiscoveryQuestion("ギザとサッカラのピラミッドで最近発見されたものはありますか？"),
+    ).toBe(true);
+  });
+
+  it.each([
+    {
+      question: "حجر رشيد: ما تاريخه وما دور شامبليون وتوماس يونج؟",
+      expected: "Rosetta Stone British Museum 1799 Champollion Thomas Young",
+    },
+    {
+      question: "هل ثبت وجود غرفة خفية في مقبرة توت عنخ آمون KV62؟",
+      expected: "Tutankhamun KV62 tomb sealing Carter Griffith Institute",
+    },
+    {
+      question: "هل فرض إخناتون التوحيد في تل العمارنة؟",
+      expected: "Akhenaten Amarna Atenism Great Hymn Aten",
+    },
+    {
+      question: "ما الدليل على دور إمحوتب في هرم زوسر؟",
+      expected: "Djoser Step Pyramid Imhotep evidence inscription",
+    },
+  ])("builds a focused search query for the named heritage subject: $question", ({ question, expected }) => {
+    expect(buildHeritageSearchQuery([{ role: "user", content: question }])).toContain(expected);
   });
 
   it("finds approved references for a long, nuanced hieroglyphic question", async () => {
