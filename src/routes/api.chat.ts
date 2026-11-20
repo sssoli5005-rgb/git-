@@ -327,6 +327,20 @@ function sourceFromTrustedUrl(url: URL, title?: string) {
   };
 }
 
+function trustedSourcesFromGroq(message: {
+  annotations?: Array<{
+    type?: string;
+    url_citation?: { url?: string; title?: string };
+  }>;
+}) {
+  return (message.annotations ?? []).flatMap((annotation) => {
+    if (annotation.type !== "url_citation") return [];
+    const citation = annotation.url_citation;
+    const url = isTrustedResearchUrl(citation?.url);
+    return url ? [sourceFromTrustedUrl(url, citation.title)] : [];
+  });
+}
+
 function trustedSourcesFromOpenRouter(message: {
   annotations?: Array<{
     type?: string;
@@ -709,7 +723,7 @@ export async function handleChatPost(
                 ? [sourceFromTrustedUrl(url, result.title)]
                 : [];
             }),
-            ...trustedSourcesFromOpenRouter({
+            ...trustedSourcesFromGroq({
               annotations: choice?.message?.annotations ?? [],
             }),
           ].filter((source, index, all) =>
