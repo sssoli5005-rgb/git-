@@ -85,8 +85,15 @@ export default {
         typeof (chatAiBinding as { websearch?: unknown }).websearch === "function"
       ) {
         chatEnv.CHAT_WEB_SEARCH = {
-          websearch: (input) =>
-            (chatAiBinding as { websearch: (args: typeof input) => Promise<Response> }).websearch(input),
+          websearch: (input: {
+            gatewayId: string;
+            query: string;
+            provider: "exa" | "linkup" | "ceramic";
+            limit: number;
+          }) =>
+            (chatAiBinding as {
+              websearch: (args: typeof input) => Promise<Response>;
+            }).websearch(input),
         };
       }
       try {
