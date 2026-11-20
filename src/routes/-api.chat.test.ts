@@ -1973,7 +1973,7 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("rejects a factual answer that has no actual search results and never uses Cloudflare memory as a substitute", async () => {
+  it("uses the reviewed Bible answer for Joseph when live providers return no verifiable search results", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async () => Response.json({
@@ -1989,12 +1989,17 @@ describe("general web research across non-Egypt topics", () => {
       fetcher,
     );
 
+    const body = await response.text();
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("ماقدرتش أتحقق من الإجابة");
+    expect(body).toContain("سفر يشوع 24:32");
+    expect(body).toContain("شكيم");
+    expect(body).toContain("لا تثبت أن رفاته عُثر عليها");
+    expect(body).not.toContain("مكان غير معروف ولا توجد عنه معلومات");
+    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("uses independent specialist search providers and verified Bible sources before generating the Yusuf answer", async () => {
+  it("uses independent specialist search providers and the reviewed Bible answer with verified citations", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "chat-only-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     vi.stubEnv("CHAT_OPENROUTER_API_KEY", "");
@@ -2048,9 +2053,11 @@ describe("general web research across non-Egypt topics", () => {
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(specialistProviders).toEqual(["exa", "linkup"]);
-    expect(body).toContain("دُفنت عظام يوسف في شكيم");
+    expect(body).toContain("سفر يشوع 24:32");
+    expect(body).toContain("شكيم");
     expect(body).toContain("المصادر:");
     expect(body).toContain("https://www.biblegateway.com/passage/");
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
   });
 
   it("keeps personal advice conversational instead of forcing web search", async () => {
