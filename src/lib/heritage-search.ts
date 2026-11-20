@@ -1,4 +1,5 @@
 import { isSourceRequest } from "./source-request";
+import { correctKnownResearchEntities } from "./trusted-source-catalog";
 
 export type HeritageSearchSource = {
   title: string;
@@ -371,7 +372,11 @@ function normalizeSearchText(value: string): string {
 }
 
 function matchesHeritageQuery(value: string): boolean {
-  const normalized = normalizeSearchText(value);
+  const corrections = correctKnownResearchEntities(value);
+  const normalized = normalizeSearchText([
+    value,
+    ...corrections.map((item) => item.canonical + " " + item.english),
+  ].join(" "));
   return (
     HERITAGE_QUERY_TERMS.some((term) => normalized.includes(normalizeSearchText(term))) ||
     /(?:^|\s)رع(?:\s|$)/u.test(normalized)

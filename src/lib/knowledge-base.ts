@@ -9,6 +9,7 @@ export type KnowledgeEntry = {
 
 import { HERITAGE_FACTS } from "./heritage-facts";
 import { isSourceRequest } from "./source-request";
+import { correctKnownResearchEntities } from "./trusted-source-catalog";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
   {
@@ -1270,11 +1271,15 @@ function getRelevantEntries(
   const latest = userMessages.at(-1)?.content ?? "";
   const previous = userMessages.at(-2)?.content ?? "";
   const sourceRequest = isSourceRequest(latest);
-  const query = normalize(
+  const rawQuery =
     isContextualFollowUp(latest, previous) || sourceRequest
       ? `${previous} ${latest}`
-      : latest,
-  );
+      : latest;
+  const corrections = correctKnownResearchEntities(rawQuery);
+  const query = normalize([
+    rawQuery,
+    ...corrections.map((item) => item.canonical + " " + item.english),
+  ].join(" "));
   if (!query) return [];
 
   if (query.includes("الهيروغليفية المصرية")) {

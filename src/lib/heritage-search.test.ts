@@ -31,6 +31,7 @@ describe("trusted Egyptian heritage search", () => {
     expect(isEgyptianHeritageQuery([{ role: "user", content: "إيه قيمة الأثر ده؟" }])).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "و ايه الي موجود في سانت كاترين ؟" }])).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "ممكن معلومات عن سانت كترين؟" }])).toBe(true);
+    expect(isEgyptianHeritageQuery([{ role: "user", content: "سانت كتيرين فيها ايه؟" }])).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "What can I see in Saint Catherine, South Sinai?" }])).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "ايه الموجود عند جبل موسى؟" }])).toBe(true);
     expect(isEgyptianHeritageQuery([{ role: "user", content: "古代エジプトのファラオは？" }])).toBe(

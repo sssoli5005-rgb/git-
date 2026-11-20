@@ -30,6 +30,17 @@ describe("retrieveRelevantKnowledge", () => {
     ]));
   });
 
+  it("retrieves reviewed Saint Catherine knowledge after a one-character place-name typo", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "سانت كتيرين فيها ايه؟" },
+    ]);
+    expect(answer.directAnswer).toContain("دير سانت كاترين");
+    expect(answer.directAnswer).toContain("كنيسة العليقة المشتعلة");
+    expect(answer.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ url: "https://whc.unesco.org/en/list/954/" }),
+    ]));
+  });
+
   it("retrieves the biblical account of Joseph's burial with the exact passages", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "أين جسد يوسف الصديق؟" },
