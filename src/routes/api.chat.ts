@@ -428,7 +428,7 @@ async function searchWithChatSpecialists(
           });
           const finalUrl = isTrustedResearchUrl(page.url || requestedUrl.href);
           const contentType = page.headers.get("content-type") || "";
-          if (page.ok && finalUrl && /text\\/html|application\\/xhtml\\+xml/i.test(contentType)) {
+          if (page.ok && finalUrl && /text\/html|application\/xhtml\+xml/i.test(contentType)) {
             sourceUrl = finalUrl;
             const html = (await page.text()).slice(0, 600_000);
             const readable = extractReadableResearchText(html);
