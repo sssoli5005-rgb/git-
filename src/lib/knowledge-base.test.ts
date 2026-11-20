@@ -8,6 +8,28 @@ import {
 } from "./knowledge-base";
 
 describe("retrieveRelevantKnowledge", () => {
+  it("retrieves sourced facts about Saint Catherine and distinguishes the monastery from its wider area", () => {
+    const messages = [{ role: "user" as const, content: "و ايه الي موجود في سانت كاترين ؟" }];
+    const answer = getRelevantKnowledgeAnswer(messages);
+    expect(answer.directAnswer).toContain("بين 548 و565 ميلاديًا");
+    expect(answer.directAnswer).toContain("كنيسة العليقة المشتعلة");
+    expect(answer.directAnswer).toContain("مسجدًا فاطميًا");
+    expect(answer.directAnswer).toContain("نحو 6,000 مخطوطة");
+    expect(answer.directAnswer).toContain("جبل موسى");
+    expect(answer.directAnswer).toContain("60,100 هكتار");
+    expect(answer.directAnswer).toContain("التمييز بين مدينة سانت كاترين، والدير نفسه");
+    expect(answer.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        organization: "Egyptian Ministry of Tourism and Antiquities",
+        url: "https://egymonuments.gov.eg/en/world-heritage/saint-catherine-s-monastery-and-its-surrounding-area",
+      }),
+      expect.objectContaining({
+        organization: "UNESCO World Heritage Centre",
+        url: "https://whc.unesco.org/en/list/954/",
+      }),
+    ]));
+  });
+
   it("retrieves the biblical account of Joseph's burial with the exact passages", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "أين جسد يوسف الصديق؟" },
