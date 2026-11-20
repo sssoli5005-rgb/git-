@@ -38,6 +38,74 @@ function expectUnverifiedScan(body: {
 }
 
 describe("ATHARA Cloudflare Worker", () => {
+  it("does not replace a Montuhotep statue with a generic Egyptian Museum lead", async () => {
+    stubEmptyHeritageSearch();
+    const aiRun = vi.fn(async (model: string) => {
+      if (model === "@cf/moondream/moondream3.1-9B-A2B") {
+        return {
+          response: JSON.stringify({
+            visualDescription: "تمثال ملكي جالس بغطاء أحمر أسود وذراعين متقاطعتين",
+            identity: "تمثال منتوحتب",
+            identityEvidence: "التاج والرداء والذراعان المتقاطعتان",
+            objectType: "تمثال ملكي",
+            material: "حجر ملون",
+            searchTerms: ["تمثال منتوحتب", "Mentuhotep statue"],
+            keywords: ["منتوحتب", "تمثال", "الدولة الوسطى"],
+            confidence: "medium",
+            confidenceByField: { identity: "medium", place: "low", period: "medium" },
+          }),
+        };
+      }
+      throw new Error("Embedding service unavailable");
+    });
+    try {
+      const officialCatalog = {
+        records: [
+          {
+            id: "egyptian-museum",
+            title: "المتحف المصري",
+            mode: "objects",
+            keywords: ["متحف", "القاهرة"],
+            description: "المتحف المصري هو أقدم متحف أثري في الشرق الأوسط ويعرض مجموعة آثار.",
+            sourceTitle: "وزارة السياحة والآثار المصرية",
+            sourceUrl: "https://egymonuments.gov.eg/ar/museums/egyptian-museum/",
+            imageUrls: [],
+          },
+          {
+            id: "egy-monuments-305",
+            title: "تمثال منتوحتب",
+            mode: "objects",
+            keywords: ["تمثال", "منتوحتب", "الدولة الوسطى"],
+            description: "تمثال الملك منتوحتب نب حبت رع مؤسس الدولة الوسطى، من الدير البحري.",
+            location: "الدير البحري",
+            period: "الدولة الوسطى",
+            sourceTitle: "وزارة السياحة والآثار المصرية",
+            sourceUrl: "https://egymonuments.gov.eg/ar/collections/statue-of-mentuhotep-4/",
+            imageUrls: ["https://egymonuments.gov.eg/media/1290/montuhotep.jpg"],
+          },
+        ],
+      };
+      const response = await worker.fetch(
+        post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+        {
+          AI: { run: aiRun },
+          ASSETS: { fetch: vi.fn(async (input: RequestInfo | URL) =>
+            String(input).endsWith("/egypt-monuments-official.json")
+              ? Response.json(officialCatalog)
+              : new Response("", { status: 404 }),
+          ) },
+        },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.researchCandidate?.name).not.toBe("المتحف المصري");
+      expect(body.researchCandidate?.name || body.matchedArtifact?.name || "").not.toContain("المتحف المصري");
+      expect(body.analysis).not.toContain("المتحف المصري هو أقدم متحف");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each([
     ["تمثال ملكي جالس بغطاء رأس وشدوان", "تمثال"],
     ["تابوت خشبي مزخرف به نقوش هيروغليفية", "تابوت"],

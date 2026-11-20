@@ -1006,6 +1006,16 @@ function rankOfficialTextCandidates(catalog, observation) {
         new URL(canonicalOfficialArchiveUrl(record.sourceUrl)).pathname,
       ),
     )
+    .filter((record) => {
+      const title = normalizeSearchTerms(record.title || "").join(" ");
+      const sourceUrl = canonicalOfficialArchiveUrl(record.sourceUrl) || "";
+      const isMuseumPage = /\/museums\//i.test(new URL(sourceUrl).pathname);
+      const isGenericMuseumName = /(متحف|museum|collection of museum)/iu.test(title);
+      const isMuseumQuestion = /(?:متحف|museum)/iu.test(
+        normalizeSearchTerms(`${observation.identity || ""} ${observation.visualDescription || ""}`).join(" "),
+      );
+      return !(isMuseumPage && isGenericMuseumName && !isMuseumQuestion);
+    })
     .map((record) => {
       const titleTerms = new Set(normalizeSearchTerms(
         [record.title, ...(Array.isArray(record.keywords) ? record.keywords : [])].join(" "),

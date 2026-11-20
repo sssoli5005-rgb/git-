@@ -511,6 +511,25 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               const leadLocation = lead.location && lead.location !== lead.museum
                 ? lead.location
                 : "";
+              const genericMuseumLead = /^(?:المتحف|متحف)\s+(?:المصري|القومي|الإسلامي|القبطي)\b|museum\b/i.test(leadName);
+              if (genericMuseumLead) {
+                analysis = [
+                  resultCopy.unverifiedStatus,
+                  leadLocation ? `${resultCopy.locationLabel}: ${leadLocation}` : "",
+                  lang === "ar"
+                    ? "الصفحة مؤسسة أو متحف عام، وليست مطابقة بصرية لقطعة بعينها."
+                    : "This is a general museum or institution record, not a visual match to a specific artifact.",
+                ].filter(Boolean).join("\n\n");
+              } else {
+                const leadStatus = lead.sourceBacked
+                  ? (lang === "ar" ? "اسم مرجّح مدعوم بسجل؛ يحتاج تأكيد مطابقة الصورة" : resultCopy.probableStatus)
+                  : (lang === "ar" ? "اسم مرشح يحتاج مراجعة" : resultCopy.unverifiedStatus);
+                analysis = [
+                  leadStatus,
+                  `${resultCopy.nameLabel}: ${leadName}`,
+                  leadLocation ? `${resultCopy.locationLabel}: ${leadLocation}` : "",
+                ].filter(Boolean).join("\n\n");
+              }
               analysis = [
                 leadStatus,
                 `${resultCopy.nameLabel}: ${leadName}`,
