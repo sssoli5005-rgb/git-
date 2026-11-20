@@ -10,6 +10,67 @@ afterEach(() => {
 });
 
 describe("production chat research wiring", () => {
+  it("routes Saint Catherine through the protected chat and falls back to its official source-backed answer", async () => {
+    vi.stubEnv("APP_USERNAME", "athara-test-user");
+    vi.stubEnv("APP_SESSION_SECRET", "athara-test-session-secret");
+
+    const sourceUrl = "https://egymonuments.gov.eg/en/world-heritage/saint-catherine-s-monastery-and-its-surrounding-area";
+    const excerpt = "Saint Catherine's Monastery was built by order of Byzantine Emperor Justinian I in 548–565 AD. It includes the Church of the Transfiguration and the Church of the Burning Bush, a Fatimid mosque from the 12th century, and a library with 6,000 manuscripts.";
+    const websearch = vi.fn(async ({ provider, query }: { provider: "exa" | "linkup" | "ceramic"; query: string }) => {
+      expect(query).toContain("سانت كاترين");
+      if (provider !== "exa") return Response.json({ items: [] });
+      return Response.json({ items: [{
+        title: "Saint Catherine’s Monastery and its surrounding area",
+        url: sourceUrl,
+        description: excerpt,
+      }] });
+    });
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "egymonuments.gov.eg" || url.hostname === "whc.unesco.org") {
+        return new Response("Access temporarily blocked", { status: 403 });
+      }
+      if (url.hostname === "ar.wikipedia.org") {
+        return Response.json({ query: { search: [] } });
+      }
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "No verified live citation was attached." },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    const token = createSession("athara-test-user");
+    const request = new Request("https://athara.test/api/chat", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `ekhtaberha_session=${token}`,
+      },
+      body: JSON.stringify({
+        language: "ar",
+        messages: [{ role: "user", content: "و ايه الي موجود في سانت كاترين ؟" }],
+      }),
+    });
+    const response = await server.fetch(
+      request,
+      { CHAT_GROQ_API_KEY: "test-groq-key", AI: { websearch } },
+      {},
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("دير سانت كاترين");
+    expect(body).toContain("كنيسة العليقة المشتعلة");
+    expect(websearch).toHaveBeenCalledTimes(1);
+  });
+
+
   it("uses Cloudflare Web Search snippets when a trusted source blocks direct page retrieval", async () => {
     vi.stubEnv("APP_USERNAME", "athara-test-user");
     vi.stubEnv("APP_SESSION_SECRET", "athara-test-session-secret");

@@ -145,6 +145,41 @@ function createHeritageSearchFetcher(
 }
 
 describe("general research fallbacks", () => {
+  it("answers the Saint Catherine question from reviewed references when live search fails", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "egymonuments.gov.eg" || url.hostname === "whc.unesco.org") {
+        return new Response("Temporarily blocked", { status: 403 });
+      }
+      if (url.hostname === "ar.wikipedia.org") {
+        return Response.json({ query: { search: [] } });
+      }
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "No verified search result was available." },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("و ايه الي موجود في سانت كاترين ؟"),
+      fetcher,
+      { CHAT_GROQ_API_KEY: "test-groq-key" },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("دير سانت كاترين");
+    expect(body).toContain("كنيسة العليقة المشتعلة");
+    expect(body).toContain("جبل موسى");
+    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
+  });
+
+
   it("answers the Joseph burial question from its reviewed Bible reference when all live providers fail", async () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
