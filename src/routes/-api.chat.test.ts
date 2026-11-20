@@ -1671,6 +1671,39 @@ describe("general web research across non-Egypt topics", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      expect(String(input)).toContain("api.groq.com");
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "بحسب سفر يشوع، دُفنت عظام يوسف في شكيم.",
+            annotations: [{
+              type: "url_citation",
+              url_citation: {
+                url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+                title: "Joshua 24:32 — NRSVUE",
+                content: "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
+              },
+            }],
+          },
+        }],
+      });
+    });
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
+      fetcher,
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("بحسب سفر يشوع");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.biblegateway.com/passage/");
+  });
+
   it("shows the actual retrieved URLs only when a factual user explicitly asks for sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
