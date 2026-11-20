@@ -144,6 +144,52 @@ function createHeritageSearchFetcher(
   });
 }
 
+describe("general research fallbacks", () => {
+  it("answers the Joseph burial question from its reviewed Bible reference when all live providers fail", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "Unverified generated answer without source evidence." },
+          }],
+        });
+      }
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        return Response.json({
+          candidates: [{
+            content: { parts: [{ text: "Unverified Gemini answer." }] },
+            groundingMetadata: { groundingChunks: [] },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("أين جسد يوسف الصديق؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "test-gemini-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("سفر يشوع 24:32");
+    expect(body).toContain("شكيم");
+    expect(body).toContain("لا تثبت أن رفاته عُثر عليها");
+    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("chat history validation", () => {
   it("accepts conversations longer than the former 41-message limit", () => {
     const messages = Array.from({ length: 85 }, (_, index) => ({

@@ -12,6 +12,34 @@ import { isSourceRequest } from "./source-request";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
   {
+    id: "joseph-bones-burial-shechem",
+    title: "رواية الكتاب المقدس عن عظام يوسف الصديق ودفنها",
+    directResponse: true,
+    keywords: [
+      "يوسف الصديق",
+      "يوسف بن يعقوب",
+      "عظام يوسف",
+      "عظام يوسف الصديق",
+      "جسد يوسف",
+      "قبر يوسف",
+      "مكان دفن يوسف",
+      "دفن يوسف",
+      "شكيم",
+      "joseph of the bible",
+      "joseph bones",
+      "shechem",
+    ],
+    content:
+      "بحسب الرواية الكتابية، سفر التكوين 50:26 يذكر أن يوسف مات في مصر، وحُنّط ووُضع في تابوت هناك. وسفر الخروج 13:19 يقول إن موسى أخذ عظام يوسف معه عند خروج بني إسرائيل من مصر. ثم يذكر سفر يشوع 24:32 أن عظام يوسف دُفنت في شكيم، في قطعة الأرض التي كان يعقوب قد اشتراها من بني حمور. لذلك فالإجابة بحسب النص الكتابي عن مكان دفن عظام يوسف هي شكيم، وليس أن النص يقول إن جسده ظل في مصر. مهم نفرّق بين الرواية الدينية وبين الدليل الأثري: هذه الآيات تسجل الرواية الكتابية، لكنها لا تثبت أن رفاته عُثر عليها أو أمكن تحديدها أثريًا في الوقت الحاضر.",
+    sources: [
+      {
+        title: "Genesis 50:24–26; Exodus 13:19; Joshua 24:32 (NIV)",
+        organization: "Bible Gateway",
+        url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A24-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NIV",
+      },
+    ],
+  },
+  {
     id: "ancient-egypt-medicine-surgery-fractures",
     title: "الطب والجراحة وعلاج الكسور في مصر القديمة",
     directResponse: true,

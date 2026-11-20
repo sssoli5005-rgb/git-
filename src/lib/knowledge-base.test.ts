@@ -8,6 +8,25 @@ import {
 } from "./knowledge-base";
 
 describe("retrieveRelevantKnowledge", () => {
+  it("retrieves the biblical account of Joseph's burial with the exact passages", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "أين جسد يوسف الصديق؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("سفر التكوين 50:26");
+    expect(answer.directAnswer).toContain("سفر الخروج 13:19");
+    expect(answer.directAnswer).toContain("سفر يشوع 24:32");
+    expect(answer.directAnswer).toContain("شكيم");
+    expect(answer.directAnswer).toContain("لا تثبت أن رفاته عُثر عليها");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "Bible Gateway",
+        url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A24-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NIV",
+      }),
+    );
+  });
+
+
   it("does not inject psychology material into ordinary greetings", () => {
     const result = retrieveRelevantKnowledge(
       [
