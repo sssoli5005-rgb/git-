@@ -1704,6 +1704,35 @@ describe("general web research across non-Egypt topics", () => {
     expect(body).toContain("https://www.biblegateway.com/passage/");
   });
 
+  it("accepts Groq's native URL citation metadata when it omits an excerpt field", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      choices: [{
+        finish_reason: "stop",
+        message: {
+          content: "تذكر يشوع 24:32 دفن عظام يوسف في شكيم.",
+          annotations: [{
+            type: "url_citation",
+            url_citation: {
+              url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
+              title: "Joshua 24:32 — NRSVUE",
+              start_index: 15,
+              end_index: 27,
+            },
+          }],
+        },
+      }],
+    }));
+    const response = await handleChatPost(
+      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
+      fetcher,
+    );
+    const body = await response.text();
+    expect(body).toContain("تذكر يشوع 24:32");
+    expect(body).toContain("https://www.biblegateway.com/passage/");
+  });
+
   it("shows the actual retrieved URLs only when a factual user explicitly asks for sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
