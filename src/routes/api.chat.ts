@@ -576,7 +576,12 @@ function trustedSourcesFromGroq(message: {
     if (annotation.type !== "url_citation") return [];
     const citation = annotation.url_citation;
     const url = isSafeResearchUrl(citation?.url);
-    return url ? [sourceFromTrustedUrl(url, citation.title)] : [];
+    // Model-supplied browser citations have no independently fetched page
+    // text here, so keep them to the reviewed directory. Open-web domains
+    // are accepted through the three-provider pipeline after page retrieval.
+    return url && isTrustedResearchHost(url.hostname)
+      ? [sourceFromTrustedUrl(url, citation.title)]
+      : [];
   });
 }
 
@@ -590,7 +595,8 @@ function trustedSourcesFromOpenRouter(message: {
     if (annotation.type !== "url_citation") return [];
     const citation = annotation.url_citation;
     const url = isSafeResearchUrl(citation?.url);
-    if (!url || typeof citation?.content !== "string" || citation.content.trim().length < 40) return [];
+    if (!url || !isTrustedResearchHost(url.hostname) ||
+        typeof citation?.content !== "string" || citation.content.trim().length < 40) return [];
     return [sourceFromTrustedUrl(url, citation.title)];
   });
 }
