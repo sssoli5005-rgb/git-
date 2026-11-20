@@ -1,9 +1,11 @@
 name = "ektaberha500-current"
-main = "src/athara-worker.js"
-compatibility_date = "2026-11-01"
+main = ".output/server/index.js"
+compatibility_date = "2026-11-18"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 SCANNER_MATCH_THRESHOLD = "0.80"
+SCANNER_FREE_FALLBACK_ENABLED = "true"
 
 [ai]
 binding = "AI"
