@@ -1203,7 +1203,12 @@ export async function handleChatPost(
             geminiGroundedSources = (candidate?.groundingMetadata?.groundingChunks ?? [])
               .flatMap((chunk) => {
                 const url = isSafeResearchUrl(chunk.web?.uri);
-                return url ? [sourceFromTrustedUrl(url, chunk.web?.title)] : [];
+                // Grounding metadata is model-provided, not fetched page text.
+                // Only the independent specialist pipeline may introduce
+                // previously uncatalogued domains after opening their pages.
+                return url && isTrustedResearchHost(url.hostname)
+                  ? [sourceFromTrustedUrl(url, chunk.web?.title)]
+                  : [];
               });
             if (geminiGroundedSources.length) {
               verifiedTurnSources = mergeResearchSources(verifiedTurnSources, geminiGroundedSources);
