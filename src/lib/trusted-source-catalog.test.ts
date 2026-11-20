@@ -38,6 +38,7 @@ describe("trusted source directory", () => {
 
   it.each([
     ["سانت كترين", "سانت كاترين", "Saint Catherine's Monastery"],
+    ["سانت كتيرين", "سانت كاترين", "Saint Catherine's Monastery"],
     ["جبل موسي", "جبل موسى", "Jebel Musa"],
     ["سقاره", "سقارة", "Saqqara"],
     ["ابو سنبل", "أبو سمبل", "Abu Simbel"],
