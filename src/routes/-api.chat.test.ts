@@ -859,8 +859,9 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الملكة نفرتيتي");
     expect(fetcher).toHaveBeenCalledTimes(3);
-    expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("ar.wikipedia.org");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.8-flash");
   });
 
