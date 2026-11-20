@@ -659,6 +659,16 @@ describe("handleChatPost hosted Groq provider", () => {
             url: "https://www.nature.com/articles/s41467-023-36351-0",
             description:
               "A peer-reviewed ScanPyramids study reports a corridor-shaped structure about 9 metres long in Khufu's Pyramid, detected with cosmic-ray muon measurements.",
+          }, {
+            title: "Saqqara — Digital Egypt — University College London",
+            url: "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
+            description:
+              "Saqqara was the main cemetery of Memphis. The site includes pyramids and tombs from different historical periods.",
+          }, {
+            title: "Memphis and its Necropolis — UNESCO World Heritage Centre",
+            url: "https://whc.unesco.org/en/list/86/",
+            description:
+              "Memphis and its Necropolis covers multiple archaeological zones, including Saqqara, Giza, pyramids, and tombs.",
           }],
         });
       }),
@@ -684,6 +694,8 @@ describe("handleChatPost hosted Groq provider", () => {
         };
         expect(payload.messages[0]?.content).toContain("9 m length");
         expect(payload.messages[0]?.content).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
+        expect(payload.messages[0]?.content).not.toContain("Saqqara was the main cemetery of Memphis.");
+        expect(payload.messages[0]?.content).not.toContain("Memphis and its Necropolis covers multiple archaeological zones");
         return Response.json({
           choices: [{
             finish_reason: "stop",
@@ -713,9 +725,181 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(body).toContain("ممر داخل هرم خوفو");
     expect(body).toContain("المصادر:");
     expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html");
+    expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
     expect(body).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
     expect(queries[0]).toContain("recent archaeological discovery");
+  });
+
+  it("uses reviewed pyramid evidence when discovery searches return only general Saqqara pages", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({
+        items: [{
+          title: "Saqqara — Digital Egypt — University College London",
+          url: "https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html",
+          description:
+            "Saqqara was the main cemetery of Memphis. The site includes pyramids and tombs from different historical periods.",
+        }, {
+          title: "Memphis and its Necropolis — UNESCO World Heritage Centre",
+          url: "https://whc.unesco.org/en/list/86/",
+          description:
+            "Memphis and its Necropolis covers multiple archaeological zones, including Saqqara, Giza, pyramids, and tombs.",
+        }],
+      })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname === "www.nature.com") {
+        return new Response("temporarily unavailable", { status: 503 });
+      }
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+        };
+        expect(payload.messages[0]?.content).toContain("نحو 9 أمتار");
+        expect(payload.messages[0]?.content).not.toContain("Saqqara was the main cemetery of Memphis.");
+        expect(payload.messages[0]?.content).not.toContain("Memphis and its Necropolis covers multiple archaeological zones");
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content:
+                "في الجيزة، قاست دراسة منشورة سنة 2023 ممرًا خلف منطقة الشيفرون في هرم خوفو بطول يقارب 9 أمتار. الدليل يدعم وجود الممر وأبعاده، لكنه لا يحدد وظيفته. لا أملك هنا مصدرًا مراجعًا يحدد أحدث كشف في سقارة.",
+            },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest(
+        "هل لسه فيه اكتشافات في الأهرامات بالجيزة وسقارة؟ عايزة الأدلة والمصادر.",
+      ),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("9 أمتار");
+    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain("https://www.ucl.ac.uk/museums-static/digitalegypt/saqqara/index.html");
+    expect(body).not.toContain("https://whc.unesco.org/en/list/86/");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    {
+      language: "ar",
+      question: "هل لسه فيه اكتشافات في الأهرامات؟ أقصد الجيزة وسقارة، وإيه الدليل؟",
+      expected: "نحو 9 أمتار",
+    },
+    {
+      language: "en",
+      question: "What recent discoveries are documented in the pyramids at Giza and Saqqara, and what is the evidence?",
+      expected: "about 9 metres long",
+    },
+    {
+      language: "fr",
+      question: "Quelles découvertes récentes sont documentées dans les pyramides de Gizeh et de Saqqara ?",
+      expected: "9 mètres de long",
+    },
+    {
+      language: "es",
+      question: "¿Qué descubrimientos recientes hay en las pirámides?",
+      expected: "9 metros de largo",
+    },
+    {
+      language: "it",
+      question: "Quali scoperte recenti sono documentate nelle piramidi di Giza e Saqqara?",
+      expected: "9 metri di lunghezza",
+    },
+    {
+      language: "de",
+      question: "Welche neuen Entdeckungen sind in den Pyramiden von Gizeh und Saqqara dokumentiert?",
+      expected: "9 Meter lang",
+    },
+    {
+      language: "ru",
+      question: "Какие новые открытия задокументированы в пирамидах Гизы и Саккары?",
+      expected: "9 метров в длину",
+    },
+    {
+      language: "ja",
+      question: "ギザとサッカラのピラミッドで最近発見されたものはありますか？",
+      expected: "約9メートル",
+    },
+    {
+      language: "zh",
+      question: "吉萨和萨卡拉的金字塔最近有哪些新发现？",
+      expected: "长约 9 米",
+    },
+  ])("answers a $language pyramid-discovery question in the selected language when chat providers are unavailable", async ({
+    language,
+    question,
+    expected,
+  }) => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("www.nature.com");
+      return new Response(
+        "<html><head><title>Precise characterization of a corridor-shaped structure</title></head><body><main>" +
+          "The ScanPyramids team reported previously unknown voids in 2016 and 2017 using cosmic-ray muon radiography. " +
+          "New measurements reveal a corridor-shaped structure of about 9 m length and a 2.0 m by 2.0 m section." +
+          " The study does not establish its original function." +
+          "</main></body></html>",
+        { headers: { "Content-Type": "text/html; charset=utf-8" } },
+      );
+    });
+
+    const response = await handleChatPost(
+      createChatRequest(question, language),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(expected);
+    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+    expect(body).not.toContain("Saqqara is the main cemetery of Memphis");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("uses the reviewed Arabic discovery fallback instead of a generic refusal when Nature is unreachable", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      expect(new URL(String(input)).hostname).toBe("www.nature.com");
+      return new Response("temporarily unavailable", { status: 503 });
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("هل لسه في الاهرامات اكتشافات؟", "ar"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("قياسات أدق لممر خلف منطقة الشيفرون");
+    expect(body).toContain("المصادر:");
+    expect(body).toContain("https://www.nature.com/articles/s41467-023-36351-0");
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+    expect(body).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("withholds an unverified heritage detail and offers a focused follow-up when no sources are available", async () => {

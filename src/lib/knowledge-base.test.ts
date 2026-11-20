@@ -25,14 +25,51 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
-  it("does not substitute a general Saqqara summary for a pyramid-discoveries question", () => {
+  it("uses only reviewed discovery evidence instead of a general Saqqara summary", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "لسه فيه اكتشافات في الأهرامات؟ أقصد الجيزة وسقارة." },
     ]);
 
-    expect(answer.content).toBe("");
+    expect(answer.content).toContain("قياسات أدق لممر خلف منطقة الشيفرون");
+    expect(answer.content).toContain("لا يثبت وظيفته الأصلية");
+    expect(answer.content).toContain("المصادر المراجعة المتاحة هنا لا تثبت أحدث كشف هناك");
     expect(answer.directAnswer).toBeUndefined();
-    expect(answer.sources).toEqual([]);
+    expect(answer.content).not.toContain("سقارة هي المقبرة الرئيسية لمدينة منف");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "Nature Communications",
+        url: "https://www.nature.com/articles/s41467-023-36351-0",
+      }),
+    );
+  });
+
+  it("does not inject discovery fallback facts into ordinary pyramid questions", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "How were the pyramids built?" },
+    ]);
+
+    expect(answer.content).not.toContain("قياسات أدق لممر خلف منطقة الشيفرون");
+  });
+
+  it.each([
+    "هل لسه في الاهرامات اكتشافات؟",
+    "What new discoveries have been made at the Giza pyramids?",
+    "¿Qué hallazgos recientes hay en las pirámides de Guiza y Saqqara?",
+  ])("recognizes a discovery-question wording variation: %s", (question) => {
+    const answer = getRelevantKnowledgeAnswer([{ role: "user", content: question }]);
+
+    expect(answer.content).toContain("قياسات أدق لممر خلف منطقة الشيفرون");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({ url: "https://www.nature.com/articles/s41467-023-36351-0" }),
+    );
+  });
+
+  it("does not answer general Egyptian discovery questions with unrelated pyramid findings", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "What recent archaeological discoveries happened in Egypt?" },
+    ]);
+
+    expect(answer.content).toBe("");
   });
 
   it("answers who built the Great Hypostyle Hall and distinguishes its construction phases", () => {

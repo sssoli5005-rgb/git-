@@ -169,6 +169,59 @@ describe("trusted Egyptian heritage search", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("opens the reviewed Nature paper directly for a pyramid-discovery question", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("www.nature.com");
+      return new Response(
+        "<html><head><title>Precise characterization of a corridor-shaped structure</title></head><body><main>" +
+          "The ScanPyramids team reported previously unknown voids in 2016 and 2017 using cosmic-ray muon radiography. " +
+          "New measurements reveal a corridor-shaped structure of about 9 m length and a 2.0 m by 2.0 m section." +
+          "</main></body></html>",
+        { headers: { "Content-Type": "text/html; charset=utf-8" } },
+      );
+    });
+
+    const results = await searchTrustedEgyptianHeritage(
+      "لسه فيه اكتشافات في الأهرامات؟ الجيزة وسقارة",
+      "ar",
+      fetcher,
+      undefined,
+      [{
+        title: "Precise characterization of a corridor-shaped structure",
+        organization: "Nature Communications",
+        url: "https://www.nature.com/articles/s41467-023-36351-0",
+      }],
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.content).toContain("9 m length");
+    expect(results[0]?.content).toContain("cosmic-ray muon radiography");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("does not replace an unavailable discovery source with general Saqqara references", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      expect(new URL(String(input)).hostname).toBe("www.nature.com");
+      return new Response("temporarily unavailable", { status: 503 });
+    });
+
+    const results = await searchTrustedEgyptianHeritage(
+      "لسه فيه اكتشافات في الأهرامات؟ الجيزة وسقارة",
+      "ar",
+      fetcher,
+      undefined,
+      [{
+        title: "Precise characterization of a corridor-shaped structure",
+        organization: "Nature Communications",
+        url: "https://www.nature.com/articles/s41467-023-36351-0",
+      }],
+    );
+
+    expect(results).toEqual([]);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("filters unrelated Arabic search results while retaining relevant monuments", async () => {
     const fetcher = vi.fn<typeof fetch>(async (_input) => {
       const url = new URL(String(_input));

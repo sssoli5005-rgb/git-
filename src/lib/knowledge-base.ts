@@ -4,6 +4,7 @@ export type KnowledgeEntry = {
   keywords: string[];
   content: string;
   directResponse?: boolean;
+  discoveryResearch?: boolean;
   sources?: Array<{ title: string; organization: string; url: string }>;
 };
 
@@ -13,6 +14,71 @@ import { correctKnownResearchEntities } from "./trusted-source-catalog";
 import { isDiscoveryResearchQuestion } from "./heritage-search";
 
 const KNOWLEDGE: KnowledgeEntry[] = [
+  {
+    id: "documented-pyramid-discoveries",
+    title: "اكتشافات موثقة في أهرامات الجيزة وسقارة",
+    discoveryResearch: true,
+    keywords: [
+      "اكتشاف في الهرم",
+      "اكتشاف",
+      "اكتشافات",
+      "الهرم",
+      "الأهرامات",
+      "الجيزة",
+      "سقارة",
+      "اكتشافات الأهرامات",
+      "اكتشافات في الأهرامات",
+      "أحدث اكتشاف في الجيزة",
+      "أحدث اكتشاف في سقارة",
+      "اكتشافات سقارة",
+      "اكتشافات الجيزة",
+      "ممر هرم خوفو",
+      "latest pyramid discoveries",
+      "recent discoveries at Giza",
+      "recent discoveries at Saqqara",
+      "discovery",
+      "discoveries",
+      "pyramid",
+      "pyramids",
+      "Giza",
+      "Saqqara",
+      "pyramid corridor",
+      "piramides",
+      "pirámide",
+      "pirámides",
+      "pyramide",
+      "piramidi",
+      "hallazgos recientes",
+      "descubrimientos recientes",
+      "nouvelles découvertes",
+      "découvertes récentes",
+      "neue Entdeckungen",
+      "neue Funde",
+      "nuove scoperte",
+      "scoperte recenti",
+      "новые открытия",
+      "последние открытия",
+      "最新発見",
+      "新発見",
+      "最近発見",
+      "発見された",
+      "ピラミッド",
+      "ギザ",
+      "サッカラ",
+      "最新发现",
+      "新发现",
+      "ScanPyramids",
+    ],
+    content:
+      "أيوه، فيه اكتشافات ودراسات جديدة، لكن الأدق ما أقولش إن ده أحدث اكتشاف على الإطلاق من غير بحث حي. في الجيزة، أُبلغ فريق ScanPyramids في 2016 و2017 عن فراغات غير معروفة سابقًا في هرم خوفو برصد أشعة الميون. وفي دراسة منشورة سنة 2023، قدّم الباحثون قياسات أدق لممر خلف منطقة الشيفرون في الواجهة الشمالية: طوله نحو 9 أمتار ومقطعه قرابة 2 × 2 متر. ده يدعم وجود الممر وأبعاده، لكنه لا يثبت وظيفته الأصلية ولا إنه حجرة دفن أو مكان كنز. بالنسبة لسقارة، المصادر المراجعة المتاحة هنا لا تثبت أحدث كشف هناك؛ وده لا يعني عدم وجود اكتشافات، لكنه يمنعني من تحديد الأحدث أو ترتيب اكتشافات الجيزة وسقارة من غير بحث مباشر.",
+    sources: [
+      {
+        title: "Precise characterization of a corridor-shaped structure in Khufu’s Pyramid by observation of cosmic-ray muons",
+        organization: "Nature Communications",
+        url: "https://www.nature.com/articles/s41467-023-36351-0",
+      },
+    ],
+  },
   {
     id: "karnak-great-hypostyle-hall",
     title: "صالة الأعمدة الكبرى في الكرنك",
@@ -1376,7 +1442,13 @@ function getRelevantEntries(
   const userMessages = messages.filter((message) => message.role === "user");
   const latest = userMessages.at(-1)?.content ?? "";
   const previous = userMessages.at(-2)?.content ?? "";
-  if (isDiscoveryResearchQuestion(latest)) return [];
+  const discoveryQuestion = isDiscoveryResearchQuestion(latest);
+  const pyramidDiscoveryQuestion =
+    discoveryQuestion &&
+    /(?:اهرام|هرم|جيزه|سقاره|pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|пирамид|ピラミッド|ギザ|サッカラ|金字塔)/iu.test(
+      normalize(latest),
+    );
+  if (discoveryQuestion && !pyramidDiscoveryQuestion) return [];
   const sourceRequest = isSourceRequest(latest);
   const rawQuery =
     isContextualFollowUp(latest, previous) || sourceRequest
@@ -1388,9 +1460,12 @@ function getRelevantEntries(
     ...corrections.map((item) => item.canonical + " " + item.english),
   ].join(" "));
   if (!query) return [];
+  const candidateEntries = KNOWLEDGE.filter((entry) =>
+    discoveryQuestion ? entry.discoveryResearch === true : entry.discoveryResearch !== true,
+  );
 
   if (query.includes("الهيروغليفية المصرية")) {
-    const exactEntry = KNOWLEDGE.find((entry) => entry.id === "egyptian-hieroglyphic-basics");
+    const exactEntry = candidateEntries.find((entry) => entry.id === "egyptian-hieroglyphic-basics");
     return exactEntry ? [exactEntry] : [];
   }
   const hierarchyTopicPhrases = [
@@ -1401,11 +1476,11 @@ function getRelevantEntries(
     "كام علامة أحادية الصوت",
   ];
   if (hierarchyTopicPhrases.some((phrase) => query.includes(normalize(phrase)))) {
-    const exactEntry = KNOWLEDGE.find((entry) => entry.id === "egyptian-hieroglyphic-basics");
+    const exactEntry = candidateEntries.find((entry) => entry.id === "egyptian-hieroglyphic-basics");
     return exactEntry ? [exactEntry] : [];
   }
 
-  const ranked = KNOWLEDGE.map((entry) => {
+  const ranked = candidateEntries.map((entry) => {
     let score = 0;
     for (const keyword of entry.keywords) {
       const normalizedKeyword = normalize(keyword);

@@ -27,6 +27,7 @@ const TRUSTED_DOMAINS = [
   "isac.uchicago.edu",
   "oi.uchicago.edu",
   "thebanmappingproject.com",
+  "nature.com",
 ] as const;
 
 const SOURCE_PRIORITY = [
@@ -40,6 +41,7 @@ const SOURCE_PRIORITY = [
   "saqqara.uw.edu.pl",
   "isac.uchicago.edu",
   "thebanmappingproject.com",
+  "nature.com",
 ] as const;
 
 const HERITAGE_QUERY_TERMS = [
@@ -735,6 +737,7 @@ export async function searchTrustedEgyptianHeritage(
     .filter((source): source is HeritageSearchSource => Boolean(source))
     .slice(0, 4);
   if (fetchedCuratedSources.length) return fetchedCuratedSources;
+  if (isDiscoveryResearchQuestion(query)) return [];
 
   const pages = (await searchWikipedia(language, query, fetcher, signal)).filter((page) =>
     isRelevantSearchResult(query, page),

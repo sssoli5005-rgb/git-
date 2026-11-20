@@ -14,7 +14,11 @@ import {
   isTrustedResearchHost,
   TRUSTED_SOURCE_CATALOG,
 } from "@/lib/trusted-source-catalog";
-import { translations, type LangCode } from "@/i18n/translations";
+import {
+  pyramidDiscoveryFallbackCopy,
+  translations,
+  type LangCode,
+} from "@/i18n/translations";
 import { isSourceRequest } from "@/lib/source-request";
 import {
   buildHeritageSearchQuery,
@@ -378,7 +382,8 @@ function buildSpecialistSearchQuery(question: string): string {
   const normalized = normalizeResearchQuery(question);
   const directoryQuery = buildResearchSearchQuery(question);
   if (isDiscoveryResearchQuestion(question)) {
-    const pyramidContext = /(?:اهرام|pyramid|khufu|cheops|giza|saqqara)/u.test(normalized)
+    const pyramidContext =
+      /(?:اهرام|هرم|pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|пирамид|пирамида|ピラミッド|ギザ|サッカラ|金字塔)/u.test(normalized)
       ? "pyramids Giza Saqqara"
       : "Egyptian archaeology";
     return `${directoryQuery} Egypt recent archaeological discovery research ${pyramidContext}`.slice(0, 1024);
@@ -387,6 +392,16 @@ function buildSpecialistSearchQuery(question: string): string {
     return (directoryQuery + " Genesis 50:25-26 Exodus 13:19 Joshua 24:32 exact Bible passages Shechem Joseph bones").slice(0, 1024);
   }
   return directoryQuery.slice(0, 1024);
+}
+
+function isRelevantDiscoverySearchResult(question: string, title: string, excerpt: string): boolean {
+  if (!isDiscoveryResearchQuestion(question)) return true;
+  const resultText = normalizeResearchQuery(`${title} ${excerpt}`);
+  const mentionsTarget =
+    /(?:pyramid|pir[aá]mid|khufu|cheops|giza|saqqara|اهرام|هرم|جيزه|سقاره|пирамид|ピラミッド|ギザ|サッカラ|金字塔)/u.test(resultText);
+  const mentionsFinding =
+    /(?:discover|find|excavat|uncover|corridor|void|muon|hallazgo|descubr|découverte|decouverte|trouve|fund|entdeck|открыт|находк|発見|发现|اكتشاف|عثور|حفائر|ممر|فراغ)/u.test(resultText);
+  return mentionsTarget && mentionsFinding;
 }
 
 function extractReadableResearchText(html: string): string {
@@ -467,6 +482,7 @@ async function searchWithChatSpecialists(
         String(item.description ?? item.snippet ?? ""),
       ).slice(0, 1_200);
       if (excerpt.length < 80) continue;
+      if (!isRelevantDiscoverySearchResult(question, item.title || "", excerpt)) continue;
       const existing = candidateMap.get(url.href);
       if (existing) {
         if (!existing.providers.includes(group.provider)) existing.providers.push(group.provider);
@@ -1456,7 +1472,9 @@ export async function handleChatPost(
   ) {
     console.info("[Chat] Using reviewed source-backed heritage knowledge after the search providers were exhausted");
     return asChatStream(
-      localKnowledgeAnswer.content,
+      isDiscoveryResearchQuestion(latestQuestion)
+        ? pyramidDiscoveryFallbackCopy[parsed.data.language]
+        : localKnowledgeAnswer.content,
       includeSources ? localKnowledgeSources : [],
       parsed.data.language,
     );
