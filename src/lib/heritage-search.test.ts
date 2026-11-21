@@ -569,6 +569,23 @@ describe("trusted Egyptian heritage search", () => {
     expect(await searchTrustedEgyptianHeritage("Saqqara", "en", fetcher)).toEqual([]);
   });
 
+  it("skips the secondary index lookup when the chat cancels redundant research", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetcher = vi.fn<typeof fetch>();
+
+    const results = await searchTrustedEgyptianHeritage(
+      "ما تاريخ بناء معبد الكرنك؟",
+      "ar",
+      fetcher,
+      controller.signal,
+      [],
+    );
+
+    expect(results).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("returns no evidence when all cited authoritative pages are unreachable", async () => {
     const fetcher = vi.fn<typeof fetch>(async (_input) => {
       const url = new URL(String(_input));
