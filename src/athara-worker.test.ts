@@ -480,8 +480,16 @@ describe("ATHARA Cloudflare Worker", () => {
         localImageUrls: ["/cached-nephthys-derivative.jpg"],
       }],
     };
+    let releaseIndexSearch!: () => void;
+    const indexSearchGate = new Promise<void>((resolve) => {
+      releaseIndexSearch = resolve;
+    });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input instanceof Request ? input.url : input);
+      if (url === "http://127.0.0.1:8765/search") {
+        await indexSearchGate;
+        return Response.json({ results: [] });
+      }
       if (url.startsWith("https://egymonuments.gov.eg/media/4666/dsc_0802.jpg")) {
         return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } });
       }
@@ -514,7 +522,7 @@ describe("ATHARA Cloudflare Worker", () => {
     try {
       const transformedCanvasImage = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
       const transformedSearchImage = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xd8, 0xff, 0xd9]).toString("base64");
-      const response = await worker.fetch(
+      const responsePromise = worker.fetch(
         post("/api/scan", {
           image: transformedCanvasImage,
           originalImage: png,
@@ -526,8 +534,18 @@ describe("ATHARA Cloudflare Worker", () => {
           AI: { run: aiRun },
           SCANNER_OPENROUTER_API_KEY: "test-openrouter-key",
           ASSETS: { fetch: assetsFetch },
+          SCANNER_INDEX_URL: "http://127.0.0.1:8765",
         },
       );
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(fetchMock.mock.calls.some(([input]) =>
+          String(input instanceof Request ? input.url : input).startsWith(referenceUrl),
+        )).toBe(true);
+      } finally {
+        releaseIndexSearch();
+      }
+      const response = await responsePromise;
       const body = await response.json();
       expect(response.status).toBe(200);
       // This direct fingerprint match must complete before any quota-limited model is called.

@@ -145,6 +145,52 @@ function createHeritageSearchFetcher(
 }
 
 describe("general research fallbacks", () => {
+  it("runs specialist and trusted heritage searches concurrently", async () => {
+    let releaseSpecialistSearch!: () => void;
+    const specialistSearchGate = new Promise<void>((resolve) => {
+      releaseSpecialistSearch = resolve;
+    });
+    const searchBinding = {
+      websearch: vi.fn(async () => {
+        await specialistSearchGate;
+        return Response.json({ items: [] });
+      }),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname.endsWith("wikipedia.org")) {
+        return Response.json({ query: { search: [] } });
+      }
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: "سقارة موقع أثري." } }],
+        });
+      }
+      return new Response("Temporarily unavailable", { status: 503 });
+    });
+
+    const responsePromise = handleChatPost(
+      createChatRequest("إيه أهم الآثار في سقارة؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fetcher.mock.calls.some(([input]) =>
+        new URL(String(input)).hostname.endsWith("wikipedia.org"),
+      )).toBe(true);
+      expect(searchBinding.websearch).toHaveBeenCalled();
+    } finally {
+      releaseSpecialistSearch();
+    }
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+  });
+
   it("answers the Karnak question without displaying unrequested sources", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));

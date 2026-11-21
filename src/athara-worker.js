@@ -3716,36 +3716,6 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
           return json({ error: "الصورة الأصلية للمطابقة يجب ألا تتجاوز 500 كيلوبايت." }, 413);
         }
       }
-      let scannerIndexResult = null;
-      if (mode === "objects" && env.SCANNER_INDEX_URL) {
-        scannerIndexResult = await searchScannerIndex(env, imageBytes);
-        const [best, runnerUp] = scannerIndexResult?.results || [];
-        const sameEntity = Boolean(best && runnerUp && best.entityId === runnerUp.entityId);
-        const threshold = scannerIndexThreshold(env);
-        if (best) {
-          const decision = best.similarity >= threshold && sameEntity ? "probable" : "candidate";
-          console.info("[Image scanner] FAISS decision:", {
-            decision,
-            reason: decision === "probable" ? "threshold-and-top-two-entity-agreement" : "insufficient-score-or-entity-agreement",
-            threshold,
-            bestSimilarity: best.similarity,
-            topTwoSameEntity: sameEntity,
-          });
-          if (decision === "probable") {
-            const result = scannerIndexArtifactResult(best);
-            if (result) {
-              // The indexed record is already the trusted source; a second LLM
-              // summary request only adds latency and can fail on provider quotas.
-              result.sourceStory = String(best.metadata.description || "").trim();
-              if (result.sourceStory) result.analysis = result.sourceStory;
-              return json(result);
-            }
-            console.warn("[Image scanner] FAISS hit rejected because its source URL or title is not allowed.");
-          }
-        } else {
-          console.info("[Image scanner] FAISS decision:", { decision: "unverified", reason: "no-index-results" });
-        }
-      }
       let comparisonImageBytes = imageBytes.length <= MAX_COMPARISON_IMAGE_BYTES ? imageBytes : null;
       if (body?.searchImage !== undefined) {
         if (typeof body.searchImage !== "string" || body.searchImage.length > 700_000) {
@@ -3762,37 +3732,71 @@ ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + q
           return json({ error: "نسخة المقارنة البصرية يجب ألا تتجاوز 500 كيلوبايت." }, 413);
         }
       }
-      // Run deterministic official-image matching before any quota-limited vision call.
-      // This allows exact official catalogue images to resolve even when every AI
-      // provider is exhausted. The original upload is checked before transformed copies.
-      if (mode === "objects" && body?.originalImage !== undefined &&
-          Array.isArray(EMBEDDED_CURATED_RECORDS) && EMBEDDED_CURATED_RECORDS.length) {
-        try {
-          const directRecords = EMBEDDED_CURATED_RECORDS.filter((record) =>
-            record && (record.mode === "objects" || record.mode === "both") &&
-            Array.isArray(record.imageUrls) && record.imageUrls.length > 0 &&
-            typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
-          );
-          const directImages = await loadOfficialCandidateImages(
-            directRecords.map((record) => ({ record, curatedFallback: true })),
-            env.ASSETS,
-          );
-          const variants = [exactMatchImageBytes, imageBytes, comparisonImageBytes]
-            .filter((bytes, index, all) =>
-              Array.isArray(bytes) && bytes.length > 0 &&
-              all.findIndex((candidate) => candidate === bytes) === index,
-            );
-          for (const variant of variants) {
-            const exactMatch = await findExactOfficialImageMatch(variant, directImages);
-            if (exactMatch) {
-              console.info("[Image scanner] Early quota-independent official image match:", exactMatch.item.id);
-              return json(officialVisualMatchResponse(exactMatch));
-            }
+      const scannerIndexPromise =
+        mode === "objects" && env.SCANNER_INDEX_URL
+          ? searchScannerIndex(env, imageBytes)
+          : Promise.resolve(null);
+      const officialFingerprintPromise =
+        mode === "objects" && body?.originalImage !== undefined &&
+        Array.isArray(EMBEDDED_CURATED_RECORDS) && EMBEDDED_CURATED_RECORDS.length
+          ? (async () => {
+              try {
+                const directRecords = EMBEDDED_CURATED_RECORDS.filter((record) =>
+                  record && (record.mode === "objects" || record.mode === "both") &&
+                  Array.isArray(record.imageUrls) && record.imageUrls.length > 0 &&
+                  typeof record.sourceUrl === "string" && /^https:\/\//i.test(record.sourceUrl),
+                );
+                const directImages = await loadOfficialCandidateImages(
+                  directRecords.map((record) => ({ record, curatedFallback: true })),
+                  env.ASSETS,
+                );
+                const variants = [exactMatchImageBytes, imageBytes, comparisonImageBytes]
+                  .filter((bytes, index, all) =>
+                    Array.isArray(bytes) && bytes.length > 0 &&
+                    all.findIndex((candidate) => candidate === bytes) === index,
+                  );
+                for (const variant of variants) {
+                  const exactMatch = await findExactOfficialImageMatch(variant, directImages);
+                  if (exactMatch) {
+                    console.info("[Image scanner] Early quota-independent official image match:", exactMatch.item.id);
+                    return json(officialVisualMatchResponse(exactMatch));
+                  }
+                }
+              } catch (error) {
+                console.warn("[Image scanner] Early official image fingerprint pass unavailable:", String(error?.message || error).slice(0, 180));
+              }
+              return null;
+            })()
+          : Promise.resolve(null);
+      const scannerIndexResult = await scannerIndexPromise;
+      const [best, runnerUp] = scannerIndexResult?.results || [];
+      const sameEntity = Boolean(best && runnerUp && best.entityId === runnerUp.entityId);
+      const threshold = scannerIndexThreshold(env);
+      if (best) {
+        const decision = best.similarity >= threshold && sameEntity ? "probable" : "candidate";
+        console.info("[Image scanner] FAISS decision:", {
+          decision,
+          reason: decision === "probable" ? "threshold-and-top-two-entity-agreement" : "insufficient-score-or-entity-agreement",
+          threshold,
+          bestSimilarity: best.similarity,
+          topTwoSameEntity: sameEntity,
+        });
+        if (decision === "probable") {
+          const result = scannerIndexArtifactResult(best);
+          if (result) {
+            // The indexed record is already the trusted source; a second LLM
+            // summary request only adds latency and can fail on provider quotas.
+            result.sourceStory = String(best.metadata.description || "").trim();
+            if (result.sourceStory) result.analysis = result.sourceStory;
+            return json(result);
           }
-        } catch (error) {
-          console.warn("[Image scanner] Early official image fingerprint pass unavailable:", String(error?.message || error).slice(0, 180));
+          console.warn("[Image scanner] FAISS hit rejected because its source URL or title is not allowed.");
         }
+      } else {
+        console.info("[Image scanner] FAISS decision:", { decision: "unverified", reason: "no-index-results" });
       }
+      const officialFingerprintResponse = await officialFingerprintPromise;
+      if (officialFingerprintResponse) return officialFingerprintResponse;
 
       const photoGps = readExifGps(imageBytes);
 

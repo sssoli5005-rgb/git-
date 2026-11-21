@@ -1002,62 +1002,51 @@ export async function handleChatPost(
       ].join("\n")
     : "";
 
-  if (liveResearchRequested && suppliedEnv?.CHAT_WEB_SEARCH) {
-    try {
-      const specialistSearch = await searchWithChatSpecialists(
-        suppliedEnv.CHAT_WEB_SEARCH,
-        latestQuestion,
-        fetcher,
-        request.signal,
-      );
-      if (specialistSearch.sources.length) {
-        searchContext = [searchContext, specialistSearch.context].filter(Boolean).join("\n\n");
-        searchedSources = mergeResearchSources(searchedSources, specialistSearch.sources);
-      }
-    } catch (error) {
-      console.warn("[Chat research] Independent search was unavailable", {
-        reason: error instanceof Error ? error.message : "unknown",
-      });
-    }
-  }
-
-  if (heritageQuestion) {
-    // Give trusted museum/university sources time to respond before falling back.
-    const searchTimeout = AbortSignal.timeout(10_000);
-    const searchSignal = AbortSignal.any([request.signal, searchTimeout]);
-    try {
-      const results = await searchTrustedEgyptianHeritage(
-        buildHeritageSearchQuery(parsed.data.messages),
-        parsed.data.language,
-        fetcher,
-        searchSignal,
-        localKnowledgeSources,
-      );
-      if (!results.length) {
-        liveSearchUnavailable = true;
-        if (!localKnowledgeSources.length) {
-          console.warn(
-            "[Heritage search] No trusted live sources or matching citations; refusing an ungrounded answer",
+  const specialistSearchPromise =
+    liveResearchRequested && suppliedEnv?.CHAT_WEB_SEARCH
+      ? searchWithChatSpecialists(
+          suppliedEnv.CHAT_WEB_SEARCH,
+          latestQuestion,
+          fetcher,
+          request.signal,
+        ).catch((error: unknown) => {
+          console.warn("[Chat research] Independent search was unavailable", {
+            reason: error instanceof Error ? error.message : "unknown",
+          });
+          return null;
+        })
+      : Promise.resolve(null);
+  const heritageSearchPromise = heritageQuestion
+    ? (async () => {
+        const searchTimeout = AbortSignal.timeout(10_000);
+        const searchSignal = AbortSignal.any([request.signal, searchTimeout]);
+        try {
+          return await searchTrustedEgyptianHeritage(
+            buildHeritageSearchQuery(parsed.data.messages),
+            parsed.data.language,
+            fetcher,
+            searchSignal,
+            localKnowledgeSources,
           );
-        } else {
-          console.warn(
-            "[Heritage search] No live source excerpts; using curated knowledge with strict evidence limits",
-          );
+        } catch (error) {
+          console.error("[Heritage search] Request failed", {
+            reason: error instanceof Error ? error.message : "unknown",
+            timedOut: searchTimeout.aborted,
+          });
+          return null;
         }
-      } else {
-        searchContext = [searchContext, formatHeritageSearchContext(results)]
-          .filter(Boolean)
-          .join("\n\n");
-        searchedSources = mergeResearchSources(
-          searchedSources,
-          results.map(({ title, organization, url }) => ({ title, organization, url })),
-        );
-      }
-    } catch (error) {
-      console.error("[Heritage search] Request failed", {
-        reason: error instanceof Error ? error.message : "unknown",
-        timedOut: searchTimeout.aborted,
-      });
+      })()
+    : Promise.resolve(null);
+  const [specialistSearch, heritageResults] = await Promise.all([
+    specialistSearchPromise,
+    heritageSearchPromise,
+  ]);
+  if (specialistSearch?.sources.length) {
+    searchContext = [searchContext, specialistSearch.context].filter(Boolean).join("\n\n");
+    searchedSources = mergeResearchSources(searchedSources, specialistSearch.sources);
+  }
+  if (heritageQuestion) {
+    if (!heritageResults?.length) {
       liveSearchUnavailable = true;
       if (!localKnowledgeSources.length) {
         console.warn(
@@ -1066,6 +1055,15 @@ export async function handleChatPost(
       } else {
         console.warn("[Heritage search] Using curated references after live search failed");
       }
+    } else {
+      searchContext = [
+        searchContext,
+        formatHeritageSearchContext(heritageResults),
+      ].filter(Boolean).join("\n\n");
+      searchedSources = mergeResearchSources(
+        searchedSources,
+        heritageResults.map(({ title, organization, url }) => ({ title, organization, url })),
+      );
     }
   }
 
