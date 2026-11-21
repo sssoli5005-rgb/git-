@@ -3041,6 +3041,124 @@ describe("ATHARA Cloudflare Worker", () => {
     expect(prompt).not.toContain("Was Osiris their sister?");
   });
 
+  it("uses Gemini for official guide translations and removes model wrappers and sources", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: "هقولك بترجمة الوصف: نفتيس وأختها إيزيس كانتا تبكيان أوزيريس.\n\nالمصادر:\n- https://example.com",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    const aiRun = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/guide", {
+          artifact: "Statue of Nephthys",
+          language: "ar",
+          mode: "official",
+          reference: "Nephthys and Isis mourned Osiris.",
+        }),
+        { AI: { run: aiRun }, SCANNER_GEMINI_API_KEY: "gemini-test-key" },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        ok: true,
+        answer: "نفتيس وأختها إيزيس كانتا تبكيان أوزيريس.",
+      });
+      expect(body.answer).not.toContain("المصادر");
+      expect(body.model).toContain("gemini");
+      expect(aiRun).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("falls back to Workers AI when Gemini returns a repetitive guide translation", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        candidates: [{ content: { parts: [{ text: "هتكون ".repeat(50) }] } }],
+      }),
+    );
+    const aiRun = vi
+      .fn()
+      .mockResolvedValue({ response: "نفتيس وأختها إيزيس كانتا تبكيان أوزيريس." });
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/guide", {
+          artifact: "Statue of Nephthys",
+          language: "ar",
+          mode: "official",
+          reference: "Nephthys and Isis mourned Osiris.",
+        }),
+        { AI: { run: aiRun }, SCANNER_GEMINI_API_KEY: "gemini-test-key" },
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        ok: true,
+        answer: "نفتيس وأختها إيزيس كانتا تبكيان أوزيريس.",
+        model: "Cloudflare Workers AI · Llama 3.1 8B",
+      });
+      expect(body.answer).not.toContain("هتكون");
+      expect(aiRun).toHaveBeenCalledOnce();
+      expect(warning).toHaveBeenCalledOnce();
+    } finally {
+      warning.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects runaway repetition from guide providers instead of returning broken translation", async () => {
+    const repeatedText = "هتكون ".repeat(50);
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        candidates: [{ content: { parts: [{ text: repeatedText }] } }],
+      }),
+    );
+    const aiRun = vi.fn().mockResolvedValue({ response: repeatedText });
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await worker.fetch(
+        post("/api/guide", {
+          artifact: "Statue of Nephthys",
+          language: "ar",
+          mode: "official",
+          reference: "Nephthys and Isis mourned Osiris.",
+        }),
+        { AI: { run: aiRun }, SCANNER_GEMINI_API_KEY: "gemini-test-key" },
+      );
+
+      expect(response.status).toBe(502);
+      expect(await response.json()).toMatchObject({
+        error: expect.stringContaining("ترجمة موثوقة"),
+      });
+      expect(aiRun).toHaveBeenCalledOnce();
+      expect(warning).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledOnce();
+    } finally {
+      warning.mockRestore();
+      error.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("retries a transient Gemini Vision 503 before using the successful response", async () => {
     let geminiCalls = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

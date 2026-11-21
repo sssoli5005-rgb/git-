@@ -178,13 +178,14 @@ function asChatStream(
   sources: Array<{ title: string; organization: string; url: string }> = [],
   language: LangCode = "ar",
 ): Response {
+  const safeContent = removeInlineResearchCitations(content);
   const sourceSection = sources.length
     ? `\n\n${translations[language].chat.sourcesLabel}:\n${sources
         .map((source) => `- [${source.title} — ${source.organization}](${source.url})`)
         .join("\n")}`
     : "";
   return new Response(
-    `${JSON.stringify({ message: { content: `${content}${sourceSection}` }, done: true, done_reason: "stop" })}\n`,
+    `${JSON.stringify({ message: { content: `${safeContent}${sourceSection}` }, done: true, done_reason: "stop" })}\n`,
     {
       headers: {
         "Cache-Control": "no-cache, no-transform",
@@ -418,27 +419,73 @@ function requiresVerifiedEvidence(
 }
 
 function canAnswerFromGeneralKnowledge(query: string, heritageQuestion: boolean): boolean {
-  if (
-    heritageQuestion ||
-    inferResearchTopics(query).some((topic) => ["health", "law", "economy"].includes(topic))
-  ) {
+  const topics = inferResearchTopics(query);
+  if (topics.some((topic) => ["health", "law", "economy", "scripture"].includes(topic))) {
     return false;
   }
 
-  return !/(?:\b(?:latest|current|today|yesterday|this week|recent|news|updated|as of)\b|احدث|اخر|حاليا|اليوم|النهارده|امبارح|اخبار|الاسبوع)/u.test(
-    normalizeResearchQuery(query),
+  const normalized = normalizeResearchQuery(query);
+  const directArtifactIdentification =
+    heritageQuestion &&
+    /(?:\b(?:identify|identification|what artifact is this|name this artifact)\b|اسم القطعة|هوية القطعة|ما هذا الأثر|ما هذا الاثر|ايه الأثر ده|ايه الاثر ده|القطعة دي في الصورة|الصورة دي فيها ايه)/u.test(
+      normalized,
+    );
+  if (directArtifactIdentification) return false;
+
+  return !/(?:\b(?:latest|current|today|yesterday|this week|recent|news|updated|as of)\b|dernier|actuel|aujourd'hui|récent|actualité|ultimo|actual|hoy|reciente|noticias|attuale|oggi|notizie|neueste|aktuell|heute|nachrichten|последн|сейчас|сегодня|недавно|новост|最新|現在|今日|最近|ニュース|調べて|検索|確認|احدث|اخر|حاليا|اليوم|النهارده|امبارح|اخبار|الاسبوع)/u.test(
+    normalized,
   );
 }
 
 function removeInlineResearchCitations(content: string): string {
   return content
-    .replace(/<ATHARA_SOURCES>[\s\S]*?<\/ATHARA_SOURCES>/giu, "")
+    .replace(/<ATHARA_SOURCES>[\s\S]*$/iu, "")
     .replace(/\s*(?:〖\s*\d+†L\d+(?:-L\d+)?\s*〗|【\s*\d+†L\d+(?:-L\d+)?\s*】)/gu, "")
     .replace(
       /(?:^|\n)\s*(?:#{1,6}\s*)?(?:sources|references|المصادر(?: المستخدمة)?|المراجع)\s*:?\s*[\s\S]*$/iu,
       "",
     )
     .trim();
+}
+
+function emitSafeChatProgress(
+  emit: (event: ChatStreamEvent) => void,
+  content: string,
+  displayedContent: string,
+): string {
+  const cleaned = removeInlineResearchCitations(content);
+  const lastCitationStart = Math.max(cleaned.lastIndexOf("【"), cleaned.lastIndexOf("〖"));
+  const lastCitationEnd = Math.max(cleaned.lastIndexOf("】"), cleaned.lastIndexOf("〗"));
+  const safeContent =
+    cleaned.length < content.length
+      ? cleaned
+      : lastCitationStart > lastCitationEnd
+        ? cleaned.slice(0, lastCitationStart)
+        : cleaned;
+  if (safeContent.startsWith(displayedContent)) {
+    const delta = safeContent.slice(displayedContent.length);
+    if (delta) emit({ message: { content: delta } });
+  } else {
+    emit({ reset: true });
+    if (safeContent) emit({ message: { content: safeContent } });
+  }
+  return safeContent;
+}
+
+function emitFinalSafeChatContent(
+  emit: (event: ChatStreamEvent) => void,
+  content: string,
+  displayedContent: string,
+): string {
+  const safeContent = removeInlineResearchCitations(content);
+  if (safeContent.startsWith(displayedContent)) {
+    const delta = safeContent.slice(displayedContent.length);
+    if (delta) emit({ message: { content: delta } });
+  } else {
+    emit({ reset: true });
+    if (safeContent) emit({ message: { content: safeContent } });
+  }
+  return safeContent;
 }
 
 // The curated directory ranks sources and every accepted web result must still
@@ -1059,7 +1106,11 @@ export async function handleChatPost(
     latestQuestion,
     heritageQuestion,
   );
-  const providerEvidenceRequired = verifiedEvidenceRequired && !generalKnowledgeFallbackAllowed;
+  const hasRelevantCuratedEvidence =
+    Boolean(localKnowledgeAnswer.content) && localKnowledgeSources.length > 0;
+  const providerEvidenceRequired =
+    verifiedEvidenceRequired &&
+    (!generalKnowledgeFallbackAllowed || hasRelevantCuratedEvidence);
   const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
@@ -2125,20 +2176,14 @@ export async function handleChatPost(
       let reply: string;
       let doneReason: string | undefined;
       let streamedReply = "";
+      let displayedReply = "";
       let repetitionDetected = false;
       try {
         ({ content: reply, doneReason } = await consumeOllamaStream(response, (content) => {
           streamedReply += content;
           const cleaned = removeRepeatedSentences(streamedReply);
-          if (cleaned.repetitionsRemoved) {
-            if (!repetitionDetected) {
-              emit({ reset: true });
-              emit({ message: { content: cleaned.content } });
-              repetitionDetected = true;
-            }
-            return;
-          }
-          if (!repetitionDetected) emit({ message: { content } });
+          repetitionDetected ||= cleaned.repetitionsRemoved > 0;
+          displayedReply = emitSafeChatProgress(emit, cleaned.content, displayedReply);
         }));
       } catch (error) {
         console.error("[Ollama] Arabic response stream could not be parsed", {
@@ -2153,14 +2198,13 @@ export async function handleChatPost(
         return;
       }
 
-      if (repetitionDetected) {
-        const cleaned = removeRepeatedSentences(reply);
+      const finalReply = removeRepeatedSentences(removeInlineResearchCitations(reply));
+      if (repetitionDetected || finalReply.repetitionsRemoved) {
         console.warn("[Ollama] Removed repeated sentences from the response", {
-          count: cleaned.repetitionsRemoved,
+          count: finalReply.repetitionsRemoved,
         });
-        emit({ reset: true });
-        emit({ message: { content: cleaned.content } });
       }
+      displayedReply = emitFinalSafeChatContent(emit, finalReply.content, displayedReply);
 
       if (doneReason === "length") {
         console.warn("[Ollama] Arabic response stopped at the generation limit", {
@@ -2171,7 +2215,7 @@ export async function handleChatPost(
         return;
       }
 
-      if (hasArabicLanguageMix(reply)) {
+      if (hasArabicLanguageMix(finalReply.content)) {
         console.warn("[Ollama] Non-Arabic output detected; retrying with qwen3:8b.");
         const fallbackRequest = createArabicFallbackRequest(chatRequest);
         let fallbackResponse: Response;
@@ -2227,11 +2271,14 @@ export async function handleChatPost(
           finishReply();
           return;
         }
-        if (!fallbackReply.trim() || hasArabicLanguageMix(fallbackReply)) {
+        const cleanedFallback = removeRepeatedSentences(
+          removeInlineResearchCitations(fallbackReply),
+        );
+        if (!cleanedFallback.content.trim() || hasArabicLanguageMix(cleanedFallback.content)) {
           console.error("[Ollama] Arabic fallback response failed validation", {
             model: "qwen3:8b",
-            empty: !fallbackReply.trim(),
-            languageMix: hasArabicLanguageMix(fallbackReply),
+            empty: !cleanedFallback.content.trim(),
+            languageMix: hasArabicLanguageMix(cleanedFallback.content),
           });
           finishReply();
           return;
@@ -2242,7 +2289,7 @@ export async function handleChatPost(
           model: "qwen3:8b",
           doneReason: fallbackDoneReason,
         });
-        emit({ message: { content: fallbackReply } });
+        displayedReply = emitFinalSafeChatContent(emit, cleanedFallback.content, "");
       }
 
       finishReply();
@@ -2250,11 +2297,13 @@ export async function handleChatPost(
   }
 
   return asProgressiveChatStream(async (emit) => {
-    let reply: string;
+    let reply = "";
     let doneReason: string | undefined;
+    let displayedReply = "";
     try {
       ({ content: reply, doneReason } = await consumeOllamaStream(response, (content) => {
-        emit({ message: { content } });
+        reply += content;
+        displayedReply = emitSafeChatProgress(emit, reply, displayedReply);
       }));
     } catch (error) {
       console.error("[Ollama] Response stream could not be completed", {
@@ -2270,6 +2319,8 @@ export async function handleChatPost(
       return;
     }
 
+    const finalReply = removeInlineResearchCitations(reply);
+    displayedReply = emitFinalSafeChatContent(emit, finalReply, displayedReply);
     const sourceSection = formatSourceSection(responseSources, parsed.data.language);
     if (sourceSection) emit({ message: { content: sourceSection } });
     emit({ done: true, done_reason: "stop" });

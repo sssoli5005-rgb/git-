@@ -260,6 +260,49 @@ function extractText(result) {
   return "";
 }
 
+function cleanGuideText(value) {
+  return String(value || "")
+    .replace(
+      /^(?:(?:إليك|هقولك)\s+(?:الترجمة|بترجمة\s+الوصف)|translation(?:\s+of\s+the\s+description)?|here(?:'s| is)\s+the\s+translation)\s*[:：-]\s*/iu,
+      "",
+    )
+    .replace(/<ATHARA_SOURCES>[\s\S]*$/iu, "")
+    .replace(
+      /(?:^|\n)\s*(?:#{1,6}\s*)?(?:sources|references|المصادر|المراجع)\s*:?\s*[\s\S]*$/iu,
+      "",
+    )
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+}
+
+function hasRunawayRepetition(value) {
+  const tokens = value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (tokens.length < 12) return false;
+
+  let repeatedRun = 1;
+  const frequencies = new Map();
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    frequencies.set(token, (frequencies.get(token) || 0) + 1);
+    repeatedRun = token === tokens[index - 1] ? repeatedRun + 1 : 1;
+    if (repeatedRun >= 4) return true;
+  }
+
+  return [...frequencies].some(
+    ([token, count]) => token.length >= 3 && count >= 6 && count / tokens.length >= 0.25,
+  );
+}
+
+function isUsableGuideText(value) {
+  const cleaned = cleanGuideText(value);
+  return Boolean(cleaned) && cleaned.length <= 2_500 && !hasRunawayRepetition(cleaned);
+}
+
 function extractOpenRouterMessageText(message) {
   const content = message?.content;
   if (typeof content === "string") return content.trim();
@@ -3577,7 +3620,11 @@ export default {
     }
 
     if (url.pathname === "/api/guide" && request.method === "POST") {
-      if (!env.AI) return json({ error: "خدمة الذكاء الاصطناعي مش متوصلة على Worker." }, 503);
+      const geminiKey =
+        typeof env.SCANNER_GEMINI_API_KEY === "string" ? env.SCANNER_GEMINI_API_KEY.trim() : "";
+      const workersAiAvailable = typeof env.AI?.run === "function";
+      if (!geminiKey && !workersAiAvailable)
+        return json({ error: "خدمة الذكاء الاصطناعي مش متوصلة على Worker." }, 503);
       let body;
       try {
         body = await request.json();
@@ -3603,31 +3650,75 @@ ${reference}
 المهمة: ${task}
 ${mode !== "official" && question ? "سؤال الزائر الإضافي: " + question : ""}
 في وضع الترجمة الرسمية، أعد ترجمة النص الأصلي فقط، ولا تكتب الاسم الرسمي أو موقع العرض لأن التطبيق يضيفهما من بيانات المتحف. اكتب الإجابة فقط ولا تضف مصادر غير متاحة.`;
-      try {
-        const result = await env.AI.run(TEXT_MODEL, {
-          messages: [
-            { role: "system", content: GUIDE_SYSTEM },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 650,
-          temperature: 0.1,
-        });
-        let answer = extractText(result).trim();
-        if (!answer) throw new Error("النموذج رجّع رد فاضي.");
-        return json({
-          ok: true,
-          answer,
-          model: "Cloudflare Workers AI · Llama 3.1 8B",
-        });
-      } catch (error) {
+      let answer = "";
+      let model = "";
+
+      if (mode === "official" && geminiKey) {
+        try {
+          const geminiModel = configuredGeminiVisionModel(env);
+          const response = await fetchVisionWithRetry(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: GUIDE_SYSTEM }] },
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { maxOutputTokens: 850, temperature: 0.1 },
+              }),
+            },
+            { provider: "Gemini guide", timeoutMs: 15_000, retries: 1 },
+          );
+          const result = await response.json();
+          const candidateText = Array.isArray(result?.candidates?.[0]?.content?.parts)
+            ? result.candidates[0].content.parts
+                .map((part) => (typeof part?.text === "string" ? part.text : ""))
+                .join("")
+            : "";
+          if (!isUsableGuideText(candidateText))
+            throw new Error("Gemini returned an unusable guide translation.");
+          answer = cleanGuideText(candidateText);
+          model = geminiModel;
+        } catch (error) {
+          console.warn(
+            "[guide] Gemini translation failed; falling back to Workers AI.",
+            safeVisionFailureCategory(error?.message || error),
+          );
+        }
+      }
+
+      if (!answer && workersAiAvailable) {
+        try {
+          const result = await env.AI.run(TEXT_MODEL, {
+            messages: [
+              { role: "system", content: GUIDE_SYSTEM },
+              { role: "user", content: prompt },
+            ],
+            max_tokens: 650,
+            temperature: 0.1,
+          });
+          const candidateText = extractText(result);
+          if (!isUsableGuideText(candidateText))
+            throw new Error("Workers AI returned an unusable guide translation.");
+          answer = cleanGuideText(candidateText);
+          model = "Cloudflare Workers AI · Llama 3.1 8B";
+        } catch (error) {
+          console.error("[guide] Workers AI translation failed.", {
+            reason: String(error?.message || error).slice(0, 180),
+          });
+        }
+      }
+
+      if (!answer) {
         return json(
           {
-            error: "مش قادرين نولّد الشرح دلوقتي. جرّب تاني بعد شوية.",
-            detail: String(error?.message || error).slice(0, 240),
+            error: "مش قادرين نولّد ترجمة موثوقة دلوقتي.",
           },
           502,
         );
       }
+
+      return json({ ok: true, answer, model });
     }
 
     if (url.pathname === "/api/scan" && request.method === "POST") {

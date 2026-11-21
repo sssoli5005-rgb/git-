@@ -651,6 +651,54 @@ describe("general research fallbacks", () => {
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
   });
 
+  it("answers a stable Egyptian-history question from model knowledge when search is empty", async () => {
+    const answer =
+      "كانت الحبال تُصنع غالبًا من ألياف نباتية مثل الكتان والبردي، واختلفت الخامات حسب الاستخدام وما يتوفر محليًا.";
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname !== "api.groq.com") {
+        return new Response("No search results", { status: 404 });
+      }
+      const payload = JSON.parse(String(init?.body)) as {
+        messages: { role: string; content: string }[];
+        tools?: unknown;
+      };
+      expect(payload.tools).toBeUndefined();
+      expect(payload.messages[0]?.content).toContain(
+        "The trusted-source search already returned no usable results",
+      );
+      return Response.json({
+        choices: [{ finish_reason: "stop", message: { content: answer } }],
+      });
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("ازاي كان المصري القديم بيصنع الحبال؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(answer);
+    expect(body).not.toContain("مش لاقي دليل موثوق");
+    expect(body).not.toContain("المصادر:");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(
+      fetcher.mock.calls.some(([input]) => new URL(String(input)).hostname === "api.groq.com"),
+    ).toBe(true);
+  });
+
   it.each([
     ["ايه الفرق بين الحاسوب واللابتوب؟", "الحاسوب واللابتوب", "الحاسوب واللابتوب"],
     ["ممكن تصححلي جمله فيها غلط املائي؟", "اللغة", "الجملة صحيحة"],
@@ -2282,6 +2330,29 @@ describe("handleChatPost Ollama stream handling", () => {
       .split("\n")
       .map((line) => JSON.parse(line) as ChatStreamEvent);
     expect(events.map((event) => event.message?.content ?? "").join("")).toContain("واكتمل.");
+    expect(events.at(-1)).toMatchObject({ done: true, done_reason: "stop" });
+  });
+
+  it("does not stream a partial generated-source block to the visitor", async () => {
+    const raw =
+      ollamaChunk("دي إجابة مفيدة من غير مصادر مطلوبة. ") +
+      ollamaChunk(
+        '<ATHARA_SOURCES>[{"title":"Hidden page","url":"https://example.com/hidden","evidence":"' +
+          "evidence ".repeat(30),
+      ) +
+      ollamaChunk('"}]</ATHARA_SOURCES>', true, "stop");
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      createChunkedResponse([raw.slice(0, 60), raw.slice(60, 180), raw.slice(180)]),
+    );
+
+    const response = await handleChatPost(createChatRequest(), fetcher);
+    const events = await readChatEvents(response);
+    const streamedText = events.map((event) => event.message?.content ?? "").join("");
+
+    expect(response.status).toBe(200);
+    expect(streamedText).toContain("دي إجابة مفيدة");
+    expect(streamedText).not.toContain("<ATHARA_SOURCES>");
+    expect(streamedText).not.toContain("example.com/hidden");
     expect(events.at(-1)).toMatchObject({ done: true, done_reason: "stop" });
   });
 
