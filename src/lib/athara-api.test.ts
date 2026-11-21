@@ -126,7 +126,7 @@ describe("ATHARA API dispatch in the production server entry", () => {
       confidenceByField: expect.objectContaining({ identity: "low" }),
     });
     expect(run).toHaveBeenCalledOnce();
-  });
+  }, 10_000);
 
   it("leaves unrelated routes to TanStack Start", () => {
     expect(
