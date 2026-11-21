@@ -2735,250 +2735,54 @@ describe("handleChatPost Ollama stream handling", () => {
   });
 
   describe("general web research across non-Egypt topics", () => {
-    it("uses Groq browser search when the user explicitly asks for current research", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-        expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
-        const payload = JSON.parse(String(init?.body)) as {
-          model: string;
-          messages: { role: string; content: string }[];
-          max_completion_tokens: number;
-          tools?: Array<{ type: string }>;
-          tool_choice?: string;
-        };
-        expect(payload.model).toBe("openai/gpt-oss-20b");
-        expect(payload.max_completion_tokens).toBe(1536);
-        expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
-        expect(payload).not.toHaveProperty("citation_options");
-        expect(payload.tools).toEqual([{ type: "browser_search" }]);
-        expect(payload.tool_choice).toBe("required");
-        expect(payload.messages.at(-1)?.content).toContain(
-          "ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر",
-        );
-        expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
-        expect(
-          payload.messages.slice(1).some(
-            (message, index, messages) =>
-              message.role === "user" && messages[index - 1]?.role === "user",
-          ),
-        ).toBe(false);
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content:
-                  "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗.",
-                executed_tools: [
-                  {
-                    browser_results: [
-                      {
-                        title: "NASA — James Webb Space Telescope",
-                        url: "https://science.nasa.gov/mission/webb/",
-                        content:
-                          "NASA describes the James Webb Space Telescope and its infrared observations.",
-                        score: 0.94,
-                      },
-                    ],
-                  },
-                ],
-              },
-            },
-          ],
-        });
-      });
-      const response = await handleChatPost(
-        createChatRequest("ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر"),
-        fetcher,
-      );
-      expect(response.status).toBe(200);
-      expect(await response.text()).toContain("إحالات نتائج البحث");
-      expect(fetcher).toHaveBeenCalledOnce();
-    });
-
-    it("hides generated research citations and source sections unless requested", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-      const fetcher = vi.fn<typeof fetch>(async (input) => {
-        if (String(input).includes("api.groq.com")) {
-          return Response.json({
-            choices: [
-              {
-                finish_reason: "stop",
-                message: {
-                  content:
-                    'أثرت المكتبة في تاريخ العلم 【1†L19-L22】.\n\n### المصادر المستخدمة\n- https://www.britannica.com/topic/Library-of-Alexandria\n<ATHARA_SOURCES>[{"title":"Library of Alexandria","url":"https://en.wikipedia.org/wiki/Library_of_Alexandria","evidence":"The Library of Alexandria was one of the largest and most significant libraries of the ancient world."}]</ATHARA_SOURCES>',
-                  executed_tools: [
-                    {
-                      browser_results: [
-                        {
-                          title: "Library of Alexandria",
-                          url: "https://www.britannica.com/topic/Library-of-Alexandria",
-                          content:
-                            "A historical overview of the Library of Alexandria and its place in the ancient world.",
-                        },
-                      ],
-                    },
-                  ],
-                },
-              },
-            ],
-          });
-        }
-        return new Response("Temporarily unavailable", { status: 503 });
-      });
-
-      const response = await handleChatPost(
-        createChatRequest("ما هي مكتبة الإسكندرية القديمة؟"),
-        fetcher,
-      );
-      const body = await response.text();
-
-      expect(body).toContain("أثرت المكتبة في تاريخ العلم");
-      expect(body).not.toContain("【1†L19-L22】");
-      expect(body).not.toContain("المصادر المستخدمة");
-      expect(body).not.toContain("britannica.com");
-    });
-
-    it("verifies Groq browser-search citations against the opened institutional page", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-      const pageText =
-        "Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.";
-      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-        if (String(input).includes("api.groq.com")) {
-          const payload = JSON.parse(String(init?.body)) as {
-            messages: Array<{ role: string; content: string }>;
-            tools?: Array<{ type: string }>;
-            tool_choice?: string;
-          };
-          expect(payload.tools).toEqual([{ type: "browser_search" }]);
-          expect(payload.tool_choice).toBe("required");
-          expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
-          return Response.json({
-            choices: [
-              {
-                finish_reason: "stop",
-                message: {
-                  content:
-                    'لو تقصدي يوسف الصديق، يذكر سفر التكوين أنه مات في مصر ودُفن في تابوت. <ATHARA_SOURCES>[{"title":"Genesis 50:26 — Bible Gateway","url":"https://www.biblegateway.com/passage/?search=Genesis%2050%3A26","evidence":"Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt."}]</ATHARA_SOURCES>',
-                },
-              },
-            ],
-          });
-        }
-        expect(String(input)).toContain("biblegateway.com");
-        return new Response(
-          "<html><body><main>Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.</main></body></html>",
-          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
-        );
-      });
-      const response = await handleChatPost(
-        createChatRequest("اين يوجد جسد يوسق الصديق؟ عايزة المصدر"),
-        fetcher,
-      );
-      const body = await response.text();
-      expect(response.status).toBe(200);
-      expect(body).toContain("لو تقصدي يوسف الصديق");
-      expect(body).toContain("biblegateway.com");
-      expect(fetcher).toHaveBeenCalledTimes(2);
-    });
-
-    it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
-      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-        const url = String(input);
-        expect(url).toContain("generativelanguage.googleapis.com");
-        const payload = JSON.parse(String(init?.body)) as {
-          tools?: Array<{ google_search?: Record<string, never> }>;
-        };
-        expect(payload.tools).toEqual([{ google_search: {} }]);
-        return Response.json({
-          candidates: [
-            {
-              finishReason: "STOP",
-              content: {
-                parts: [
-                  {
-                    text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء. 【1†L1-L2】\n\n### المصادر\n- https://example.com/unverified",
-                  },
-                ],
-              },
-              groundingMetadata: {
-                groundingChunks: [
-                  {
-                    web: {
-                      uri: "https://science.nasa.gov/mission/webb/",
-                      title: "NASA — James Webb Space Telescope",
-                    },
-                  },
-                  { web: { uri: "https://webbtelescope.org/", title: "WebbTelescope.org" } },
-                ],
-              },
-            },
-          ],
-        });
-      });
-      const response = await handleChatPost(
-        createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب مع المصادر"),
-        fetcher,
-      );
-      const body = await response.text();
-      expect(response.status).toBe(200);
-      expect(body).toContain("تلسكوب جيمس ويب مرصد فضائي");
-      expect(body).not.toContain("【1†L1-L2】");
-      expect(body).not.toContain("example.com/unverified");
-      expect(body).toContain("https://science.nasa.gov/mission/webb/");
-      expect(body).toContain("https://webbtelescope.org/");
-      expect(fetcher).toHaveBeenCalledOnce();
-    });
-  });
-
-  it("uses live research for an ordinary factual question outside Egyptian heritage", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    it("uses Groq as a standalone conversational AI without provider-native web search", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        tools?: Array<{ type: string }>;
-        tool_choice?: string;
-      };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload).not.toHaveProperty("citation_options");
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
-      return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي 〖1†L1-L3〗.",
-              executed_tools: [
-                {
-                  browser_results: [
-                    {
-                      title: "NASA — Earth's Atmosphere",
-                      url: "https://science.nasa.gov/earth/",
-                      content:
-                        "The Earth's atmosphere scatters shorter blue wavelengths of sunlight more than longer red wavelengths.",
-                      score: 0.89,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      });
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toContain("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown; messages: { role: string; content: string }[] };
+      expect(payload.model).toBe("qwen/qwen3.8-27b");
+      expect(payload.tools).toBeUndefined();
+      expect(payload.messages[0]?.content).toContain("conversational AI engine");
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: "السما بتبدو زرقا لأن جزيئات الغلاف الجوي بتشتت الأطوال الموجية الزرقاء من ضوء الشمس بدرجة أكبر من الحمراء." } }] });
     });
     const response = await handleChatPost(createChatRequest("ليه السما زرقا؟"), fetcher);
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("تشتت ضوء الشمس");
+    expect(await response.text()).toContain("بتشتت الأطوال الموجية الزرقاء");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("falls back from Groq to Gemini as the only second AI and never invokes OpenRouter search", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "chat-gemini-key");
+    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "unused-openrouter-key");
+    const providerOrder: string[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      const payload = JSON.parse(String(init?.body)) as { model?: string; tools?: unknown; systemInstruction?: unknown };
+      if (url.hostname === "api.groq.com") {
+        providerOrder.push("Groq");
+        expect(payload.model).toBe("qwen/qwen3.8-27b");
+        expect(payload.tools).toBeUndefined();
+        return new Response("provider unavailable", { status: 401 });
+      }
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        providerOrder.push("Gemini");
+        expect(payload.model).toBeUndefined();
+        expect(payload.tools).toBeUndefined();
+        expect(payload.systemInstruction).toBeDefined();
+        return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "الثقب الأسود منطقة في الفضاء تكون جاذبيتها شديدة لدرجة أن الضوء نفسه لا يستطيع الإفلات منها بعد تجاوز أفق الحدث." }] } }] });
+      }
+      throw new Error("Unexpected third AI/search provider: " + url.hostname);
+    });
+    const response = await handleChatPost(createChatRequest("يعني ايه ثقب اسود؟"), fetcher);
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(providerOrder).toEqual(["Groq", "Gemini"]);
+    expect(body).toContain("الضوء نفسه لا يستطيع الإفلات");
+    expect(body).not.toContain("OpenRouter");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("researches the exact unaccented Arabic question without showing unrequested sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
