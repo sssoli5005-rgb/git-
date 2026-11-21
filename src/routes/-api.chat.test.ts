@@ -722,7 +722,7 @@ describe("general research fallbacks", () => {
         };
         const prompt = payload.messages.map((message) => message.content).join("\\n");
         expect(prompt).toContain("correct it directly and respectfully");
-        expect(prompt).toContain("ادعاء أن كائنات فضائية بنت الأهرامات");
+        expect(prompt).toContain("الادعاء بأن كائنات فضائية بنت أهرامات الجيزة");
         expect(payload.tools).toBeUndefined();
         return Response.json({
           choices: [{ finish_reason: "stop", message: { content: answer } }],
