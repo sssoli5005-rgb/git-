@@ -1463,46 +1463,8 @@ export async function handleChatPost(
           const rawAnswer = choice?.message?.content?.trim() ?? "";
           const parsedGroqAnswer = parseGroqSearchCitations(rawAnswer);
           const answer = parsedGroqAnswer.answer;
-          // Search providers expose citations in more than one OpenAI-compatible
-          // response shape. Accept only HTTPS URLs on the trusted-source allowlist;
-          // don't require the model to manufacture our private marker format.
-          const groqToolResults = (choice?.message?.executed_tools ?? []).flatMap((tool) => {
-            const nestedSearchResults = Array.isArray(tool.search_results)
-              ? tool.search_results
-              : (tool.search_results?.results ?? []);
-            return [...(tool.browser_results ?? []), ...nestedSearchResults];
-          });
-          const groqBrowserSources = [
-            ...groqToolResults.flatMap((result) => {
-              const url = isSafeResearchUrl(result.url);
-              const evidence = result.content ?? result.snippet ?? "";
-              // Browser-tool output is model supplied and is not page-verified.
-              // Open-web sources are accepted via the specialist pipeline,
-              // which fetches and records the destination page text.
-              return url && isTrustedResearchHost(url.hostname) && evidence.trim().length >= 40
-                ? [sourceFromTrustedUrl(url, result.title)]
-                : [];
-            }),
-            ...trustedSourcesFromGroq({
-              annotations: choice?.message?.annotations ?? [],
-            }),
-          ].filter(
-            (source, index, all) =>
-              all.findIndex((candidate) => candidate.url === source.url) === index,
-          );
-          const verifiedContentCitations = requestsLiveResearch
-            ? await verifyGroqSearchCitations(parsedGroqAnswer.citations, fetcher, request.signal)
-            : [];
-          const groqSearchSources = mergeResearchSources(
-            groqBrowserSources,
-            verifiedContentCitations,
-          );
-          const hasGroqSearchEvidence = groqSearchSources.length > 0;
-          if (requestsLiveResearch && hasGroqSearchEvidence) {
-            verifiedTurnSources = mergeResearchSources(verifiedTurnSources, groqSearchSources);
-            if (includeSources)
-              responseSources = mergeResearchSources(responseSources, groqSearchSources);
-          }
+          // Website references are gathered and page-checked by the
+          // independent specialist research layer above, never by the AI model.
           const canUseGroqResearchAnswer = Boolean(answer);
           if (choice?.finish_reason === "length") {
             providerFailureCode = "incomplete_response";
