@@ -431,7 +431,12 @@ function canAnswerFromGeneralKnowledge(
     /(?:\b(?:my case|my contract|my symptoms|i have|i take|should i take|what dose|dosage for me|diagnose me|treat me|my debt|my taxes|invest my money|should i buy|should i sell|sue my|legal advice for me|medical advice for me|emergency)\b|عندي|عندي الم|عندي ألم|اعاني|أعاني|اخد|أخد|اخذ|آخذ|جرعة|جرعات|ينفع اخد|هل اتناول|هل أتناول|نتيجة تحليلي|تحليلي|قضيتي|عقدي|ارفع قضية|أرفع قضية|محامي|حقوقي|حضانة|طلاق|استثمر فلوسي|فلوسي|مدخراتي|ديوني|قرضي|ضرايبي|ضرائبي)/u.test(
       normalized,
     );
-  if (topics.includes("scripture") || personalHighImpactAdvice) return false;
+  const exactScriptureQuotationRequested =
+    topics.includes("scripture") &&
+    /(?:\\b(?:quote verbatim|verbatim text|exact wording|full text of|recite the verse|quote the verse|copy the passage)\\b|اقتبس(?:\\s+لي)?|اقتباس حرفي|النص الحرفي|النص الكامل للآية|نص الآية حرفيًا|اكتب(?:\\s+لي)?\\s+نص(?:\\s+الآية)?|هات نص الآية|اذكر نص الآية|بالنص الحرفي)/iu.test(
+      normalized,
+    );
+  if (exactScriptureQuotationRequested || personalHighImpactAdvice) return false;
 
   const directArtifactIdentification =
     heritageQuestion &&
@@ -1129,18 +1134,18 @@ export async function handleChatPost(
   const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
-        "MANDATORY THREE-STAGE VERIFIED RESEARCH — use Exa, Linkup, and Ceramic in parallel when the Cloudflare Web Search binding is available:",
+        "INDEPENDENT SOURCE CONTEXT — the application has already run a separate website-search layer and may provide excerpts below:",
         "Understand the user's intent before searching. Normalize high-confidence spelling and transliteration variants, preserve the original wording, and gently surface the likely correction only when it helps. If two meanings remain materially different, ask one focused question rather than guessing.",
-        "Search the exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat an unfamiliar term or an empty first search as proof that no answer exists. If a term has multiple plausible meanings, give the likely interpretations and answer conditionally when safe; ask for clarification only when the distinction materially changes the answer.",
+        "The source-search layer handles exact wording and spelling variants independently. Do not try to perform or claim web searches yourself. Interpret the user's wording, resolve likely spelling variants, and answer the intended question. If multiple meanings materially change the answer, explain the likely interpretations and ask one focused question only when necessary.",
         "Choose sources from the shared categorized trusted-source directory that match the subject. Official sources, universities, national libraries and archives, museums, peer-reviewed journals, and recognized specialist publications have priority. Encyclopedias are orientation sources, not substitutes for primary evidence.",
-        "Search, compare, and synthesize evidence from the current turn. Distinguish directly opened page text from provider snippets. A snippet is limited evidence, not proof that the full page was read. Compare separate publications rather than counting multiple search providers that return the same page as independent corroboration.",
+        "Use the retrieved, opened page excerpts passed into this conversation as evidence. Distinguish page text from search snippets, and do not count multiple search providers returning the same page as independent corroboration.",
         "If providers disagree, explain the disagreement. State dates and current facts only when the retrieved evidence supports them. Correct false premises kindly and explain the supported information. Begin with the direct answer, then explain what supports it.",
         ...(isDiscoveryResearchQuestion(latestQuestion)
           ? [
               "DISCOVERY QUESTIONS: distinguish a peer-reviewed or institutionally confirmed physical finding from a proposed interpretation or an unverified media claim. Give the reported date, location, and detection method only when the retrieved evidence supports them. Do not call an older finding the latest unless the current search verifies that.",
             ]
           : []),
-        "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
+        "THE APPLICATION'S INDEPENDENT SEARCH CONTEXT FOR THIS QUESTION:",
         "MATCHED TRUSTED SOURCE DIRECTORY FOR THIS QUESTION:\\n" +
           describeTrustedSourcesForQuestion(latestQuestion, 12),
         "NORMALIZED RESEARCH QUERY (preserve the user's intent):\\n" +
@@ -1154,14 +1159,14 @@ export async function handleChatPost(
               "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
             ]
           : []),
-        "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Use retrieved evidence whenever available. For stable general knowledge questions that do not require current or primary-source verification, a cautious explanation from established general knowledge is acceptable if live results fail; clearly state that live verification was unavailable when relevant. Do not invent citations, links, or claims that a search succeeded. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For questions about scripture, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For religious history and theology, consult primary council or religious texts, official statements of the traditions being described, and academic scholarship; identify whose doctrinal perspective each claim represents, explain disputed terms in their historical context, and do not treat confessional positions as universal historical consensus. For ancient Egyptian religion, distinguish textual and archaeological evidence from modern interpretation, and avoid treating beliefs across all periods and local cults as one unchanging system. For disputed claims, compare independent sources.",
+        "The website-search layer is separate from the two conversation AI engines and has already run independently. Groq and Gemini are conversational models only. Use retrieved page text when it is present; otherwise answer stable, low-risk questions from your own well-established model knowledge. Keep strict evidence requirements for current facts, explicit source requests, exact verbatim scripture, high-impact personal advice, and direct artifact/image/inscription identification. Never invent citations or claim that an external page was opened when it was not.",
         "SCRIPTURE SCOPE: The Bible-text instruction above applies only to biblical questions. For the Qur'an, hadith, Jewish texts, or other traditions, retrieve the requested passage from a recognized text in that tradition; distinguish the primary text from translation, commentary, later interpretation, and historical scholarship. Identify a hadith collection and grading only when verified, and never present one school's interpretation as universal.",
         providerEvidenceRequired
           ? "VERIFIED-EVIDENCE REQUIREMENT: This current, high-impact, or Egyptian-heritage question requires verified sources. If no usable evidence is retrieved, do not guess or present model memory as verified; state the specific verification limit."
           : "GENERAL-KNOWLEDGE FALLBACK: If research returns no usable evidence for this safe, stable question, still answer from well-established general knowledge. Briefly distinguish what is known from what was not verified in this turn, and never invent sources, quotations, or citations.",
         wantsSources
-          ? "The user explicitly requested sources. Include only verified source names and links that directly support the answer."
-          : "The user did not request sources. Do not include source names, citations, URLs, or a sources section in the reply; use the retrieved evidence only to ground the answer. Exception: if the user supplied a source and specifically asks for an answer based on it, place that supplied link beside the claim it supports.",
+          ? "The user explicitly requested sources. Include only source names and links supplied by the independent app-level research context, and only when they directly support the answer."
+          : "The user did not request sources. Do not include source names, citations, URLs, or a sources section in the reply; use the independent app-level research context only to ground the answer. Exception: if the user supplied a source and specifically asks for an answer based on it, place that supplied link beside the claim it supports.",
         "SEARCH-FAILURE RECOVERY: Before saying a detail cannot be verified, use any directly relevant curated knowledge and verified references already supplied in the conversation context. If sources are unavailable for a stable general question, provide the most useful cautious explanation you can without pretending it was verified. If this query requires verified evidence, do not guess; state the specific limit and offer a useful next step. Include relevant verified references only when requested, except when the user supplied a source and specifically asks for an answer based on it; do not invent or expose unrelated links.",
       ].join("\n")
     : "";
@@ -1231,9 +1236,9 @@ export async function handleChatPost(
 
   const specialistSearchAttempted = Boolean(suppliedEnv?.CHAT_WEB_SEARCH);
   const specialistSearchFoundEvidence = searchedSources.length > 0 || Boolean(searchContext.trim());
-  const useHostedSearchTools =
-    liveResearchRequested &&
-    (providerEvidenceRequired || !specialistSearchAttempted || specialistSearchFoundEvidence);
+  // AI providers are independent conversation engines. Website retrieval is
+  // performed only by the specialist search pipeline above, never by model tools.
+  const useHostedSearchTools = false;
   const generalKnowledgeAfterSearchFailure =
     liveResearchRequested &&
     generalKnowledgeFallbackAllowed &&
@@ -1262,16 +1267,9 @@ export async function handleChatPost(
         source.url ===
         "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
     );
-  const hasReviewedScriptureAnswer =
-    localKnowledgeAnswer.directAnswer &&
-    localKnowledgeSources.some((source) =>
-      source.title === "Deuteronomy 34:5–6" ||
-      source.title === "2 Kings 2:11–18 — Elijah Taken Up to Heaven",
-    );
   const hasConfiguredHostedProvider = [
     "CHAT_GROQ_API_KEY",
     "CHAT_GEMINI_API_KEY",
-    "CHAT_OPENROUTER_API_KEY",
   ].some((key) => readProviderEnv(suppliedEnv, key)?.trim());
   if (
     (parsed.data.language === "ar" &&
@@ -1279,8 +1277,7 @@ export async function handleChatPost(
       localKnowledgeSources.length > 0 &&
       (searchedSources.length > 0 || !hasConfiguredHostedProvider)) ||
     (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
-    hasReviewedCosmeticsAnswer ||
-    hasReviewedScriptureAnswer
+    hasReviewedCosmeticsAnswer
   ) {
     console.info(
       hasReviewedCosmeticsAnswer
@@ -1300,10 +1297,8 @@ export async function handleChatPost(
         : "STRICT EVIDENCE LIMITATION: No approved live-source excerpt was retrieved for this turn. Do not guess or present model memory as verified for this specific identification, inscription, exact date, current fact, high-impact request, or explicit source request. State exactly what could not be confirmed and give the supported general context if available."
       : "";
 
-  // Live sources remain the preferred evidence. When they fail, stable and
-  // low-risk questions can still receive a cautious explanation; strict
-  // identification, current, high-impact, scriptural, and cited requests remain gated.
-  // Provider failover remains Groq, then Gemini, then OpenRouter.
+  // Live sources are separate evidence providers, not conversation models.
+  // Groq answers first and Gemini is the only AI fallback.
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
@@ -1345,16 +1340,16 @@ export async function handleChatPost(
       const compactResearchInstruction = [
         `You are ATHARA, a careful conversational guide. Answer in ${languageNames[parsed.data.language]}. Answer the user's exact question directly, using recent conversation context when relevant.`,
         "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
-        "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
+        "The application's independent website-search layer has already run for this turn and may supply page excerpts below. You are the conversational AI, not the search connector. Do not perform, claim, or fabricate web searches. If no excerpt is supplied, answer stable and safe questions from your own well-established knowledge.",
         "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
         "For evangelical Christianity, prefer recognized bodies such as the National Association of Evangelicals; for Catholic teaching, use the Holy See (الكرسي الرسولي) and its official Catechism. Identify doctrinal perspectives rather than treating one institution as universal Christianity.",
-        useHostedSearchTools
-          ? "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results."
-          : "The trusted-source search already returned no usable results. Answer this stable, low-risk question directly from established general knowledge, state any important uncertainty, and do not invent citations.",
+        specialistSearchFoundEvidence
+          ? "The application's independent website-search layer supplied excerpts in the system context. Use those excerpts for claims they support, and distinguish them from your own general knowledge. You are the conversational AI, not the search tool."
+          : "The independent website-search layer returned no usable page text. Still answer this safe, stable question directly from your own well-established knowledge. Do not invent citations or claim that you searched.",
         generalKnowledgeFallbackAllowed
-          ? "If browser_search returns no usable evidence, do not refuse or ask for unnecessary clarification. Answer the stable question from established knowledge, say briefly that the answer was not live-verified, and do not invent citations or exact quotations."
+          ? "If no app-level page excerpt is available, answer the safe stable question from established model knowledge; do not claim that you used a search tool or invent citations."
           : "",
-        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. When the user repeats a myth, legend, conspiracy theory, or false premise, correct it directly and respectfully, then explain what the evidence supports. Separate documented ancient religious beliefs from literal historical events, later folklore, and modern viral claims; never agree merely to please the user. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
+        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. When the user repeats a myth, legend, conspiracy theory, or false premise, correct it directly and respectfully, then explain what the evidence supports. Separate documented ancient religious beliefs from literal historical events, later folklore, and modern viral claims; never agree merely to please the user. For scriptural questions, use any relevant retrieved passage supplied in the conversation, identify the translation or tradition when known, and distinguish the text's wording from later interpretation. Never invent a verse quotation or reference. For religious history and theology, identify whose doctrine each claim represents rather than treating it as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
         ...(/(?:alexandria|اسكندريه)/u.test(
           normalizeResearchQuery(latestQuestion),
         )
@@ -1362,7 +1357,7 @@ export async function handleChatPost(
               "For the ancient Library of Alexandria, do not claim that one known person destroyed the entire library. Treat the scale of the 48 BCE fire during Caesar's Alexandrian War as disputed; distinguish the later destruction of the Serapeum in 391 CE from the main library, and do not present the later story blaming Arab forces as established fact.",
             ]
           : []),
-        "Be concise but explanatory. If search tools fail, answer stable low-risk questions from established knowledge and state exactly what was not verified; keep stricter evidence limits for current facts, high-impact advice, exact scripture, and artifact or inscription identification. Never use a canned 'general information is available but needs clarification' reply.",
+        "Be concise but explanatory. If the independent search layer returns no usable excerpts, answer stable low-risk questions from established knowledge and state what was not live-verified when relevant. Keep stricter evidence limits for current facts, high-impact advice, exact scripture quotations, and direct artifact or inscription identification. Never use a canned 'general information is available but needs clarification' reply.",
         "Do not show links or a sources section unless the user asks for sources. " +
           (useHostedSearchTools
             ? "At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page."
@@ -1373,7 +1368,7 @@ export async function handleChatPost(
               .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
               .join("; ")
           : "",
-        describeTrustedSourcesForQuestion(latestQuestion, 1),
+        generalKnowledgeAfterSearchFailure,
         localKnowledgeAnswer.content
           ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 350)}`
           : "",
@@ -1398,28 +1393,14 @@ export async function handleChatPost(
         { role: "system", content: compactResearchInstruction },
         ...recentConversation,
       );
-      const sourceRequirement = useHostedSearchTools
-        ? 'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.'
-        : "";
-      const lastMessage = groqMessages.at(-1);
-      if (sourceRequirement && lastMessage?.role === "user") {
-        groqMessages[groqMessages.length - 1] = {
-          ...lastMessage,
-          content: `${lastMessage.content}\n\n${sourceRequirement}`,
-        };
-      } else if (sourceRequirement) {
-        groqMessages.push({ role: "user", content: sourceRequirement });
-      }
+      // Source links are attached by the application's independent
+      // research pipeline, never invented by the language model.
     }
-    // Factual questions must use the search-capable model; never fall back to
-    // an ungrounded fast chat model on the same turn.
-    const groqModels = requestsLiveResearch
-      ? ["openai/gpt-oss-20b"]
-      : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
+    // Groq is the first independent conversation AI. Use its configured
+    // general-purpose chat model for factual and casual questions alike.
+    const groqModels = [primaryModel];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(
-        requestsLiveResearch && model === "openai/gpt-oss-20b" ? 25_000 : 8_000,
-      );
+      const providerTimeout = AbortSignal.timeout(15_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -1434,16 +1415,10 @@ export async function handleChatPost(
             body: JSON.stringify({
               model,
               messages: requestsLiveResearch ? groqMessages : localPayload.messages,
-              max_completion_tokens: requestsLiveResearch ? 1536 : 4096,
+              max_completion_tokens: 4096,
               ...(heritageQuestion ? { temperature: 0.2 } : {}),
-              ...(useHostedSearchTools
-                ? {
-                    tools: [{ type: "browser_search" }],
-                    tool_choice: "required",
-                    temperature: heritageQuestion ? 0.2 : 1,
-                    reasoning_effort: "low",
-                  }
-                : { reasoning_effort: "medium", reasoning_format: "hidden" }),
+              reasoning_effort: "medium",
+              reasoning_format: "hidden",
             }),
           },
           "Groq",
@@ -1487,46 +1462,8 @@ export async function handleChatPost(
           const rawAnswer = choice?.message?.content?.trim() ?? "";
           const parsedGroqAnswer = parseGroqSearchCitations(rawAnswer);
           const answer = parsedGroqAnswer.answer;
-          // Search providers expose citations in more than one OpenAI-compatible
-          // response shape. Accept only HTTPS URLs on the trusted-source allowlist;
-          // don't require the model to manufacture our private marker format.
-          const groqToolResults = (choice?.message?.executed_tools ?? []).flatMap((tool) => {
-            const nestedSearchResults = Array.isArray(tool.search_results)
-              ? tool.search_results
-              : (tool.search_results?.results ?? []);
-            return [...(tool.browser_results ?? []), ...nestedSearchResults];
-          });
-          const groqBrowserSources = [
-            ...groqToolResults.flatMap((result) => {
-              const url = isSafeResearchUrl(result.url);
-              const evidence = result.content ?? result.snippet ?? "";
-              // Browser-tool output is model supplied and is not page-verified.
-              // Open-web sources are accepted via the specialist pipeline,
-              // which fetches and records the destination page text.
-              return url && isTrustedResearchHost(url.hostname) && evidence.trim().length >= 40
-                ? [sourceFromTrustedUrl(url, result.title)]
-                : [];
-            }),
-            ...trustedSourcesFromGroq({
-              annotations: choice?.message?.annotations ?? [],
-            }),
-          ].filter(
-            (source, index, all) =>
-              all.findIndex((candidate) => candidate.url === source.url) === index,
-          );
-          const verifiedContentCitations = requestsLiveResearch
-            ? await verifyGroqSearchCitations(parsedGroqAnswer.citations, fetcher, request.signal)
-            : [];
-          const groqSearchSources = mergeResearchSources(
-            groqBrowserSources,
-            verifiedContentCitations,
-          );
-          const hasGroqSearchEvidence = groqSearchSources.length > 0;
-          if (requestsLiveResearch && hasGroqSearchEvidence) {
-            verifiedTurnSources = mergeResearchSources(verifiedTurnSources, groqSearchSources);
-            if (includeSources)
-              responseSources = mergeResearchSources(responseSources, groqSearchSources);
-          }
+          // Website references are gathered and page-checked by the
+          // independent specialist research layer above, never by the AI model.
           const canUseGroqResearchAnswer = Boolean(answer);
           if (choice?.finish_reason === "length") {
             providerFailureCode = "incomplete_response";
@@ -1660,7 +1597,8 @@ export async function handleChatPost(
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim();
-  const geminiLiveSearch = useHostedSearchTools;
+  // Gemini is an independent language model, not a web-search connector.
+  const geminiLiveSearch = false;
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
@@ -1887,134 +1825,10 @@ export async function handleChatPost(
     }
   }
 
-  // Third independent chat provider: OpenRouter web search (CHAT_* key only).
-  const openRouterApiKey = readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim();
-  if (openRouterApiKey && !request.signal.aborted) {
-    const localPayload = JSON.parse(chatRequest.body) as {
-      messages: { role: string; content: string }[];
-    };
-    const model =
-      readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_MODEL")?.trim() || "openai/gpt-oss-20b";
-    const timeout = AbortSignal.timeout(liveResearchRequested ? 25_000 : 12_000);
-    try {
-      const response = await fetchChatProviderWithRetry(
-        fetcher,
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + openRouterApiKey,
-            "HTTP-Referer": "https://athara-heritage.app",
-            "X-Title": "ATHARA",
-          },
-          signal: AbortSignal.any([request.signal, timeout]),
-          body: JSON.stringify({
-            model,
-            messages: localPayload.messages,
-            max_tokens: 4096,
-            ...(useHostedSearchTools
-              ? {
-                  tools: [
-                    {
-                      type: "openrouter:web_search",
-                      parameters: {
-                        engine: "exa",
-                        max_results: 5,
-                        max_total_results: 10,
-                        allowed_domains: [
-                          "egymonuments.gov.eg",
-                          "whc.unesco.org",
-                          "metmuseum.org",
-                          "britishmuseum.org",
-                          "penn.museum",
-                          "si.edu",
-                          "louvre.fr",
-                          "ees.ac.uk",
-                          "ucl.ac.uk",
-                          "uee.ucla.edu",
-                          "escholarship.org",
-                          "thesaurus-linguae-aegyptiae.de",
-                          "biblegateway.com",
-                          "bible.com",
-                          "quran.com",
-                          "sunnah.com",
-                          "dar-alifta.org",
-                          "sefaria.org",
-                          "britannica.com",
-                          "nae.org",
-                          "vatican.va",
-                          "sourcebooks.fordham.edu",
-                          "copticorthodox.church",
-                          "st-takla.org",
-                          "cambridge.org",
-                          "oxfordreference.com",
-                          "ox.ac.uk",
-                          "cam.ac.uk",
-                          "harvard.edu",
-                          "who.int",
-                          "un.org",
-                          "nasa.gov",
-                          "noaa.gov",
-                          "nature.com",
-                          "science.org",
-                          "pubmed.ncbi.nlm.nih.gov",
-                        ],
-                      },
-                    },
-                  ],
-                  tool_choice: "required",
-                }
-              : {}),
-          }),
-        },
-        "OpenRouter",
-      );
-      if (response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          choices?: Array<{
-            finish_reason?: string;
-            message?: {
-              content?: string | null;
-              annotations?: Array<{
-                type?: string;
-                url_citation?: { url?: string; title?: string; content?: string };
-              }>;
-            };
-          }>;
-        } | null;
-        const choice = payload?.choices?.[0];
-        const message = choice?.message;
-        const answer = typeof message?.content === "string" ? message.content.trim() : "";
-        const sources = trustedSourcesFromOpenRouter(message ?? {});
-        if (liveResearchRequested && sources.length) {
-          verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
-          if (includeSources) responseSources = mergeResearchSources(responseSources, sources);
-        }
-        const evidenceOk =
-          Boolean(answer) && (!providerEvidenceRequired || verifiedTurnSources.length > 0);
-        const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
-        if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
-          const cleaned = removeRepeatedSentences(
-            liveResearchRequested ? removeInlineResearchCitations(answer) : answer,
-          );
-          return asChatStream(cleaned.content, responseSources, parsed.data.language);
-        }
-        console.warn("[OpenRouter] Discarded answer without complete trusted evidence", {
-          hasAnswer: Boolean(answer),
-          languageOk,
-          evidenceOk,
-        });
-      } else {
-        console.error("[OpenRouter] Request failed", { httpStatus: response.status });
-      }
-    } catch (error) {
-      console.error("[OpenRouter] Provider request failed", {
-        timedOut: timeout.aborted,
-        reason: error instanceof Error ? error.name : "unknown",
-      });
-    }
-  }
+  // Exactly two hosted conversational AI engines are used: Groq, then Gemini.
+  // OpenRouter is not a third answer engine; source verification remains in
+  // the independent specialist website-search pipeline.
+
 
   if (
     liveResearchRequested &&

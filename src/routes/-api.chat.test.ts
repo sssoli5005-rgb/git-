@@ -248,7 +248,7 @@ describe("general research fallbacks", () => {
       };
       expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain(
-        "The trusted-source search already returned no usable results",
+        "The independent website-search layer returned no usable page text",
       );
       return Response.json({
         choices: [{ finish_reason: "stop", message: { content: answer } }],
@@ -280,7 +280,19 @@ describe("general research fallbacks", () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
     };
-    const fetcher = vi.fn<typeof fetch>();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(new URL(String(input)).hostname).toBe("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as { tools?: unknown };
+      expect(payload.tools).toBeUndefined();
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "بحسب سفر التثنية 34:5–6، مات موسى في أرض موآب في الوادي المقابل لبيت فغور، لكن النص يقول إن أحدًا لا يعرف موضع قبره. ده وصف للرواية الكتابية، مش إثباتًا أثريًا.",
+          },
+        }],
+      });
+    });
 
     const request = new Request("http://localhost/api/chat", {
       method: "POST",
@@ -312,7 +324,7 @@ describe("general research fallbacks", () => {
     expect(body).toContain("مش إثباتًا أثريًا");
     expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls.some(([input]) =>
       new URL(String(input)).hostname.endsWith("wikipedia.org"),
     )).toBe(false);
@@ -600,23 +612,16 @@ describe("general research fallbacks", () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
     };
+    const providerOrder: string[] = [];
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname === "api.groq.com") {
-        return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "Unverified generated answer without source evidence." },
-          }],
-        });
+        providerOrder.push("Groq");
+        return new Response("Groq unavailable", { status: 401 });
       }
       if (url.hostname === "generativelanguage.googleapis.com") {
-        return Response.json({
-          candidates: [{
-            content: { parts: [{ text: "Unverified Gemini answer." }] },
-            groundingMetadata: { groundingChunks: [] },
-          }],
-        });
+        providerOrder.push("Gemini");
+        return new Response("Gemini unavailable", { status: 401 });
       }
       throw new Error("Unexpected request to " + url.hostname);
     });
@@ -636,7 +641,7 @@ describe("general research fallbacks", () => {
     expect(body).not.toContain("Unverified generated answer");
     expect(body).not.toContain("Unverified Gemini answer");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
+    expect(providerOrder).toEqual(["Groq", "Gemini"]);
   });
 
   it.each([
@@ -656,8 +661,8 @@ describe("general research fallbacks", () => {
           messages: { role: string; content: string }[];
         };
         const prompt = payload.messages.map((message) => message.content).join("\n");
-        expect(prompt).toContain("Search every safe factual question");
-        expect(prompt).toContain("retry with likely corrected spellings");
+        expect(prompt).toContain("The application's independent website-search layer has already run");
+        expect(prompt).toContain("Correct clear variants gently");
         expect(prompt).toContain("If a term has multiple plausible meanings");
         expect(prompt).toContain("Never use a canned");
         expect(prompt).toContain("National Association of Evangelicals");
@@ -711,7 +716,7 @@ describe("general research fallbacks", () => {
       };
       expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain(
-        "The trusted-source search already returned no usable results",
+        "The independent website-search layer returned no usable page text",
       );
       return Response.json({
         choices: [{ finish_reason: "stop", message: { content: answer } }],
@@ -1271,9 +1276,9 @@ describe("handleChatPost hosted Groq provider", () => {
           tools?: Array<{ type?: string }>;
           messages: { role: string; content: string }[];
         };
-        expect(payload.messages[0]?.content).toContain("Use browser_search for this factual question");
+        expect(payload.messages[0]?.content).toContain("You are ATHARA, a careful conversational guide");
         expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
-        expect(payload.tools).toEqual([{ type: "browser_search" }]);
+        expect(payload.tools).toBeUndefined();
         return Response.json({
           choices: [
             {
@@ -1841,9 +1846,9 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("uses the alternate Groq model with the same key after a rate limit", async () => {
+  it("falls back to Gemini when Groq rate-limits its primary chat model", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
@@ -1851,7 +1856,7 @@ describe("handleChatPost hosted Groq provider", () => {
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
       .mockResolvedValueOnce(
         Response.json({
-          choices: [{ message: { content: "الكتابة الهيروغليفية نظام كتابة مصري قديم." } }],
+          candidates: [{ content: { parts: [{ text: "الكتابة الهيروغليفية نظام كتابة مصري قديم." }] } }],
         }),
       );
 
@@ -1860,9 +1865,10 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الكتابة الهيروغليفية نظام كتابة مصري قديم");
     expect(fetcher).toHaveBeenCalledTimes(4);
-    expect((JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body)) as { model: string }).model).toBe(
-      "openai/gpt-oss-20b",
-    );
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("continues a truncated Groq answer before returning it", async () => {
@@ -2142,9 +2148,6 @@ describe("handleChatPost hosted Groq provider", () => {
           choices: [{ message: { content: "خلينا نفهم الموضوع step by step." } }],
         }),
       )
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{ content: { parts: [{ text: "خلينا نفهم الموضوع خطوة بخطوة." }] } }],
@@ -2155,12 +2158,9 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("خلينا نفهم الموضوع خطوة بخطوة.");
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[3]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[4]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("does not use the scanner AI binding when chat Groq is throttled", async () => {
@@ -2335,8 +2335,8 @@ describe("handleChatPost production provider configuration", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain("مش لاقي دليل موثوق");
-    expect(requestedHosts).toHaveLength(12);
-    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(6);
+    expect(requestedHosts).toHaveLength(9);
+    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(3);
     expect(requestedHosts.filter((host) => host === "generativelanguage.googleapis.com")).toHaveLength(
       6,
     );
@@ -2735,565 +2735,97 @@ describe("handleChatPost Ollama stream handling", () => {
   });
 
   describe("general web research across non-Egypt topics", () => {
-    it("uses Groq browser search when the user explicitly asks for current research", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-        expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
-        const payload = JSON.parse(String(init?.body)) as {
-          model: string;
-          messages: { role: string; content: string }[];
-          max_completion_tokens: number;
-          tools?: Array<{ type: string }>;
-          tool_choice?: string;
-        };
-        expect(payload.model).toBe("openai/gpt-oss-20b");
-        expect(payload.max_completion_tokens).toBe(1536);
-        expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
-        expect(payload).not.toHaveProperty("citation_options");
-        expect(payload.tools).toEqual([{ type: "browser_search" }]);
-        expect(payload.tool_choice).toBe("required");
-        expect(payload.messages.at(-1)?.content).toContain(
-          "ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر",
-        );
-        expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
-        expect(
-          payload.messages.slice(1).some(
-            (message, index, messages) =>
-              message.role === "user" && messages[index - 1]?.role === "user",
-          ),
-        ).toBe(false);
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content:
-                  "أحدث المعلومات المتاحة عن تلسكوب جيمس ويب، مع إحالات نتائج البحث 〖1†L2-L5〗.",
-                executed_tools: [
-                  {
-                    browser_results: [
-                      {
-                        title: "NASA — James Webb Space Telescope",
-                        url: "https://science.nasa.gov/mission/webb/",
-                        content:
-                          "NASA describes the James Webb Space Telescope and its infrared observations.",
-                        score: 0.94,
-                      },
-                    ],
-                  },
-                ],
-              },
-            },
-          ],
-        });
-      });
-      const response = await handleChatPost(
-        createChatRequest("ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر"),
-        fetcher,
-      );
-      expect(response.status).toBe(200);
-      expect(await response.text()).toContain("إحالات نتائج البحث");
-      expect(fetcher).toHaveBeenCalledOnce();
-    });
-
-    it("hides generated research citations and source sections unless requested", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-      const fetcher = vi.fn<typeof fetch>(async (input) => {
-        if (String(input).includes("api.groq.com")) {
-          return Response.json({
-            choices: [
-              {
-                finish_reason: "stop",
-                message: {
-                  content:
-                    'أثرت المكتبة في تاريخ العلم 【1†L19-L22】.\n\n### المصادر المستخدمة\n- https://www.britannica.com/topic/Library-of-Alexandria\n<ATHARA_SOURCES>[{"title":"Library of Alexandria","url":"https://en.wikipedia.org/wiki/Library_of_Alexandria","evidence":"The Library of Alexandria was one of the largest and most significant libraries of the ancient world."}]</ATHARA_SOURCES>',
-                  executed_tools: [
-                    {
-                      browser_results: [
-                        {
-                          title: "Library of Alexandria",
-                          url: "https://www.britannica.com/topic/Library-of-Alexandria",
-                          content:
-                            "A historical overview of the Library of Alexandria and its place in the ancient world.",
-                        },
-                      ],
-                    },
-                  ],
-                },
-              },
-            ],
-          });
-        }
-        return new Response("Temporarily unavailable", { status: 503 });
-      });
-
-      const response = await handleChatPost(
-        createChatRequest("ما هي مكتبة الإسكندرية القديمة؟"),
-        fetcher,
-      );
-      const body = await response.text();
-
-      expect(body).toContain("أثرت المكتبة في تاريخ العلم");
-      expect(body).not.toContain("【1†L19-L22】");
-      expect(body).not.toContain("المصادر المستخدمة");
-      expect(body).not.toContain("britannica.com");
-    });
-
-    it("verifies Groq browser-search citations against the opened institutional page", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-      const pageText =
-        "Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.";
-      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-        if (String(input).includes("api.groq.com")) {
-          const payload = JSON.parse(String(init?.body)) as {
-            messages: Array<{ role: string; content: string }>;
-            tools?: Array<{ type: string }>;
-            tool_choice?: string;
-          };
-          expect(payload.tools).toEqual([{ type: "browser_search" }]);
-          expect(payload.tool_choice).toBe("required");
-          expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
-          return Response.json({
-            choices: [
-              {
-                finish_reason: "stop",
-                message: {
-                  content:
-                    'لو تقصدي يوسف الصديق، يذكر سفر التكوين أنه مات في مصر ودُفن في تابوت. <ATHARA_SOURCES>[{"title":"Genesis 50:26 — Bible Gateway","url":"https://www.biblegateway.com/passage/?search=Genesis%2050%3A26","evidence":"Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt."}]</ATHARA_SOURCES>',
-                },
-              },
-            ],
-          });
-        }
-        expect(String(input)).toContain("biblegateway.com");
-        return new Response(
-          "<html><body><main>Joseph died at the age of 110, and after they embalmed him, he was put in a coffin in Egypt.</main></body></html>",
-          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
-        );
-      });
-      const response = await handleChatPost(
-        createChatRequest("اين يوجد جسد يوسق الصديق؟ عايزة المصدر"),
-        fetcher,
-      );
-      const body = await response.text();
-      expect(response.status).toBe(200);
-      expect(body).toContain("لو تقصدي يوسف الصديق");
-      expect(body).toContain("biblegateway.com");
-      expect(fetcher).toHaveBeenCalledTimes(2);
-    });
-
-    it("uses Gemini Google Search grounding and displays returned source URLs", async () => {
-      vi.stubEnv("CHAT_GROQ_API_KEY", "");
-      vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
-      const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-        const url = String(input);
-        expect(url).toContain("generativelanguage.googleapis.com");
-        const payload = JSON.parse(String(init?.body)) as {
-          tools?: Array<{ google_search?: Record<string, never> }>;
-        };
-        expect(payload.tools).toEqual([{ google_search: {} }]);
-        return Response.json({
-          candidates: [
-            {
-              finishReason: "STOP",
-              content: {
-                parts: [
-                  {
-                    text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء. 【1†L1-L2】\n\n### المصادر\n- https://example.com/unverified",
-                  },
-                ],
-              },
-              groundingMetadata: {
-                groundingChunks: [
-                  {
-                    web: {
-                      uri: "https://science.nasa.gov/mission/webb/",
-                      title: "NASA — James Webb Space Telescope",
-                    },
-                  },
-                  { web: { uri: "https://webbtelescope.org/", title: "WebbTelescope.org" } },
-                ],
-              },
-            },
-          ],
-        });
-      });
-      const response = await handleChatPost(
-        createChatRequest("ابحث عن معلومات موثوقة عن تلسكوب جيمس ويب مع المصادر"),
-        fetcher,
-      );
-      const body = await response.text();
-      expect(response.status).toBe(200);
-      expect(body).toContain("تلسكوب جيمس ويب مرصد فضائي");
-      expect(body).not.toContain("【1†L1-L2】");
-      expect(body).not.toContain("example.com/unverified");
-      expect(body).toContain("https://science.nasa.gov/mission/webb/");
-      expect(body).toContain("https://webbtelescope.org/");
-      expect(fetcher).toHaveBeenCalledOnce();
-    });
-  });
-
-  it("uses live research for an ordinary factual question outside Egyptian heritage", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+    it("uses Groq as a standalone conversational AI without provider-native web search", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        tools?: Array<{ type: string }>;
-        tool_choice?: string;
-      };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload).not.toHaveProperty("citation_options");
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
-      return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "السماء تبدو زرقاء بسبب تشتت ضوء الشمس في الغلاف الجوي 〖1†L1-L3〗.",
-              executed_tools: [
-                {
-                  browser_results: [
-                    {
-                      title: "NASA — Earth's Atmosphere",
-                      url: "https://science.nasa.gov/earth/",
-                      content:
-                        "The Earth's atmosphere scatters shorter blue wavelengths of sunlight more than longer red wavelengths.",
-                      score: 0.89,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      });
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toContain("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown; messages: { role: string; content: string }[] };
+      expect(payload.model).toBe("qwen/qwen3.8-27b");
+      expect(payload.tools).toBeUndefined();
+      expect(payload.messages[0]?.content).toContain("website-search layer");
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: "السما بتبدو زرقا لأن جزيئات الغلاف الجوي بتشتت الأطوال الموجية الزرقاء من ضوء الشمس بدرجة أكبر من الحمراء." } }] });
     });
     const response = await handleChatPost(createChatRequest("ليه السما زرقا؟"), fetcher);
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("تشتت ضوء الشمس");
+    expect(await response.text()).toContain("بتشتت الأطوال الموجية الزرقاء");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("researches the exact unaccented Arabic question without showing unrequested sources", async () => {
+  it("falls back from Groq to Gemini as the only second AI and never invokes OpenRouter search", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "chat-gemini-key");
+    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "unused-openrouter-key");
+    const providerOrder: string[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      const payload = JSON.parse(String(init?.body)) as { model?: string; tools?: unknown; systemInstruction?: unknown };
+      if (url.hostname === "api.groq.com") {
+        providerOrder.push("Groq");
+        expect(payload.model).toBe("qwen/qwen3.8-27b");
+        expect(payload.tools).toBeUndefined();
+        return new Response("provider unavailable", { status: 401 });
+      }
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        providerOrder.push("Gemini");
+        expect(payload.model).toBeUndefined();
+        expect(payload.tools).toBeUndefined();
+        expect(payload.systemInstruction).toBeDefined();
+        return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "الثقب الأسود منطقة في الفضاء تكون جاذبيتها شديدة لدرجة أن الضوء نفسه لا يستطيع الإفلات منها بعد تجاوز أفق الحدث." }] } }] });
+      }
+      throw new Error("Unexpected third AI/search provider: " + url.hostname);
+    });
+    const response = await handleChatPost(createChatRequest("يعني ايه ثقب اسود؟"), fetcher);
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(providerOrder).toEqual(["Groq", "Gemini"]);
+    expect(body).toContain("الضوء نفسه لا يستطيع الإفلات");
+    expect(body).not.toContain("OpenRouter");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("answers a stable scripture question with the standalone conversational AI", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        tools?: Array<{ type: string }>;
-        tool_choice?: string;
-        messages: { role: string; content: string }[];
-      };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload).not.toHaveProperty("citation_options");
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
-      expect(payload.messages[0]?.content).toContain(
-        "For questions about scripture, retrieve the exact passage",
-      );
-      expect(payload.messages[0]?.content).toContain(
-        "For religious history and theology, consult primary council or religious texts",
-      );
-      return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content:
-                "بحسب سفر التكوين 50:25-26، مات يوسف في مصر وعمره 110 سنوات وحُنّط ووُضع في تابوت. ويذكر الخروج 13:19 أن موسى أخذ عظامه معه. ويحدد يشوع 24:32 شكيم مكانًا لدفن عظامه. أما ربط الموقع التقليدي المعروف بقبر يوسف به فلا يثبت هوية الرفات أثريًا بمفرده.",
-              executed_tools: [
-                {
-                  browser_results: [
-                    {
-                      title: "Genesis 50:25-26; Exodus 13:19; Joshua 24:32 — NRSVUE",
-                      url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A25-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NRSVUE",
-                      content:
-                        "Genesis 50:25 Joseph asks that his bones be carried up; Genesis 50:26 he is embalmed and placed in a coffin in Egypt. Exodus 13:19 Moses takes the bones of Joseph. Joshua 24:32 says the bones of Joseph were buried at Shechem.",
-                      score: 0.98,
-                    },
-                    {
-                      title: "Joseph's Tomb — Encyclopaedia Britannica",
-                      url: "https://www.britannica.com/place/Josephs-Tomb",
-                      content:
-                        "The traditional site identified as Joseph's Tomb is located at Shechem, near Nablus.",
-                      score: 0.74,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      });
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toContain("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown; messages: { role: string; content: string }[] };
+      expect(payload.model).toBe("qwen/qwen3.8-27b");
+      expect(payload.tools).toBeUndefined();
+      expect(payload.messages[0]?.content).toContain("You are ATHARA, a careful conversational guide");
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: "بحسب سفر التكوين، مات يوسف في مصر، ثم يذكر سفر الخروج أن موسى أخذ عظامه معه، ويحدد سفر يشوع 24:32 شكيم موضع دفن العظام. ده وصف للرواية الكتابية، وليس إثباتًا أثريًا لهوية رفات معاصرة." } }] });
     });
-
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
-      fetcher,
-    );
+    const response = await handleChatPost(createChatRequest("اين جسد يوسف الصديق في المسيحية؟"), fetcher);
     const body = await response.text();
-
     expect(response.status).toBe(200);
-    expect(body).toContain("التكوين 50:25-26");
-    expect(body).toContain("الخروج 13:19");
     expect(body).toContain("يشوع 24:32");
     expect(body).toContain("شكيم");
-    expect(body).not.toContain("https://www.biblegateway.com/");
     expect(body).not.toContain("المصادر:");
     expect(fetcher).toHaveBeenCalledOnce();
   });
-
-  it("accepts Groq browser tool search_results nested under results", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "توضح المصادر أن يوسف دُفن في شكيم.",
-              executed_tools: [
-                {
-                  search_results: {
-                    results: [
-                      {
-                        title: "Joshua 24:32",
-                        url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                        content:
-                          "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      }),
-    );
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(body).toContain("توضح المصادر");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-  });
-
-  it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+  it("does not accept AI-written links or tool metadata as verified website sources", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       expect(String(input)).toContain("api.groq.com");
       return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "بحسب سفر يشوع، دُفنت عظام يوسف في شكيم.",
-              annotations: [
-                {
-                  type: "url_citation",
-                  url_citation: {
-                    url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                    title: "Joshua 24:32 — NRSVUE",
-                    content:
-                      "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
-                  },
-                },
-              ],
-            },
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "باريس هي عاصمة فرنسا. https://example.com/fake",
+            annotations: [{ type: "url_citation", url_citation: { url: "https://www.britannica.com/place/Paris", title: "Paris — Encyclopaedia Britannica", content: "Paris is the capital of France." } }],
+            executed_tools: [{ browser_results: [{ title: "Fake source", url: "https://example.com/fake", content: "A model-authored claim, not a result from the app-level search." }] }],
           },
-        ],
+        }],
       });
     });
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(response.status).toBe(200);
-    expect(body).toContain("بحسب سفر يشوع");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-  });
-
-  it("accepts Groq's native URL citation metadata when it omits an excerpt field", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "تذكر يشوع 24:32 دفن عظام يوسف في شكيم.",
-              annotations: [
-                {
-                  type: "url_citation",
-                  url_citation: {
-                    url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                    title: "Joshua 24:32 — NRSVUE",
-                    start_index: 15,
-                    end_index: 27,
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      }),
-    );
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(body).toContain("تذكر يشوع 24:32");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-  });
-
-  it("shows the actual retrieved URLs only when a factual user explicitly asks for sources", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        messages: { role: string; content: string }[];
-      };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "بحسب يشوع 24:32 دُفنت عظام يوسف في شكيم.",
-              executed_tools: [
-                {
-                  browser_results: [
-                    {
-                      title: "Joshua 24:32 — NRSVUE",
-                      url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                      content: "The bones of Joseph were buried at Shechem.",
-                      score: 0.97,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      });
-    });
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-    expect(body).toContain("Joshua 24:32");
-  });
-
-  it("falls through Groq and Gemini search failures to the dedicated third OpenRouter research provider", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "chat-gemini-key");
-    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "chat-openrouter-key");
-    const providerOrder: string[] = [];
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-      const url = String(input);
-      const payload = JSON.parse(String(init?.body)) as {
-        model?: string;
-        tools?: Array<{ type?: string; parameters?: { allowed_domains?: string[] } }>;
-        tool_choice?: string;
-      };
-      if (url.includes("api.groq.com")) {
-        providerOrder.push("Groq");
-        expect(payload.tools).toContainEqual({ type: "browser_search" });
-        expect(payload.tool_choice).toBe("required");
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content: "Groq could not retrieve an approved source.",
-                executed_tools: [],
-              },
-            },
-          ],
-        });
-      }
-      if (url.includes("generativelanguage.googleapis.com")) {
-        providerOrder.push("Gemini");
-        expect(payload.tools).toEqual([{ google_search: {} }]);
-        return Response.json({
-          candidates: [
-            {
-              content: { parts: [{ text: "Gemini could not retrieve an approved source." }] },
-              groundingMetadata: { groundingChunks: [] },
-            },
-          ],
-        });
-      }
-      if (url.includes("openrouter.ai")) {
-        providerOrder.push("OpenRouter");
-        expect(payload.tools?.[0]?.type).toBe("openrouter:web_search");
-        expect(payload.tool_choice).toBe("required");
-        expect(payload.tools?.[0]?.parameters?.allowed_domains).toContain("britannica.com");
-        expect(payload.tools?.[0]?.parameters?.allowed_domains).toEqual(
-          expect.arrayContaining([
-            "quran.com",
-            "sunnah.com",
-            "dar-alifta.org",
-            "sefaria.org",
-            "uee.ucla.edu",
-            "escholarship.org",
-            "thesaurus-linguae-aegyptiae.de",
-          ]),
-        );
-        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer chat-openrouter-key");
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content: "باريس هي عاصمة فرنسا.",
-                annotations: [
-                  {
-                    type: "url_citation",
-                    url_citation: {
-                      url: "https://www.britannica.com/place/Paris",
-                      title: "Paris — Encyclopaedia Britannica",
-                      content:
-                        "Paris is the capital and most populous city of France. It is located in the north-central part of the country.",
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        });
-      }
-      throw new Error("Unexpected provider request: " + url);
-    });
-
     const response = await handleChatPost(createChatRequest("ما عاصمة فرنسا؟ مع المصادر"), fetcher);
     const body = await response.text();
-
     expect(response.status).toBe(200);
-    expect(providerOrder).toEqual(["Groq", "Gemini", "OpenRouter"]);
-    expect(body).toContain("باريس هي عاصمة فرنسا");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.britannica.com/place/Paris");
+    expect(body).not.toContain("example.com/fake");
+    expect(body).not.toContain("britannica.com");
+    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("مش متاحة مؤقتًا");
   });
-
   it("uses trusted live research without showing unrequested sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
@@ -3301,12 +2833,10 @@ describe("handleChatPost Ollama stream handling", () => {
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       expect(String(input)).toContain("api.groq.com");
       const payload = JSON.parse(String(init?.body)) as {
-        tools?: Array<{ type?: string }>;
-        tool_choice?: string;
+        tools?: unknown;
         messages: { role: string; content: string }[];
       };
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
+      expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain("Infer the user's intended meaning");
       return Response.json({
         choices: [
@@ -3566,5 +3096,6 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(body).toContain("لا يوجد تاريخ مؤكد");
     expect(body).toContain(openWebUrl);
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
   });
 });
