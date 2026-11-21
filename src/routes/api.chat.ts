@@ -837,7 +837,7 @@ async function searchWithChatSpecialists(
         .join("; ") +
       ". Treat this as a high-confidence search normalization, not as permission to change the question's meaning."
     : "";
-  const sourceGuide = describeTrustedSourcesForQuestion(question, 3);
+  const sourceGuide = describeTrustedSourcesForQuestion(question, 1);
   const context = [
     "INDEPENDENT WEB RESEARCH — the three specialist search indexes (Exa, Linkup, Ceramic) were queried in parallel.",
     "Providers returning usable search results: " + (uniqueProviders.join(", ") || "none") + ".",
@@ -1370,9 +1370,9 @@ export async function handleChatPost(
               .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
               .join("; ")
           : "",
-        describeTrustedSourcesForQuestion(latestQuestion, 2),
+        describeTrustedSourcesForQuestion(latestQuestion, 1),
         localKnowledgeAnswer.content
-          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 500)}`
+          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 350)}`
           : "",
         searchFallbackContext,
         searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_800)}` : "",
