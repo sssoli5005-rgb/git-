@@ -2030,8 +2030,8 @@ export function retrieveRelevantKnowledge(
 
   const instruction =
     language === "ar"
-      ? "دي معلومات مرجعية موثقة تساعدك لو مرتبطة بالسؤال. جاوب بالمصري الطبيعي وبأسلوب بسيط. التزم بما تقوله المراجع؛ ما تضيفش أسماء أو تواريخ أو تفاصيل غير موجودة فيها، وما تعتبرش كل جبانة منف هي سقارة."
-      : "Use this sourced reference only when it directly helps answer the latest question. Answer in the user's language and do not add names, dates, or details absent from the source.";
+      ? "دي معلومات مرجعية موثوقة. استخدمها أولًا في النقاط اللي بتغطيها، واشرح بالمصري الطبيعي وبأسلوب بسيط. المرجع بيدعم المعلومات اللي بيذكرها، لكنه مش سقف لكل الشرح: في سؤال تاريخي ثابت وآمن، لو فيه جزء مش مغطى، كمّله بحذر من المعرفة العامة الراسخة ووضّح إنه خلفية عامة مش متحقق منها بمصدر مباشر في المحاولة دي. ما تخترعش أسماء أو تواريخ دقيقة أو اقتباسات أو مصادر، وما تخلطش بين الجبانات والمواقع المختلفة."
+      : "Use this reviewed reference first for the claims it actually supports; it is supporting context, not a ceiling on the whole answer. For stable, low-risk historical questions, you may cautiously add well-established general background beyond the entry and label it as not live-verified in this turn. Never invent exact dates, names, quotations, provenance, or citations; keep direct artifact or mummy identification, inscription readings, contested chronology, and recent discoveries evidence-based.";
 
   return [
     "RETRIEVED HERITAGE KNOWLEDGE (use as a sourced reference):",
@@ -2044,7 +2044,7 @@ export function retrieveRelevantKnowledge(
             : ""
         }`,
     ),
-    "Distinguish evidence from hypotheses. For Egyptian heritage answers, do not present unsourced details as verified facts. If the references do not establish a requested detail, say that the available sources do not confirm it. Do not invent citations.",
+    "Distinguish source-backed evidence from hypotheses and general background. For stable, low-risk Egyptian heritage explanations, cautiously supplement gaps with well-established knowledge and say when that background was not verified by a live source in this turn. Do not invent exact identities, dates, provenance, inscription readings, quotations, or citations; direct identification and contested claims still require evidence.",
   ].join("\n\n");
 }
 
