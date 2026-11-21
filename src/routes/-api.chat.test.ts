@@ -600,23 +600,16 @@ describe("general research fallbacks", () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
     };
+    const providerOrder: string[] = [];
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
       if (url.hostname === "api.groq.com") {
-        return Response.json({
-          choices: [{
-            finish_reason: "stop",
-            message: { content: "Unverified generated answer without source evidence." },
-          }],
-        });
+        providerOrder.push("Groq");
+        return new Response("Groq unavailable", { status: 401 });
       }
       if (url.hostname === "generativelanguage.googleapis.com") {
-        return Response.json({
-          candidates: [{
-            content: { parts: [{ text: "Unverified Gemini answer." }] },
-            groundingMetadata: { groundingChunks: [] },
-          }],
-        });
+        providerOrder.push("Gemini");
+        return new Response("Gemini unavailable", { status: 401 });
       }
       throw new Error("Unexpected request to " + url.hostname);
     });
@@ -636,7 +629,7 @@ describe("general research fallbacks", () => {
     expect(body).not.toContain("Unverified generated answer");
     expect(body).not.toContain("Unverified Gemini answer");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
+    expect(providerOrder).toEqual(["Groq", "Gemini"]);
   });
 
   it.each([
@@ -1271,7 +1264,7 @@ describe("handleChatPost hosted Groq provider", () => {
           tools?: Array<{ type?: string }>;
           messages: { role: string; content: string }[];
         };
-        expect(payload.messages[0]?.content).toContain("Use browser_search for this factual question");
+        expect(payload.messages[0]?.content).toContain("conversational AI engine");
         expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
         expect(payload.tools).toEqual([{ type: "browser_search" }]);
         return Response.json({
@@ -2880,12 +2873,10 @@ describe("handleChatPost Ollama stream handling", () => {
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       expect(String(input)).toContain("api.groq.com");
       const payload = JSON.parse(String(init?.body)) as {
-        tools?: Array<{ type?: string }>;
-        tool_choice?: string;
+        tools?: unknown;
         messages: { role: string; content: string }[];
       };
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
+      expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain("Infer the user's intended meaning");
       return Response.json({
         choices: [
