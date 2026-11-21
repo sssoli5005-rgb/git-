@@ -1203,7 +1203,7 @@ export async function handleChatPost(
             );
             if (
               heritageQuestion &&
-              !verifiedEvidenceRequired &&
+              !providerEvidenceRequired &&
               !wantsSources &&
               hasTrustedSpecialistSource
             ) {
