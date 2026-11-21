@@ -737,7 +737,13 @@ async function searchWithChatSpecialists(
         String(item.description ?? item.snippet ?? ""),
       ).slice(0, 1_200);
       if (excerpt.length < 80) continue;
-      if (!isRelevantDiscoverySearchResult(question, item.title || "", excerpt)) continue;
+      // The discovery-specific relevance check is only appropriate for current
+      // archaeology-discovery questions. Other topics (including scripture,
+      // science, and general history) need their own relevant search excerpts.
+      if (
+        isDiscoveryResearchQuestion(question) &&
+        !isRelevantDiscoverySearchResult(question, item.title || "", excerpt)
+      ) continue;
       const existing = candidateMap.get(url.href);
       if (existing) {
         if (!existing.providers.includes(group.provider)) existing.providers.push(group.provider);
@@ -831,7 +837,7 @@ async function searchWithChatSpecialists(
         .join("; ") +
       ". Treat this as a high-confidence search normalization, not as permission to change the question's meaning."
     : "";
-  const sourceGuide = describeTrustedSourcesForQuestion(question, 12);
+  const sourceGuide = describeTrustedSourcesForQuestion(question, 3);
   const context = [
     "INDEPENDENT WEB RESEARCH — the three specialist search indexes (Exa, Linkup, Ceramic) were queried in parallel.",
     "Providers returning usable search results: " + (uniqueProviders.join(", ") || "none") + ".",
@@ -1364,12 +1370,12 @@ export async function handleChatPost(
               .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
               .join("; ")
           : "",
-        describeTrustedSourcesForQuestion(latestQuestion, 4),
+        describeTrustedSourcesForQuestion(latestQuestion, 2),
         localKnowledgeAnswer.content
-          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 1_200)}`
+          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 500)}`
           : "",
         searchFallbackContext,
-        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_000)}` : "",
+        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_800)}` : "",
       ]
         .filter(Boolean)
         .join("\n\n");
