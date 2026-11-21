@@ -1265,7 +1265,7 @@ export async function handleChatPost(
   const hasReviewedScriptureAnswer =
     localKnowledgeAnswer.directAnswer &&
     localKnowledgeSources.some((source) =>
-      /^https:\/\/(?:www\\.)?biblegateway\\.com\/passage\//iu.test(source.url),
+      source.url.includes("biblegateway.com/passage/"),
     );
   const hasConfiguredHostedProvider = [
     "CHAT_GROQ_API_KEY",
