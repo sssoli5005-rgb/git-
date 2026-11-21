@@ -1267,19 +1267,17 @@ export async function handleChatPost(
         source.url ===
         "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
     );
-  const hasReviewedScriptureAnswer = false;
   const hasConfiguredHostedProvider = [
     "CHAT_GROQ_API_KEY",
     "CHAT_GEMINI_API_KEY",
   ].some((key) => readProviderEnv(suppliedEnv, key)?.trim());
   if (
-    (parsed.data.language === "ar" &&
+    !hasConfiguredHostedProvider &&
+    ((parsed.data.language === "ar" &&
       localKnowledgeAnswer.directAnswer &&
-      localKnowledgeSources.length > 0 &&
-      (searchedSources.length > 0 || !hasConfiguredHostedProvider)) ||
-    (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
-    hasReviewedCosmeticsAnswer ||
-    hasReviewedScriptureAnswer
+      localKnowledgeSources.length > 0) ||
+      (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
+      hasReviewedCosmeticsAnswer)
   ) {
     console.info(
       hasReviewedCosmeticsAnswer
@@ -1342,7 +1340,7 @@ export async function handleChatPost(
       const compactResearchInstruction = [
         `You are ATHARA, a careful conversational guide. Answer in ${languageNames[parsed.data.language]}. Answer the user's exact question directly, using recent conversation context when relevant.`,
         "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
-        "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
+        "The application's independent website-search layer has already run for this turn and may supply page excerpts below. You are the conversational AI, not the search connector. Do not perform, claim, or fabricate web searches. If no excerpt is supplied, answer stable and safe questions from your own well-established knowledge.",
         "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
         "For evangelical Christianity, prefer recognized bodies such as the National Association of Evangelicals; for Catholic teaching, use the Holy See (الكرسي الرسولي) and its official Catechism. Identify doctrinal perspectives rather than treating one institution as universal Christianity.",
         specialistSearchFoundEvidence
@@ -1351,7 +1349,7 @@ export async function handleChatPost(
         generalKnowledgeFallbackAllowed
           ? "If no app-level page excerpt is available, answer the safe stable question from established model knowledge; do not claim that you used a search tool or invent citations."
           : "",
-        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. When the user repeats a myth, legend, conspiracy theory, or false premise, correct it directly and respectfully, then explain what the evidence supports. Separate documented ancient religious beliefs from literal historical events, later folklore, and modern viral claims; never agree merely to please the user. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
+        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. When the user repeats a myth, legend, conspiracy theory, or false premise, correct it directly and respectfully, then explain what the evidence supports. Separate documented ancient religious beliefs from literal historical events, later folklore, and modern viral claims; never agree merely to please the user. For scriptural questions, use any relevant retrieved passage supplied in the conversation, identify the translation or tradition when known, and distinguish the text's wording from later interpretation. Never invent a verse quotation or reference. For religious history and theology, identify whose doctrine each claim represents rather than treating it as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
         ...(/(?:alexandria|اسكندريه)/u.test(
           normalizeResearchQuery(latestQuestion),
         )
@@ -1359,7 +1357,7 @@ export async function handleChatPost(
               "For the ancient Library of Alexandria, do not claim that one known person destroyed the entire library. Treat the scale of the 48 BCE fire during Caesar's Alexandrian War as disputed; distinguish the later destruction of the Serapeum in 391 CE from the main library, and do not present the later story blaming Arab forces as established fact.",
             ]
           : []),
-        "Be concise but explanatory. If search tools fail, answer stable low-risk questions from established knowledge and state exactly what was not verified; keep stricter evidence limits for current facts, high-impact advice, exact scripture, and artifact or inscription identification. Never use a canned 'general information is available but needs clarification' reply.",
+        "Be concise but explanatory. If the independent search layer returns no usable excerpts, answer stable low-risk questions from established knowledge and state what was not live-verified when relevant. Keep stricter evidence limits for current facts, high-impact advice, exact scripture quotations, and direct artifact or inscription identification. Never use a canned 'general information is available but needs clarification' reply.",
         "Do not show links or a sources section unless the user asks for sources. " +
           (useHostedSearchTools
             ? "At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page."
@@ -1370,7 +1368,7 @@ export async function handleChatPost(
               .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
               .join("; ")
           : "",
-        describeTrustedSourcesForQuestion(latestQuestion, 1),
+        generalKnowledgeAfterSearchFailure,
         localKnowledgeAnswer.content
           ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 350)}`
           : "",
@@ -1420,6 +1418,7 @@ export async function handleChatPost(
               max_completion_tokens: 4096,
               ...(heritageQuestion ? { temperature: 0.2 } : {}),
               reasoning_effort: "medium",
+              reasoning_format: "hidden",
             }),
           },
           "Groq",
