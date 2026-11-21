@@ -699,6 +699,61 @@ describe("general research fallbacks", () => {
     ).toBe(true);
   });
 
+  it("corrects an Egyptian-history myth using cautious general knowledge after live search returns nothing", async () => {
+    const answer =
+      "لا، مافيش دليل أثري موثوق إن كائنات فضائية بنت الأهرامات. الأدلة المتاحة بتربط البناء بعمال مصريين ومناطق استخراج ونقل أحجار وتنظيم بشري، مع استمرار النقاش العلمي حول تفاصيل بعض طرق البناء.";
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.hostname.endsWith("wikipedia.org")) {
+        if (url.searchParams.get("list") === "search") {
+          return Response.json({ query: { search: [] } });
+        }
+        if (url.searchParams.get("prop")) {
+          return Response.json({ query: { pages: {} } });
+        }
+      }
+      if (url.hostname === "api.groq.com") {
+        const payload = JSON.parse(String(init?.body)) as {
+          messages: { role: string; content: string }[];
+          tools?: unknown;
+        };
+        const prompt = payload.messages.map((message) => message.content).join("\\n");
+        expect(prompt).toContain("correct it directly and respectfully");
+        expect(prompt).toContain("ادعاء أن كائنات فضائية بنت الأهرامات");
+        expect(payload.tools).toBeUndefined();
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: answer } }],
+        });
+      }
+      return new Response("No matching source", { status: 404 });
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("هل كائنات فضائية بنت الأهرامات؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("مافيش دليل أثري موثوق");
+    expect(body).toContain("عمال مصريين");
+    expect(body).not.toContain("ماقدرتش أتحقق من الإجابة");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(body).not.toContain("المصادر:");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
+
   it.each([
     ["ايه الفرق بين الحاسوب واللابتوب؟", "الحاسوب واللابتوب", "الحاسوب واللابتوب"],
     ["ممكن تصححلي جمله فيها غلط املائي؟", "اللغة", "الجملة صحيحة"],
