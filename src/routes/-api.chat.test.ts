@@ -1215,7 +1215,7 @@ describe("handleChatPost hosted Groq provider", () => {
     ).toHaveLength(1);
   });
 
-  it("uses a curated institutional answer when all live search providers fail", async () => {
+  it("answers stable Egyptian history from Groq knowledge when search returns no trusted source", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
@@ -1294,7 +1294,7 @@ describe("handleChatPost hosted Groq provider", () => {
       "https://www.ucl.ac.uk/museums-static/digitalegypt/administration/index.html",
     );
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(false);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
