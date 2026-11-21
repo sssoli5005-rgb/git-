@@ -1852,8 +1852,6 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 429 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 429 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{ content: { parts: [{ text: "الكتابة الهيروغليفية نظام كتابة مصري قديم." }] } }],
@@ -1864,11 +1862,9 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الكتابة الهيروغليفية نظام كتابة مصري قديم");
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[3]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("continues a truncated Groq answer before returning it", async () => {
@@ -2335,10 +2331,10 @@ describe("handleChatPost production provider configuration", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain("مش لاقي دليل موثوق");
-    expect(requestedHosts).toHaveLength(9);
-    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(3);
+    expect(requestedHosts).toHaveLength(5);
+    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(1);
     expect(requestedHosts.filter((host) => host === "generativelanguage.googleapis.com")).toHaveLength(
-      6,
+      4,
     );
   });
 
