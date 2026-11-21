@@ -473,6 +473,11 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
       /(?:مصر القديمه|مصر القديمة|معتقدات المصريين القدماء|ديانه المصريين|ديانة المصريين|الدين المصري|المعتقدات المصريه|المعتقدات المصرية|الالهه المصريه|الآلهة المصرية|فرعون|فراعنه|فراعنة|هيروغليف|تحنيط|مومياء|اهرام|أهرام|سقاره|سقارة|الجيزه|الجيزة|الاقصر|الأقصر|اسوان|أسوان|سانت كاترين|سانت كترين|سان كترين|جبل موسى|جبل موسي|ابو سمبل|أبو سمبل|نفرتيتي|توت عنخ|رمسيس|حتشبسوت|خوفو|اخناتون|إخناتون|أخناتون|إمحوتب|ايمحتب|حجر رشيد|روزيته|egyptolog|ancient egyptian religion|egyptian beliefs|pharaoh|hieroglyph|mumm|saqqara|giza|luxor|aswan|tutankhamun|ramesses|nefertiti|hatshepsut|akhenaten|amarna|rosetta|imhotep|djoser|kv62)/iu,
   },
   {
+    topic: "religion",
+    pattern:
+      /(?:دين|ديني|ديانه|ديانة|معتقد|عقيده|عقيدة|لاهوت|الكنيسه|الكنيسة|قبطي|المسيح|يسوع|كيرلس|اوطاخ|افسس|خلقيدون|طبيعه واحده|طبيعة واحدة|انجيلي|انجيليه|انجيليين|انجليين|كاثوليك|كاثوليكي|بروتستانت|الإسلام|الاسلام|مسلم|القرآن|القران|قرآن|قران|حديث نبوي|الحديث النبوي|الحديث|حديث|صحيح البخاري|صحيح مسلم|يهودي|يهودية|اليهودية|التوراة|التلمود|هندوسي|الهندوسية|بوذي|البوذية|سيخي|الجاينية|الطاوية|الزرادشتية|christian|church|christ|christology|theolog|coptic|cyril|ephesus|chalcedon|eutyches|eutychian|miaphys|monophys|incarnate|hypostasis|nature of christ|evangelical|catholic|protestant|islam|muslim|qur['’]?an|koran|hadith|judaism|jewish|torah|talmud|hindu|buddh|sikh|jain|tao|zoroastr)/iu,
+  },
+  {
     topic: "archaeology",
     pattern:
       /(?:مكتبة الإسكندرية|مكتبة الاسكندرية|الإسكندرية القديمة|Alexandria|اثار|آثار|اثري|أثري|تنقيب|حفائر|مقبره|مقبرة|معبد|قطعه اثريه|قطعة أثرية|مخطوطه|مخطوطة|نقش|artifact|archaeolog|excavation|tomb|temple|inscription|manuscript)/iu,
@@ -481,11 +486,6 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
     topic: "world-history",
     pattern:
       /(?:تاريخ|حضاره|حضارة|ملوك|امبراطور|إمبراطور|حرب|معركه|معركة|دوله قديمه|دولة قديمة|history|historical|civilization|king|queen|emperor|war|battle)/iu,
-  },
-  {
-    topic: "religion",
-    pattern:
-      /(?:دين|ديني|ديانه|ديانة|معتقد|عقيده|عقيدة|لاهوت|الكنيسه|الكنيسة|قبطي|المسيح|يسوع|كيرلس|اوطاخ|افسس|خلقيدون|طبيعه واحده|طبيعة واحدة|انجيلي|انجيليه|انجيليين|انجليين|كاثوليك|كاثوليكي|بروتستانت|الإسلام|الاسلام|مسلم|القرآن|القران|قرآن|قران|حديث نبوي|الحديث النبوي|الحديث|حديث|صحيح البخاري|صحيح مسلم|يهودي|يهودية|اليهودية|التوراة|التلمود|هندوسي|الهندوسية|بوذي|البوذية|سيخي|الجاينية|الطاوية|الزرادشتية|christian|church|christ|christology|theolog|coptic|cyril|ephesus|chalcedon|eutyches|eutychian|miaphys|monophys|incarnate|hypostasis|nature of christ|evangelical|catholic|protestant|islam|muslim|qur['’]?an|koran|hadith|judaism|jewish|torah|talmud|hindu|buddh|sikh|jain|tao|zoroastr)/iu,
   },
   {
     topic: "science",
