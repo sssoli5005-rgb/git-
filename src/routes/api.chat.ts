@@ -418,13 +418,21 @@ function requiresVerifiedEvidence(
   );
 }
 
-function canAnswerFromGeneralKnowledge(query: string, heritageQuestion: boolean): boolean {
+function canAnswerFromGeneralKnowledge(
+  query: string,
+  heritageQuestion: boolean,
+  wantsSources = false,
+): boolean {
+  if (wantsSources) return false;
   const topics = inferResearchTopics(query);
-  if (topics.some((topic) => ["health", "law", "economy", "scripture"].includes(topic))) {
-    return false;
-  }
-
   const normalized = normalizeResearchQuery(query);
+  const personalHighImpactAdvice =
+    topics.some((topic) => ["health", "law", "economy"].includes(topic)) &&
+    /(?:\b(?:my case|my contract|my symptoms|i have|i take|should i take|what dose|dosage for me|diagnose me|treat me|my debt|my taxes|invest my money|should i buy|should i sell|sue my|legal advice for me|medical advice for me|emergency)\b|عندي|عندي الم|عندي ألم|اعاني|أعاني|اخد|أخد|اخذ|آخذ|جرعة|جرعات|ينفع اخد|هل اتناول|هل أتناول|نتيجة تحليلي|تحليلي|قضيتي|عقدي|ارفع قضية|أرفع قضية|محامي|حقوقي|حضانة|طلاق|استثمر فلوسي|فلوسي|مدخراتي|ديوني|قرضي|ضرايبي|ضرائبي)/u.test(
+      normalized,
+    );
+  if (topics.includes("scripture") || personalHighImpactAdvice) return false;
+
   const directArtifactIdentification =
     heritageQuestion &&
     /(?:\b(?:identify|identification|what artifact is this|name this artifact)\b|اسم القطعة|هوية القطعة|ما هذا الأثر|ما هذا الاثر|ايه الأثر ده|ايه الاثر ده|القطعة دي في الصورة|الصورة دي فيها ايه)/u.test(
@@ -729,7 +737,13 @@ async function searchWithChatSpecialists(
         String(item.description ?? item.snippet ?? ""),
       ).slice(0, 1_200);
       if (excerpt.length < 80) continue;
-      if (!isRelevantDiscoverySearchResult(question, item.title || "", excerpt)) continue;
+      // The discovery-specific relevance check is only appropriate for current
+      // archaeology-discovery questions. Other topics (including scripture,
+      // science, and general history) need their own relevant search excerpts.
+      if (
+        isDiscoveryResearchQuestion(question) &&
+        !isRelevantDiscoverySearchResult(question, item.title || "", excerpt)
+      ) continue;
       const existing = candidateMap.get(url.href);
       if (existing) {
         if (!existing.providers.includes(group.provider)) existing.providers.push(group.provider);
@@ -823,7 +837,7 @@ async function searchWithChatSpecialists(
         .join("; ") +
       ". Treat this as a high-confidence search normalization, not as permission to change the question's meaning."
     : "";
-  const sourceGuide = describeTrustedSourcesForQuestion(question, 12);
+  const sourceGuide = describeTrustedSourcesForQuestion(question, 1);
   const context = [
     "INDEPENDENT WEB RESEARCH — the three specialist search indexes (Exa, Linkup, Ceramic) were queried in parallel.",
     "Providers returning usable search results: " + (uniqueProviders.join(", ") || "none") + ".",
@@ -1105,12 +1119,13 @@ export async function handleChatPost(
   const generalKnowledgeFallbackAllowed = canAnswerFromGeneralKnowledge(
     latestQuestion,
     heritageQuestion,
+    wantsSources,
   );
-  const hasRelevantCuratedEvidence =
-    Boolean(localKnowledgeAnswer.content) && localKnowledgeSources.length > 0;
-  const providerEvidenceRequired =
-    verifiedEvidenceRequired &&
-    (!generalKnowledgeFallbackAllowed || hasRelevantCuratedEvidence);
+  // Stable, low-risk questions may use cautious general knowledge when live
+  // research is empty, even if a related curated entry exists but is incomplete.
+  // Current/high-impact/scriptural/identification questions and explicit source
+  // requests still require evidence from this turn.
+  const providerEvidenceRequired = verifiedEvidenceRequired && !generalKnowledgeFallbackAllowed;
   const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
@@ -1196,13 +1211,11 @@ export async function handleChatPost(
   }
   if (heritageQuestion) {
     if (!heritageResults?.length) {
-      liveSearchUnavailable = true;
-      if (!localKnowledgeSources.length) {
-        console.warn(
-          "[Heritage search] No matching local citations; refusing an ungrounded answer",
-        );
+      liveSearchUnavailable = searchedSources.length === 0 && !searchContext.trim();
+      if (liveSearchUnavailable && !localKnowledgeSources.length) {
+        console.warn("[Heritage search] No approved or curated evidence was retrieved");
       } else {
-        console.warn("[Heritage search] Using curated references after live search failed");
+        console.warn("[Heritage search] No heritage-specific page excerpt; using other retrieved or curated context when relevant");
       }
     } else {
       searchContext = [
@@ -1273,15 +1286,21 @@ export async function handleChatPost(
     );
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
-  const hasCuratedReferences = localKnowledgeSources.length > 0;
   const searchFallbackContext =
-    heritageQuestion && liveSearchUnavailable && hasCuratedReferences
-      ? "LIVE SEARCH LIMITATION: No approved live-source excerpt was retrieved for this turn. The directly relevant curated knowledge and its verified references in the system context are the only permitted factual evidence. Use only claims explicitly supported by that curated entry. Do not fill gaps from model memory or general knowledge. If the entry does not answer the question, say which detail it does not establish. Never invent or imply a source, citation, or successful search."
+    heritageQuestion && liveSearchUnavailable
+      ? generalKnowledgeFallbackAllowed
+        ? [
+            "LIVE SEARCH LIMITATION: No approved live-source excerpt was retrieved for this turn.",
+            "Use the directly relevant reviewed knowledge first for the claims it supports. For this stable, low-risk explanatory question, you may supplement gaps with cautious, well-established general knowledge. Clearly distinguish source-backed facts from general background that was not live-verified in this turn.",
+            "Do not invent exact dates, names, artifact identities, mummy or tomb identifications, provenance, inscription readings, quotations, or citations. Explain myths and mistaken premises by separating documented evidence, ancient beliefs, later folklore, and unsupported modern claims.",
+          ].join("\\n")
+        : "STRICT EVIDENCE LIMITATION: No approved live-source excerpt was retrieved for this turn. Do not guess or present model memory as verified for this specific identification, inscription, exact date, current fact, high-impact request, or explicit source request. State exactly what could not be confirmed and give the supported general context if available."
       : "";
 
-  // A heritage answer without a fetched institutional excerpt or a sourced
-  // curated entry must not be generated by an LLM from memory.
-  // A failed institutional lookup advances to Groq, Gemini, then OpenRouter.
+  // Live sources remain the preferred evidence. When they fail, stable and
+  // low-risk questions can still receive a cautious explanation; strict
+  // identification, current, high-impact, scriptural, and cited requests remain gated.
+  // Provider failover remains Groq, then Gemini, then OpenRouter.
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
@@ -1325,13 +1344,14 @@ export async function handleChatPost(
         "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
         "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
         "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
+        "For evangelical Christianity, prefer recognized bodies such as the National Association of Evangelicals; for Catholic teaching, use the Holy See (الكرسي الرسولي) and its official Catechism. Identify doctrinal perspectives rather than treating one institution as universal Christianity.",
         useHostedSearchTools
           ? "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results."
           : "The trusted-source search already returned no usable results. Answer this stable, low-risk question directly from established general knowledge, state any important uncertainty, and do not invent citations.",
         generalKnowledgeFallbackAllowed
           ? "If browser_search returns no usable evidence, do not refuse or ask for unnecessary clarification. Answer the stable question from established knowledge, say briefly that the answer was not live-verified, and do not invent citations or exact quotations."
           : "",
-        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
+        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. When the user repeats a myth, legend, conspiracy theory, or false premise, correct it directly and respectfully, then explain what the evidence supports. Separate documented ancient religious beliefs from literal historical events, later folklore, and modern viral claims; never agree merely to please the user. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
         ...(/(?:alexandria|اسكندريه)/u.test(
           normalizeResearchQuery(latestQuestion),
         )
@@ -1344,19 +1364,18 @@ export async function handleChatPost(
           (useHostedSearchTools
             ? "At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page."
             : "Do not include a machine-readable source block because no browser search is being used."),
-        `Search query: ${buildSpecialistSearchQuery(latestQuestion)}`,
         spellingEntitySuggestions.length
           ? "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " +
             spellingEntitySuggestions
               .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
               .join("; ")
           : "",
-        describeTrustedSourcesForQuestion(latestQuestion, 6),
+        describeTrustedSourcesForQuestion(latestQuestion, 1),
         localKnowledgeAnswer.content
-          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content}`
+          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 350)}`
           : "",
         searchFallbackContext,
-        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 4_000)}` : "",
+        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_400)}` : "",
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -1418,7 +1437,7 @@ export async function handleChatPost(
                 ? {
                     tools: [{ type: "browser_search" }],
                     tool_choice: "required",
-                    temperature: 1,
+                    temperature: heritageQuestion ? 0.2 : 1,
                     reasoning_effort: "low",
                   }
                 : { reasoning_effort: "medium", reasoning_format: "hidden" }),
