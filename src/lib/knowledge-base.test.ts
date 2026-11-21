@@ -25,6 +25,32 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("answers the Egyptian queens' hair question from reviewed archaeological and museum sources", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      {
+        role: "user",
+        content: "إيه سر جمال ملكات الفراعنة؟ وإزاي كانوا بيحافظوا على شعرهم؟",
+      },
+    ]);
+
+    expect(answer.directAnswer).toContain("مافيش سر جمال واحد");
+    expect(answer.directAnswer).toContain("قاعدة شبكية");
+    expect(answer.directAnswer).toContain("شمع النحل");
+    expect(answer.directAnswer).toContain("لا تثبت أن كل الملكات حلقن شعرهن");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "Internet Archaeology, University of York",
+        url: "https://intarch.ac.uk/journal/issue42/6/3.cfm",
+      }),
+    );
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "The Metropolitan Museum of Art",
+        url: "https://www.metmuseum.org/art/collection/search/590954",
+      }),
+    );
+  });
+
   it("uses only reviewed discovery evidence instead of a general Saqqara summary", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "لسه فيه اكتشافات في الأهرامات؟ أقصد الجيزة وسقارة." },

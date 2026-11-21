@@ -538,10 +538,11 @@ describe("ATHARA Cloudflare Worker", () => {
         },
       );
       try {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(fetchMock.mock.calls.some(([input]) =>
-          String(input instanceof Request ? input.url : input).startsWith(referenceUrl),
-        )).toBe(true);
+        await vi.waitFor(() => {
+          expect(fetchMock.mock.calls.some(([input]) =>
+            String(input instanceof Request ? input.url : input).startsWith(referenceUrl),
+          )).toBe(true);
+        });
       } finally {
         releaseIndexSearch();
       }

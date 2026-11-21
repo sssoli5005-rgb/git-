@@ -191,6 +191,29 @@ describe("general research fallbacks", () => {
     expect(response.status).toBe(200);
   });
 
+  it("answers the Egyptian queens' hair question from reviewed sources when live search fails", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      new Response("Temporarily unavailable", { status: 503 }),
+    );
+    const response = await handleChatPost(
+      createChatRequest("إيه سر جمال ملكات الفراعنة؟ وإزاي كانوا بيحافظوا على شعرهم؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("مافيش سر جمال واحد");
+    expect(body).toContain("شمع النحل");
+    expect(body).not.toContain("المعلومة العامة المستقرة متاحة");
+    expect(body).not.toContain("https://intarch.ac.uk");
+  });
+
   it("answers the Karnak question without displaying unrequested sources", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(String(input));
