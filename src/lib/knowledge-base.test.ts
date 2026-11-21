@@ -40,6 +40,19 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("answers who Severus of Antioch was from specialist Coptic and academic references", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "مين هو الانبا ساويرس الانطاقي؟" },
+    ]);
+    expect(answer.directAnswer).toContain("القديس ساويرس الأنطاكي");
+    expect(answer.directAnswer).toContain("بطريركًا لأنطاكية سنة 512م");
+    expect(answer.directAnswer).toContain("مصر");
+    expect(answer.directAnswer).toContain("538م");
+    expect(answer.sources).toContainEqual(expect.objectContaining({
+      url: "https://ccdl.claremont.edu/digital/collection/cce/id/2209/",
+    }));
+  });
+
   it("explains the Christian reading of Psalm 110:1 without erasing historical interpretations", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "في المسيحية فيه ايه بتقول قال الرب لربي يعني ايه؟" },

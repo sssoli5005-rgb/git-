@@ -641,6 +641,32 @@ describe("general research fallbacks", () => {
     expect(providerOrder).toEqual(["Groq", "Gemini"]);
   });
 
+  it("uses the reviewed Severus of Antioch answer when both hosted providers fail", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com" || url.hostname === "generativelanguage.googleapis.com") {
+        return new Response("Provider unavailable", { status: 503 });
+      }
+      throw new Error("Unexpected request to " + url.hostname);
+    });
+    const response = await handleChatPost(
+      createChatRequest("مين هو الانبا ساويرس الانطاقي؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "test-gemini-key",
+        CHAT_WEB_SEARCH: searchBinding,
+      },
+    );
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain("القديس ساويرس الأنطاكي");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+  });
+
   it.each([
     {
       question: "في المسيحية فيه ايه بتقول قال الرب لربي يعني ايه؟",
