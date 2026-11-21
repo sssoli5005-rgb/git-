@@ -38,6 +38,7 @@ describe("trusted source directory", () => {
   it.each([
     ["ما الموجود في سانت كترين؟", "egyptology"],
     ["ما معنى سفر يشوع 24:32؟", "scripture"],
+    ["أين جسد إيليا النبي؟", "scripture"],
     ["ما معنى آية الكرسي في القرآن؟", "scripture"],
     ["ما معنى حديث صحيح البخاري؟", "scripture"],
     ["ما المقصود بنص التوراة في اليهودية؟", "scripture"],

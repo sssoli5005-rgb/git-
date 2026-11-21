@@ -40,6 +40,23 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("answers Elijah's fate from 2 Kings without inventing an earthly grave", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "اين جسد ايليا النبي ؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("سفر الملوك الثاني 2:11");
+    expect(answer.directAnswer).toContain("صعد إلى السماء في زوبعة");
+    expect(answer.directAnswer).toContain("بحث خمسون رجلًا ثلاثة أيام ولم يعثروا عليه");
+    expect(answer.directAnswer).toContain("لا يذكر النص قبرًا أرضيًا لإيليا");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        title: "2 Kings 2:11–18 — Elijah Taken Up to Heaven",
+        url: "https://www.biblegateway.com/passage/?search=2+Kings+2%3A11-18&version=NIV",
+      }),
+    );
+  });
+
   it("infers the typo in a Catholic-versus-Evangelical question from reviewed sources", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "إيه الفرق بين الانجليين و الكاثوليك؟" },

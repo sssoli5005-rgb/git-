@@ -1264,7 +1264,10 @@ export async function handleChatPost(
     );
   const hasReviewedScriptureAnswer =
     localKnowledgeAnswer.directAnswer &&
-    localKnowledgeSources.some((source) => source.title === "Deuteronomy 34:5–6");
+    localKnowledgeSources.some((source) =>
+      source.title === "Deuteronomy 34:5–6" ||
+      source.title === "2 Kings 2:11–18 — Elijah Taken Up to Heaven",
+    );
   const hasConfiguredHostedProvider = [
     "CHAT_GROQ_API_KEY",
     "CHAT_GEMINI_API_KEY",
