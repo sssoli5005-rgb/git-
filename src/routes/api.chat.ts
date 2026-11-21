@@ -763,7 +763,15 @@ async function searchWithChatSpecialists(
     }
   }
 
-  const candidates = [...candidateMap.entries()].slice(0, 12);
+  const candidates = [...candidateMap.entries()]
+    .sort(([firstUrl, first], [secondUrl, second]) => {
+      const rank = (url: string, candidate: { providers: string[] }) => {
+        const trusted = isTrustedResearchHost(new URL(url).hostname) ? 2 : 1;
+        return trusted * 10 + candidate.providers.length;
+      };
+      return rank(secondUrl, second) - rank(firstUrl, first);
+    })
+    .slice(0, 8);
   if (!candidates.length) {
     console.warn("[Chat research] No safe public-web source results were returned", {
       successfulProviders: providerResults
