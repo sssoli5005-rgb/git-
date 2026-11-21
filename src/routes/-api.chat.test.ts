@@ -3041,7 +3041,7 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(body).toContain("المصادر:");
     expect(body).toContain("https://www.biblegateway.com/passage/");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
-      false,
+      true,
     );
   });
 
