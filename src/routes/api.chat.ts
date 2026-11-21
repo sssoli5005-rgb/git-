@@ -905,19 +905,8 @@ function createUnverifiedHeritageReply(language: LangCode): string {
   return messages[language];
 }
 
-function createUnverifiedResearchReply(language: LangCode): string {
-  const messages: Record<LangCode, string> = {
-    ar: "المعلومة العامة المستقرة متاحة، لكن الجزء الدقيق يحتاج مصدرًا أدق أو توضيحًا. لو قلتلي المكان أو العصر أو العبارة المقصودة أقدر أضيّق الإجابة وأكمل.",
-    en: "The stable general context is available, but the precise detail needs a clearer source or clarification. If you specify the place, period, object, or exact wording, I can narrow the answer.",
-    fr: "Le contexte général établi est disponible, mais le détail précis nécessite une source plus claire ou une précision. Indiquez le lieu, la période, l’objet ou les termes exacts.",
-    es: "El contexto general establecido está disponible, pero el dato preciso necesita una fuente más clara o una aclaración. Indica el lugar, el período, el objeto o la formulación exacta.",
-    it: "Non posso verificare questo dettaglio specifico con fonti affidabili, quindi non farò supposizioni. Se indichi il luogo, l'oggetto o il periodo, posso circoscrivere la risposta e continuare.",
-    de: "Dieses konkrete Detail kann ich anhand zuverlässiger Quellen nicht überprüfen und möchte nicht raten. Wenn Sie den Ort, das Objekt oder den Zeitraum nennen, kann ich die Antwort eingrenzen und fortfahren.",
-    ru: "Мне не удалось проверить эту конкретную деталь по надежным источникам, поэтому я не буду гадать. Если уточните место, предмет или период, я смогу сузить ответ и продолжить.",
-    ja: "この具体的な内容は信頼できる情報源で確認できないため、推測では答えません。場所、品物、時代を指定していただければ、範囲を絞って続けて説明できます。",
-    zh: "现有可靠来源无法核实这一具体信息，因此我不会猜测。请补充地点、物品或时期，我可以据此缩小范围并继续回答。",
-  };
-  return messages[language];
+function createTemporaryProviderUnavailableReply(language: LangCode): string {
+  return translations[language].chat.providerUnavailable;
 }
 
 function createArabicTourismQuickReply(data: {
@@ -993,6 +982,7 @@ export async function handleChatPost(
     ? [
         "MANDATORY THREE-STAGE VERIFIED RESEARCH — use Exa, Linkup, and Ceramic in parallel when the Cloudflare Web Search binding is available:",
         "Understand the user's intent before searching. Normalize high-confidence spelling and transliteration variants, preserve the original wording, and gently surface the likely correction only when it helps. If two meanings remain materially different, ask one focused question rather than guessing.",
+        "Search the exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat an unfamiliar term or an empty first search as proof that no answer exists. If a term has multiple plausible meanings, give the likely interpretations and answer conditionally when safe; ask for clarification only when the distinction materially changes the answer.",
         "Choose sources from the shared categorized trusted-source directory that match the subject. Official sources, universities, national libraries and archives, museums, peer-reviewed journals, and recognized specialist publications have priority. Encyclopedias are orientation sources, not substitutes for primary evidence.",
         "Search, compare, and synthesize evidence from the current turn. Distinguish directly opened page text from provider snippets. A snippet is limited evidence, not proof that the full page was read. Compare separate publications rather than counting multiple search providers that return the same page as independent corroboration.",
         "If providers disagree, explain the disagreement. State dates and current facts only when the retrieved evidence supports them. Correct false premises kindly and explain the supported information. Begin with the direct answer, then explain what supports it.",
@@ -1160,6 +1150,8 @@ export async function handleChatPost(
       const compactResearchInstruction = [
         `You are ATHARA, a careful conversational guide. Answer in ${languageNames[parsed.data.language]}. Answer the user's exact question directly, using recent conversation context when relevant.`,
         "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
+        "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
+        "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
         "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results.",
         "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
         ...(/(?:alexandria|اسكندريه)/u.test(
@@ -1169,7 +1161,7 @@ export async function handleChatPost(
               "For the ancient Library of Alexandria, do not claim that one known person destroyed the entire library. Treat the scale of the 48 BCE fire during Caesar's Alexandrian War as disputed; distinguish the later destruction of the Serapeum in 391 CE from the main library, and do not present the later story blaming Arab forces as established fact.",
             ]
           : []),
-        "Be concise but explanatory. GENERAL-KNOWLEDGE FALLBACK: if sources are unavailable, answer safe stable questions directly from established knowledge, note only specific limits, and never fabricate sources. Do not return a generic refusal.",
+        "Be concise but explanatory. If search tools fail, answer stable low-risk questions from established knowledge and state exactly what was not verified; keep stricter evidence limits for current facts, high-impact advice, exact scripture, and artifact or inscription identification. Never use a canned 'general information is available but needs clarification' reply.",
         "Do not show links or a sources section unless the user asks for sources. At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page.",
         `Search query: ${buildSpecialistSearchQuery(latestQuestion)}`,
         spellingEntitySuggestions.length
@@ -1872,7 +1864,7 @@ export async function handleChatPost(
       geminiFailureStatus,
     });
     return asChatStream(
-      createUnverifiedResearchReply(parsed.data.language),
+      createTemporaryProviderUnavailableReply(parsed.data.language),
       [],
       parsed.data.language,
     );

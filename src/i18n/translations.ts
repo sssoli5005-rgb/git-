@@ -1412,6 +1412,7 @@ export interface Dict {
     invalidRequest: string;
     providerError: string;
     heritageSearchFailed: string;
+    providerUnavailable: string;
     sourcesLabel: string;
     incompleteResponse: string;
     timeout: string;
@@ -1556,6 +1557,8 @@ const baseTranslations = {
         "حصلت مشكلة مؤقتة في الاتصال بالمساعد. رسالتك لسه موجودة في مربع الكتابة؛ جرّبي الإرسال تاني بعد لحظة.",
       heritageSearchFailed:
         "ماقدرتش أوصل لمصادر موثوقة كفاية للإجابة دلوقتي. جرّبي تاني بعد شوية أو غيّري صياغة السؤال.",
+      providerUnavailable:
+        "خدمة الإجابة مش متاحة مؤقتًا. ده مش معناه إن سؤالك محتاج توضيح؛ جرّب تاني بعد شوية.",
       sourcesLabel: "المصادر",
       incompleteResponse:
         "الرد ماكملش دلوقتي. سؤالك لسه مكتوب في مربع الرسالة؛ جرّبي الإرسال تاني من غير ما تعيدي كتابته.",
@@ -1727,6 +1730,8 @@ const baseTranslations = {
         "Ollama rejected the request or encountered an error. Check the local server and try again.",
       heritageSearchFailed:
         "I couldn't reach enough trusted sources to answer right now. Please try again later or rephrase the question.",
+      providerUnavailable:
+        "The answer service is temporarily unavailable. This doesn't mean your question needs clarification; please try again shortly.",
       sourcesLabel: "Sources",
       incompleteResponse:
         "The reply couldn't finish just now. Your message is still in the input box; try sending it again shortly without retyping it.",
@@ -1944,6 +1949,8 @@ const baseTranslations = {
         "Ollama a refusأ© la demande ou rencontrأ© une erreur. Vأ©rifiez le serveur local et rأ©essayez.",
       heritageSearchFailed:
         "Impossible d'accأ©der أ  suffisamment de sources fiables pour rأ©pondre. Rأ©essayez plus tard ou reformulez la question.",
+      providerUnavailable:
+        "Le service de réponse est temporairement indisponible. Cela ne signifie pas que votre question doit être précisée ; réessayez bientôt.",
       sourcesLabel: "Sources",
       incompleteResponse:
         "La réponse n’a pas pu se terminer. Votre message est toujours dans le champ de saisie ; réessayez sans le retaper.",
@@ -2164,6 +2171,8 @@ const baseTranslations = {
         "Ollama rechazأ³ la solicitud o devolviأ³ un error. Revisa el servidor local e intأ©ntalo de nuevo.",
       heritageSearchFailed:
         "No pude acceder a suficientes fuentes fiables para responder ahora. Intأ©ntalo mأ،s tarde o reformula la pregunta.",
+      providerUnavailable:
+        "El servicio de respuestas no está disponible temporalmente. Eso no significa que la pregunta necesite más detalles; inténtalo de nuevo pronto.",
       sourcesLabel: "Fuentes",
       incompleteResponse:
         "La respuesta no pudo terminarse. Tu mensaje sigue en el cuadro de texto; vuelve a enviarlo en un momento sin escribirlo otra vez.",
@@ -2384,6 +2393,8 @@ const baseTranslations = {
         "Ollama hat die Anfrage abgelehnt oder einen Fehler gemeldet. Prأ¼fe den lokalen Server und versuche es erneut.",
       heritageSearchFailed:
         "Ich konnte gerade nicht auf genügend vertrauenswürdige Quellen zugreifen. Bitte versuche es später erneut oder formuliere die Frage um.",
+      providerUnavailable:
+        "Der Antwortdienst ist vorübergehend nicht verfügbar. Das bedeutet nicht, dass deine Frage mehr Einzelheiten braucht; versuche es bitte später erneut.",
       sourcesLabel: "Quellen",
       incompleteResponse:
         "Die Antwort konnte gerade nicht beendet werden. Deine Nachricht steht noch im Eingabefeld; versuche es gleich erneut, ohne sie neu einzugeben.",
@@ -2602,6 +2613,7 @@ const baseTranslations = {
       providerError:
         "Ollama و‹’ç»‌ن؛†è¯·و±‚وˆ–è؟”ه›‍ن؛†é”™è¯¯م€‚è¯·و£€وں¥وœ¬هœ°وœچهٹ،ه™¨هگژé‡چè¯•م€‚",
       heritageSearchFailed: "目前无法找到足够可靠的信息来源。请稍后重试，或换一种方式提问。",
+      providerUnavailable: "回答服务暂时不可用。这并不表示问题需要补充细节，请稍后再试。",
       sourcesLabel: "来源",
       incompleteResponse: "回复暂时未能完成。你的消息仍在输入框中，请稍后重试，无需重新输入。",
       timeout: "Ollama ه“چه؛”و—¶é—´è؟‡é•؟ï¼Œè¯·ç¨چهگژé‡چè¯•م€‚",
@@ -2800,6 +2812,8 @@ export const translations: Record<LangCode, Dict> = {
       sourcesLabel: "Fonti",
       heritageSearchFailed:
         "Non riesco ad accedere a fonti affidabili sufficienti in questo momento. Riprova più tardi o riformula la domanda.",
+      providerUnavailable:
+        "Il servizio di risposta è temporaneamente non disponibile. Questo non significa che la domanda richieda più dettagli; riprova tra poco.",
       sending: "Sto pensando…",
     },
     features: {
@@ -2865,6 +2879,8 @@ export const translations: Record<LangCode, Dict> = {
       sourcesLabel: "Источники",
       heritageSearchFailed:
         "Сейчас не удалось найти достаточно надёжных источников. Попробуйте позже или переформулируйте вопрос.",
+      providerUnavailable:
+        "Сервис ответов временно недоступен. Это не значит, что вопросу не хватает подробностей; попробуйте позже.",
       sending: "Думаю…",
     },
     features: {
@@ -2933,6 +2949,7 @@ export const translations: Record<LangCode, Dict> = {
       sourcesLabel: "出典",
       heritageSearchFailed:
         "回答に十分な信頼できる情報源を確認できませんでした。時間をおいて再試行するか、質問を言い換えてください。",
+      providerUnavailable: "回答サービスが一時的に利用できません。質問に詳しい情報が必要という意味ではありません。しばらくしてから再試行してください。",
       sending: "考えています…",
     },
     features: {

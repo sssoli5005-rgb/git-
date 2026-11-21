@@ -191,6 +191,43 @@ describe("general research fallbacks", () => {
     expect(response.status).toBe(200);
   });
 
+  it("does not ask for unnecessary details when all hosted answer providers fail", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const host = new URL(String(input)).hostname;
+      if (host === "api.groq.com" || host === "generativelanguage.googleapis.com") {
+        return new Response("Temporarily unavailable", { status: 503 });
+      }
+      throw new Error(`Unexpected request to ${host}.`);
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("إيه الفرق بين الشهب والنيازك؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "test-gemini-key",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(body).not.toContain("المعلومة العامة المستقرة متاحة");
+    expect(body).not.toContain("لو قلتلي المكان أو العصر");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.map(([input]) => new URL(String(input)).hostname)).toEqual([
+      "api.groq.com",
+      "generativelanguage.googleapis.com",
+    ]);
+  });
+
   it("answers the Egyptian queens' hair question from reviewed sources when live search fails", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       new Response("Temporarily unavailable", { status: 503 }),
@@ -386,7 +423,10 @@ describe("general research fallbacks", () => {
           messages: { role: string; content: string }[];
         };
         const prompt = payload.messages.map((message) => message.content).join("\n");
-        expect(prompt).toContain("GENERAL-KNOWLEDGE FALLBACK");
+        expect(prompt).toContain("Search every safe factual question");
+        expect(prompt).toContain("retry with likely corrected spellings");
+        expect(prompt).toContain("If a term has multiple plausible meanings");
+        expect(prompt).toContain("Never use a canned");
         expect(prompt).toContain("National Association of Evangelicals");
         expect(prompt).toContain("الكرسي الرسولي");
         if (question.includes("الانجليين")) {
@@ -1927,7 +1967,7 @@ describe("handleChatPost production provider configuration", () => {
     const response = await handleChatPost(createChatRequest(), fetcher);
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("المعلومة العامة");
+    expect(await response.text()).toContain("خدمة الإجابة مش متاحة مؤقتًا");
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
