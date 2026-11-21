@@ -475,7 +475,7 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
   {
     topic: "religion",
     pattern:
-      /(?:دين|ديني|ديانه|ديانة|معتقد|عقيده|عقيدة|لاهوت|الكنيسه|الكنيسة|قبطي|المسيح|يسوع|كيرلس|اوطاخ|افسس|خلقيدون|طبيعه واحده|طبيعة واحدة|انجيلي|انجيليه|انجيليين|انجليين|كاثوليك|كاثوليكي|بروتستانت|الإسلام|الاسلام|مسلم|القرآن|القران|قرآن|قران|حديث نبوي|الحديث النبوي|الحديث|حديث|صحيح البخاري|صحيح مسلم|يهودي|يهودية|اليهودية|التوراة|التلمود|هندوسي|الهندوسية|بوذي|البوذية|سيخي|الجاينية|الطاوية|الزرادشتية|christian|church|christ|christology|theolog|coptic|cyril|ephesus|chalcedon|eutyches|eutychian|miaphys|monophys|incarnate|hypostasis|nature of christ|evangelical|catholic|protestant|islam|muslim|qur['’]?an|koran|hadith|judaism|jewish|torah|talmud|hindu|buddh|sikh|jain|tao|zoroastr)/iu,
+      /(?:الانبا|الأنبا|ساويرس|سويروس|Severus of Antioch|Severos of Antioch|دين|ديني|ديانه|ديانة|معتقد|عقيده|عقيدة|لاهوت|الكنيسه|الكنيسة|قبطي|المسيح|يسوع|كيرلس|اوطاخ|افسس|خلقيدون|طبيعه واحده|طبيعة واحدة|انجيلي|انجيليه|انجيليين|انجليين|كاثوليك|كاثوليكي|بروتستانت|الإسلام|الاسلام|مسلم|القرآن|القران|قرآن|قران|حديث نبوي|الحديث النبوي|الحديث|حديث|صحيح البخاري|صحيح مسلم|يهودي|يهودية|اليهودية|التوراة|التلمود|هندوسي|الهندوسية|بوذي|البوذية|سيخي|الجاينية|الطاوية|الزرادشتية|christian|church|christ|christology|theolog|coptic|cyril|ephesus|chalcedon|eutyches|eutychian|miaphys|monophys|incarnate|hypostasis|nature of christ|evangelical|catholic|protestant|islam|muslim|qur['’]?an|koran|hadith|judaism|jewish|torah|talmud|hindu|buddh|sikh|jain|tao|zoroastr)/iu,
   },
   {
     topic: "archaeology",
