@@ -2789,14 +2789,11 @@ describe("handleChatPost Ollama stream handling", () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
-        tools?: Array<{ type: string }>;
-        tool_choice?: string;
+        tools?: unknown;
         messages: { role: string; content: string }[];
       };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload).not.toHaveProperty("citation_options");
-      expect(payload.tools).toEqual([{ type: "browser_search" }]);
-      expect(payload.tool_choice).toBe("required");
+      expect(payload.model).toBe("qwen/qwen3.8-27b");
+      expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain(
         "For questions about scripture, retrieve the exact passage",
       );
@@ -2852,252 +2849,30 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("accepts Groq browser tool search_results nested under results", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "توضح المصادر أن يوسف دُفن في شكيم.",
-              executed_tools: [
-                {
-                  search_results: {
-                    results: [
-                      {
-                        title: "Joshua 24:32",
-                        url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                        content:
-                          "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      }),
-    );
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(body).toContain("توضح المصادر");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-  });
-
-  it("accepts standard Groq URL citation annotations without requiring a custom marker", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+  it("does not accept AI-written links or tool metadata as verified website sources", async () => {
+    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       expect(String(input)).toContain("api.groq.com");
       return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "بحسب سفر يشوع، دُفنت عظام يوسف في شكيم.",
-              annotations: [
-                {
-                  type: "url_citation",
-                  url_citation: {
-                    url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                    title: "Joshua 24:32 — NRSVUE",
-                    content:
-                      "The bones of Joseph were buried at Shechem, in the piece of ground that Jacob had bought from the children of Hamor.",
-                  },
-                },
-              ],
-            },
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "باريس هي عاصمة فرنسا. https://example.com/fake",
+            annotations: [{ type: "url_citation", url_citation: { url: "https://www.britannica.com/place/Paris", title: "Paris — Encyclopaedia Britannica", content: "Paris is the capital of France." } }],
+            executed_tools: [{ browser_results: [{ title: "Fake source", url: "https://example.com/fake", content: "A model-authored claim, not a result from the app-level search." }] }],
           },
-        ],
+        }],
       });
     });
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(response.status).toBe(200);
-    expect(body).toContain("بحسب سفر يشوع");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-  });
-
-  it("accepts Groq's native URL citation metadata when it omits an excerpt field", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async () =>
-      Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "تذكر يشوع 24:32 دفن عظام يوسف في شكيم.",
-              annotations: [
-                {
-                  type: "url_citation",
-                  url_citation: {
-                    url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                    title: "Joshua 24:32 — NRSVUE",
-                    start_index: 15,
-                    end_index: 27,
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      }),
-    );
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-    expect(body).toContain("تذكر يشوع 24:32");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-  });
-
-  it("shows the actual retrieved URLs only when a factual user explicitly asks for sources", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        messages: { role: string; content: string }[];
-      };
-      expect(payload.model).toBe("openai/gpt-oss-20b");
-      return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content: "بحسب يشوع 24:32 دُفنت عظام يوسف في شكيم.",
-              executed_tools: [
-                {
-                  browser_results: [
-                    {
-                      title: "Joshua 24:32 — NRSVUE",
-                      url: "https://www.biblegateway.com/passage/?search=Joshua+24%3A32&version=NRSVUE",
-                      content: "The bones of Joseph were buried at Shechem.",
-                      score: 0.97,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      });
-    });
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق؟ مع المصادر"),
-      fetcher,
-    );
-    const body = await response.text();
-
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.biblegateway.com/passage/");
-    expect(body).toContain("Joshua 24:32");
-  });
-
-  it("falls through Groq and Gemini search failures to the dedicated third OpenRouter research provider", async () => {
-    vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "chat-gemini-key");
-    vi.stubEnv("CHAT_OPENROUTER_API_KEY", "chat-openrouter-key");
-    const providerOrder: string[] = [];
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-      const url = String(input);
-      const payload = JSON.parse(String(init?.body)) as {
-        model?: string;
-        tools?: Array<{ type?: string; parameters?: { allowed_domains?: string[] } }>;
-        tool_choice?: string;
-      };
-      if (url.includes("api.groq.com")) {
-        providerOrder.push("Groq");
-        expect(payload.tools).toContainEqual({ type: "browser_search" });
-        expect(payload.tool_choice).toBe("required");
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content: "Groq could not retrieve an approved source.",
-                executed_tools: [],
-              },
-            },
-          ],
-        });
-      }
-      if (url.includes("generativelanguage.googleapis.com")) {
-        providerOrder.push("Gemini");
-        expect(payload.tools).toEqual([{ google_search: {} }]);
-        return Response.json({
-          candidates: [
-            {
-              content: { parts: [{ text: "Gemini could not retrieve an approved source." }] },
-              groundingMetadata: { groundingChunks: [] },
-            },
-          ],
-        });
-      }
-      if (url.includes("openrouter.ai")) {
-        providerOrder.push("OpenRouter");
-        expect(payload.tools?.[0]?.type).toBe("openrouter:web_search");
-        expect(payload.tool_choice).toBe("required");
-        expect(payload.tools?.[0]?.parameters?.allowed_domains).toContain("britannica.com");
-        expect(payload.tools?.[0]?.parameters?.allowed_domains).toEqual(
-          expect.arrayContaining([
-            "quran.com",
-            "sunnah.com",
-            "dar-alifta.org",
-            "sefaria.org",
-            "uee.ucla.edu",
-            "escholarship.org",
-            "thesaurus-linguae-aegyptiae.de",
-          ]),
-        );
-        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer chat-openrouter-key");
-        return Response.json({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: {
-                content: "باريس هي عاصمة فرنسا.",
-                annotations: [
-                  {
-                    type: "url_citation",
-                    url_citation: {
-                      url: "https://www.britannica.com/place/Paris",
-                      title: "Paris — Encyclopaedia Britannica",
-                      content:
-                        "Paris is the capital and most populous city of France. It is located in the north-central part of the country.",
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        });
-      }
-      throw new Error("Unexpected provider request: " + url);
-    });
-
     const response = await handleChatPost(createChatRequest("ما عاصمة فرنسا؟ مع المصادر"), fetcher);
     const body = await response.text();
-
     expect(response.status).toBe(200);
-    expect(providerOrder).toEqual(["Groq", "Gemini", "OpenRouter"]);
-    expect(body).toContain("باريس هي عاصمة فرنسا");
-    expect(body).toContain("المصادر:");
-    expect(body).toContain("https://www.britannica.com/place/Paris");
+    expect(body).not.toContain("example.com/fake");
+    expect(body).not.toContain("britannica.com");
+    expect(body).not.toContain("المصادر:");
+    expect(body).toContain("مش متاحة مؤقتًا");
   });
-
   it("uses trusted live research without showing unrequested sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
