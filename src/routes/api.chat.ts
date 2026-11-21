@@ -1914,14 +1914,20 @@ export async function handleChatPost(
 
   // Chat uses only its dedicated hosted providers and CHAT_OLLAMA_* in local development.
   // The Cloudflare AI binding and scanner credentials belong exclusively to /api/scan.
+  const hasReviewedPsalm110Answer = localKnowledgeSources.some(
+    (source) => source.url === "https://www.biblegateway.com/passage/?search=Psalm%20110%3A1&version=NIV",
+  );
+  const hasReviewedAlexandriaAnswer = localKnowledgeSources.some(
+    (source) => source.url === "https://www.perseus.tufts.edu/hopper/text?doc=Perseus%3Atext%3A1999.01.0244%3Achapter%3D49%3Asection%3D3",
+  );
   if (
     parsed.data.language === "ar" &&
-    heritageQuestion &&
-    localKnowledgeAnswer.content &&
-    localKnowledgeSources.length
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.length > 0 &&
+    (heritageQuestion || hasReviewedPsalm110Answer || hasReviewedAlexandriaAnswer)
   ) {
-    console.warn("[Chat] Using a directly relevant sourced answer after provider failures");
-    return asChatStream(localKnowledgeAnswer.content, responseSources, parsed.data.language);
+    console.warn("[Chat] Using a directly relevant reviewed answer after provider failures");
+    return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
 
   // Do not silently route hosted-provider failures to the local default model.

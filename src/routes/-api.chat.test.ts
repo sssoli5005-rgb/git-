@@ -642,6 +642,37 @@ describe("general research fallbacks", () => {
   });
 
   it.each([
+    {
+      question: "في المسيحية فيه ايه بتقول قال الرب لربي يعني ايه؟",
+      expected: "عبارة «قال الرب لربي» هي بداية مزمور 110:1",
+    },
+    {
+      question: "هل حرق مكتبة الاسكندرية كانت متقصده؟",
+      expected: "الأدلة لا تثبت أن مكتبة الإسكندرية كانت هي الهدف المقصود بالحريق",
+    },
+  ])("uses a reviewed answer for $question when Groq and Gemini fail", async ({ question, expected }) => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com" || url.hostname === "generativelanguage.googleapis.com") {
+        return new Response("Provider unavailable", { status: 401 });
+      }
+      throw new Error("Unexpected request to " + url.hostname);
+    });
+    const response = await handleChatPost(createChatRequest(question), fetcher, {
+      CHAT_GROQ_API_KEY: "test-groq-key",
+      CHAT_GEMINI_API_KEY: "test-gemini-key",
+      CHAT_WEB_SEARCH: searchBinding,
+    });
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain(expected);
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+  });
+
+  it.each([
     "إيه الفرق بين الإنجيليين والكاثوليك؟",
     "ايه الفرق بين الانجليين و الكاثوليك",
     "الفرق بين الانجليين والكاثوليك مش عارف",

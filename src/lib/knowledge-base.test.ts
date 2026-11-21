@@ -40,6 +40,30 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("explains the Christian reading of Psalm 110:1 without erasing historical interpretations", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "في المسيحية فيه ايه بتقول قال الرب لربي يعني ايه؟" },
+    ]);
+    expect(answer.directAnswer).toContain("مزمور 110:1");
+    expect(answer.directAnswer).toContain("المسيح أو المسيا");
+    expect(answer.directAnswer).toContain("متى 22:41–46");
+    expect(answer.directAnswer).toContain("السياق التاريخي الأصلي");
+    expect(answer.sources).toContainEqual(expect.objectContaining({
+      url: "https://www.biblegateway.com/passage/?search=Psalm%20110%3A1&version=NIV",
+    }));
+  });
+
+  it("answers whether the Library of Alexandria fire was deliberate with historical nuance", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "هل حرق مكتبة الاسكندرية كانت متقصده؟" },
+    ]);
+    expect(answer.directAnswer).toContain("لا تثبت أن مكتبة الإسكندرية كانت هي الهدف المقصود");
+    expect(answer.directAnswer).toContain("حرب الإسكندرية سنة 48 ق.م.");
+    expect(answer.directAnswer).toContain("بلوتارخ");
+    expect(answer.directAnswer).toContain("391م");
+    expect(answer.sources.length).toBeGreaterThanOrEqual(3);
+  });
+
   it("answers Elijah's fate from 2 Kings without inventing an earthly grave", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "اين جسد ايليا النبي ؟" },
@@ -130,7 +154,7 @@ describe("retrieveRelevantKnowledge", () => {
 
     expect(answer.directAnswer).toContain("بلوتارخ");
     expect(answer.directAnswer).toContain("48 ق.م.");
-    expect(answer.directAnswer).toContain("لا تثبت وحدها");
+    expect(answer.directAnswer).toContain("لا يثبت وحده");
     expect(answer.directAnswer).toContain("تدمير المكتبة كاملةً لشخص واحد معروف");
     expect(answer.sources).toContainEqual(
       expect.objectContaining({
