@@ -184,6 +184,17 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("Infer the user's intended meaning despite spelling");
   });
 
+  it("keeps stable heritage answers conversational when sources fail and corrects myths", () => {
+    const prompt = buildChatSystemInstruction("ar");
+    expect(prompt).toContain("not a hard limit on every useful explanation");
+    expect(prompt).toContain("still answer stable, low-risk history and heritage questions");
+    expect(prompt).toContain("clearly separating what retrieved or reviewed references establish");
+    expect(prompt).toContain("A failed search by itself is never a reason to refuse");
+    expect(prompt).toContain("correct it directly and respectfully");
+    expect(prompt).toContain("Separate documented ancient religious beliefs from literal historical events");
+    expect(prompt).toContain("Keep specific artifact or mummy identification");
+  });
+
   it("supports multiple religious traditions without conflating text, commentary, and institutional views", () => {
     const prompt = buildChatSystemInstruction("ar");
     expect(prompt).toContain("Answer safe questions about religious traditions broadly");
