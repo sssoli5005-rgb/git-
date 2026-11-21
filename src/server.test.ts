@@ -100,7 +100,7 @@ describe("production chat research wiring", () => {
           messages: { role: string; content: string }[];
           tools?: Array<{ type?: string }>;
         };
-        expect(payload.tools).toEqual([{ type: "browser_search" }]);
+        expect(payload.tools).toBeUndefined();
         expect(payload.messages[0]?.content).toContain("Search-index excerpt");
         expect(payload.messages[0]?.content).toContain("buried at Shechem");
         return Response.json({
