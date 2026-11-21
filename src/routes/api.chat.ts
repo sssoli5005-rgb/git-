@@ -420,11 +420,14 @@ function requiresVerifiedEvidence(
 
 function canAnswerFromGeneralKnowledge(query: string, heritageQuestion: boolean): boolean {
   const topics = inferResearchTopics(query);
-  if (topics.some((topic) => ["health", "law", "economy", "scripture"].includes(topic))) {
-    return false;
-  }
-
   const normalized = normalizeResearchQuery(query);
+  const personalHighImpactAdvice =
+    topics.some((topic) => ["health", "law", "economy"].includes(topic)) &&
+    /(?:\b(?:my case|my contract|my symptoms|i have|i take|should i take|what dose|dosage for me|diagnose me|treat me|my debt|my taxes|invest my money|should i buy|should i sell|sue my|legal advice for me|medical advice for me|emergency)\b|عندي|عندي الم|عندي ألم|اعاني|أعاني|اخد|أخد|اخذ|آخذ|جرعة|جرعات|ينفع اخد|هل اتناول|هل أتناول|نتيجة تحليلي|تحليلي|قضيتي|عقدي|ارفع قضية|أرفع قضية|محامي|حقوقي|حضانة|طلاق|استثمر فلوسي|فلوسي|مدخراتي|ديوني|قرضي|ضرايبي|ضرائبي)/u.test(
+      normalized,
+    );
+  if (topics.includes("scripture") || personalHighImpactAdvice) return false;
+
   const directArtifactIdentification =
     heritageQuestion &&
     /(?:\b(?:identify|identification|what artifact is this|name this artifact)\b|اسم القطعة|هوية القطعة|ما هذا الأثر|ما هذا الاثر|ايه الأثر ده|ايه الاثر ده|القطعة دي في الصورة|الصورة دي فيها ايه)/u.test(
@@ -1106,11 +1109,11 @@ export async function handleChatPost(
     latestQuestion,
     heritageQuestion,
   );
-  const hasRelevantCuratedEvidence =
-    Boolean(localKnowledgeAnswer.content) && localKnowledgeSources.length > 0;
-  const providerEvidenceRequired =
-    verifiedEvidenceRequired &&
-    (!generalKnowledgeFallbackAllowed || hasRelevantCuratedEvidence);
+  // Stable, low-risk questions may use cautious general knowledge when live
+  // research is empty, even if a related curated entry exists but is incomplete.
+  // Current/high-impact/scriptural/identification questions and explicit source
+  // requests still require evidence from this turn.
+  const providerEvidenceRequired = verifiedEvidenceRequired && !generalKnowledgeFallbackAllowed;
   const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
@@ -1196,13 +1199,11 @@ export async function handleChatPost(
   }
   if (heritageQuestion) {
     if (!heritageResults?.length) {
-      liveSearchUnavailable = true;
-      if (!localKnowledgeSources.length) {
-        console.warn(
-          "[Heritage search] No matching local citations; refusing an ungrounded answer",
-        );
+      liveSearchUnavailable = searchedSources.length === 0 && !searchContext.trim();
+      if (liveSearchUnavailable && !localKnowledgeSources.length) {
+        console.warn("[Heritage search] No approved or curated evidence was retrieved");
       } else {
-        console.warn("[Heritage search] Using curated references after live search failed");
+        console.warn("[Heritage search] No heritage-specific page excerpt; using other retrieved or curated context when relevant");
       }
     } else {
       searchContext = [
@@ -1273,15 +1274,21 @@ export async function handleChatPost(
     );
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
-  const hasCuratedReferences = localKnowledgeSources.length > 0;
   const searchFallbackContext =
-    heritageQuestion && liveSearchUnavailable && hasCuratedReferences
-      ? "LIVE SEARCH LIMITATION: No approved live-source excerpt was retrieved for this turn. The directly relevant curated knowledge and its verified references in the system context are the only permitted factual evidence. Use only claims explicitly supported by that curated entry. Do not fill gaps from model memory or general knowledge. If the entry does not answer the question, say which detail it does not establish. Never invent or imply a source, citation, or successful search."
+    heritageQuestion && liveSearchUnavailable
+      ? generalKnowledgeFallbackAllowed
+        ? [
+            "LIVE SEARCH LIMITATION: No approved live-source excerpt was retrieved for this turn.",
+            "Use the directly relevant reviewed knowledge first for the claims it supports. For this stable, low-risk explanatory question, you may supplement gaps with cautious, well-established general knowledge. Clearly distinguish source-backed facts from general background that was not live-verified in this turn.",
+            "Do not invent exact dates, names, artifact identities, mummy or tomb identifications, provenance, inscription readings, quotations, or citations. Explain myths and mistaken premises by separating documented evidence, ancient beliefs, later folklore, and unsupported modern claims.",
+          ].join("\\n")
+        : "STRICT EVIDENCE LIMITATION: No approved live-source excerpt was retrieved for this turn. Do not guess or present model memory as verified for this specific identification, inscription, exact date, current fact, high-impact request, or explicit source request. State exactly what could not be confirmed and give the supported general context if available."
       : "";
 
-  // A heritage answer without a fetched institutional excerpt or a sourced
-  // curated entry must not be generated by an LLM from memory.
-  // A failed institutional lookup advances to Groq, Gemini, then OpenRouter.
+  // Live sources remain the preferred evidence. When they fail, stable and
+  // low-risk questions can still receive a cautious explanation; strict
+  // identification, current, high-impact, scriptural, and cited requests remain gated.
+  // Provider failover remains Groq, then Gemini, then OpenRouter.
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
