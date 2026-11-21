@@ -324,7 +324,7 @@ describe("general research fallbacks", () => {
     expect(body).toContain("مش إثباتًا أثريًا");
     expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls.some(([input]) =>
       new URL(String(input)).hostname.endsWith("wikipedia.org"),
     )).toBe(false);
