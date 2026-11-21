@@ -39,6 +39,71 @@ type ChatProviderEnv = Record<string, unknown> & {
   CHAT_WEB_SEARCH?: ChatWebSearchBinding;
 };
 
+const CHAT_PROVIDER_RETRY_DELAYS_MS = [250, 500] as const;
+
+function isRetryableChatProviderStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function waitForChatProviderRetry(delayMs: number, signal?: AbortSignal | null): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new Error("Provider request was aborted."));
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, delayMs);
+    const abort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(signal?.reason ?? new Error("Provider request was aborted."));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
+async function fetchChatProviderWithRetry(
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit,
+  providerName: string,
+): Promise<Response> {
+  const signal = init.signal;
+  for (let attempt = 0; ; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetcher(url, init);
+    } catch (error) {
+      const delayMs = CHAT_PROVIDER_RETRY_DELAYS_MS[attempt];
+      if (!delayMs || signal?.aborted || !(error instanceof TypeError)) throw error;
+
+      console.warn(`[${providerName}] Request failed; retrying provider request`, {
+        attempt: attempt + 1,
+        reason: error.name,
+        delayMs,
+      });
+      await waitForChatProviderRetry(delayMs, signal);
+      continue;
+    }
+
+    const delayMs = CHAT_PROVIDER_RETRY_DELAYS_MS[attempt];
+    if (!delayMs || !isRetryableChatProviderStatus(response.status) || signal?.aborted) {
+      return response;
+    }
+
+    console.warn(`[${providerName}] Transient response; retrying provider request`, {
+      attempt: attempt + 1,
+      httpStatus: response.status,
+      delayMs,
+    });
+    await response.body?.cancel();
+    await waitForChatProviderRetry(delayMs, signal);
+  }
+}
+
 function readProviderEnv(env: ChatProviderEnv | undefined, key: string): string | undefined {
   const value = env?.[key];
   if (typeof value === "string") return value;
@@ -1082,6 +1147,19 @@ export async function handleChatPost(
     }
   }
 
+  const specialistSearchAttempted = Boolean(suppliedEnv?.CHAT_WEB_SEARCH);
+  const specialistSearchFoundEvidence = searchedSources.length > 0 || Boolean(searchContext.trim());
+  const useHostedSearchTools =
+    liveResearchRequested &&
+    (verifiedEvidenceRequired || !specialistSearchAttempted || specialistSearchFoundEvidence);
+  const generalKnowledgeAfterSearchFailure =
+    liveResearchRequested &&
+    !verifiedEvidenceRequired &&
+    specialistSearchAttempted &&
+    !specialistSearchFoundEvidence
+      ? "The trusted-source search already ran for this turn and returned no usable results. Do not retry web search; answer the stable, low-risk question directly from well-established general knowledge. Do not invent citations, and briefly distinguish what was not verified."
+      : "";
+
   const knowledgeSources = [...searchedSources, ...localKnowledgeSources]
     .filter(
       (source, index, sources) =>
@@ -1094,17 +1172,32 @@ export async function handleChatPost(
     /(?:مين|من)\s+(?:هما|هم)\s+(?:الكاثوليك|اليهود|المسلمين)|(?:مين|من|إيه)\s+(?:هو|هي)\s+(?:الإسلام|اليهودية)|اشرحلي\s+(?:الدين الفرعوني|الديانة الفرعونية)|(?:الديانة الفرعونية|الدين المصري القديم)/iu.test(
       latestQuestion,
     );
+  const hasReviewedCosmeticsAnswer =
+    parsed.data.language === "ar" &&
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.some(
+      (source) =>
+        source.url ===
+        "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
+    );
+  const hasConfiguredHostedProvider = [
+    "CHAT_GROQ_API_KEY",
+    "CHAT_GEMINI_API_KEY",
+    "CHAT_OPENROUTER_API_KEY",
+  ].some((key) => readProviderEnv(suppliedEnv, key)?.trim());
   if (
     (parsed.data.language === "ar" &&
       localKnowledgeAnswer.directAnswer &&
-      localKnowledgeSources.length &&
-      (searchedSources.length ||
-        (!readProviderEnv(suppliedEnv, "CHAT_GROQ_API_KEY")?.trim() &&
-          !readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim() &&
-          !readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim()))) ||
-    (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion)
+      localKnowledgeSources.length > 0 &&
+      (searchedSources.length > 0 || !hasConfiguredHostedProvider)) ||
+    (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
+    hasReviewedCosmeticsAnswer
   ) {
-    console.info("[Chat] Answering with directly relevant curated general knowledge");
+    console.info(
+      hasReviewedCosmeticsAnswer
+        ? "[Chat] Answering with directly relevant reviewed cosmetics knowledge"
+        : "[Chat] Answering with directly relevant curated knowledge",
+    );
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
   }
   const hasCuratedReferences = localKnowledgeSources.length > 0;
@@ -1119,7 +1212,14 @@ export async function handleChatPost(
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
-    [searchContext, searchFallbackContext, generalResearchContext].filter(Boolean).join("\n\n"),
+    [
+      searchContext,
+      searchFallbackContext,
+      generalResearchContext,
+      generalKnowledgeAfterSearchFailure,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   );
 
   // Groq is primary. If it is temporarily unavailable, continue to Gemini
@@ -1152,7 +1252,9 @@ export async function handleChatPost(
         "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
         "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
         "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
-        "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results.",
+        useHostedSearchTools
+          ? "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results."
+          : "The trusted-source search already returned no usable results. Answer this stable, low-risk question directly from established general knowledge, state any important uncertainty, and do not invent citations.",
         "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
         ...(/(?:alexandria|اسكندريه)/u.test(
           normalizeResearchQuery(latestQuestion),
@@ -1162,7 +1264,10 @@ export async function handleChatPost(
             ]
           : []),
         "Be concise but explanatory. If search tools fail, answer stable low-risk questions from established knowledge and state exactly what was not verified; keep stricter evidence limits for current facts, high-impact advice, exact scripture, and artifact or inscription identification. Never use a canned 'general information is available but needs clarification' reply.",
-        "Do not show links or a sources section unless the user asks for sources. At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page.",
+        "Do not show links or a sources section unless the user asks for sources. " +
+          (useHostedSearchTools
+            ? "At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page."
+            : "Do not include a machine-readable source block because no browser search is being used."),
         `Search query: ${buildSpecialistSearchQuery(latestQuestion)}`,
         spellingEntitySuggestions.length
           ? "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " +
@@ -1195,15 +1300,16 @@ export async function handleChatPost(
         { role: "system", content: compactResearchInstruction },
         ...recentConversation,
       );
-      const sourceRequirement =
-        'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.';
+      const sourceRequirement = useHostedSearchTools
+        ? 'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.'
+        : "";
       const lastMessage = groqMessages.at(-1);
-      if (lastMessage?.role === "user") {
+      if (sourceRequirement && lastMessage?.role === "user") {
         groqMessages[groqMessages.length - 1] = {
           ...lastMessage,
           content: `${lastMessage.content}\n\n${sourceRequirement}`,
         };
-      } else {
+      } else if (sourceRequirement) {
         groqMessages.push({ role: "user", content: sourceRequirement });
       }
     }
@@ -1220,25 +1326,30 @@ export async function handleChatPost(
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
         headers.set("authorization", "Bearer " + groqApiKey);
-        const groqResponse = await fetcher("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers,
-          signal: providerSignal,
-          body: JSON.stringify({
-            model,
-            messages: requestsLiveResearch ? groqMessages : localPayload.messages,
-            max_completion_tokens: requestsLiveResearch ? 1536 : 4096,
-            ...(heritageQuestion ? { temperature: 0.2 } : {}),
-            ...(requestsLiveResearch
-              ? {
-                  tools: [{ type: "browser_search" }],
-                  tool_choice: "required",
-                  temperature: 1,
-                  reasoning_effort: "low",
-                }
-              : { reasoning_effort: "medium", reasoning_format: "hidden" }),
-          }),
-        });
+        const groqResponse = await fetchChatProviderWithRetry(
+          fetcher,
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            method: "POST",
+            headers,
+            signal: providerSignal,
+            body: JSON.stringify({
+              model,
+              messages: requestsLiveResearch ? groqMessages : localPayload.messages,
+              max_completion_tokens: requestsLiveResearch ? 1536 : 4096,
+              ...(heritageQuestion ? { temperature: 0.2 } : {}),
+              ...(useHostedSearchTools
+                ? {
+                    tools: [{ type: "browser_search" }],
+                    tool_choice: "required",
+                    temperature: 1,
+                    reasoning_effort: "low",
+                  }
+                : { reasoning_effort: "medium", reasoning_format: "hidden" }),
+            }),
+          },
+          "Groq",
+        );
         if (groqResponse.ok) {
           const groqPayload = (await groqResponse.json().catch(() => null)) as {
             choices?: Array<{
@@ -1331,7 +1442,8 @@ export async function handleChatPost(
               const continuationTimeout = AbortSignal.timeout(15_000);
               const continuationSignal = AbortSignal.any([request.signal, continuationTimeout]);
               try {
-                const continuationResponse = await fetcher(
+                const continuationResponse = await fetchChatProviderWithRetry(
+                  fetcher,
                   "https://api.groq.com/openai/v1/chat/completions",
                   {
                     method: "POST",
@@ -1350,6 +1462,7 @@ export async function handleChatPost(
                       reasoning_format: "hidden",
                     }),
                   },
+                  "Groq",
                 );
                 if (continuationResponse.ok) {
                   const continuationPayload = (await continuationResponse
@@ -1449,7 +1562,7 @@ export async function handleChatPost(
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim();
-  const geminiLiveSearch = liveResearchRequested;
+  const geminiLiveSearch = useHostedSearchTools;
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
@@ -1473,7 +1586,8 @@ export async function handleChatPost(
       const providerTimeout = AbortSignal.timeout(geminiLiveSearch ? 25_000 : 12_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
-        const geminiResponse = await fetcher(
+        const geminiResponse = await fetchChatProviderWithRetry(
+          fetcher,
           `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
           {
             method: "POST",
@@ -1492,6 +1606,7 @@ export async function handleChatPost(
               ...(geminiLiveSearch ? { tools: [{ google_search: {} }] } : {}),
             }),
           },
+          "Gemini",
         );
 
         if (geminiResponse.ok) {
@@ -1553,7 +1668,8 @@ export async function handleChatPost(
               const continuationTimeout = AbortSignal.timeout(15_000);
               const continuationSignal = AbortSignal.any([request.signal, continuationTimeout]);
               try {
-                const continuationResponse = await fetcher(
+                const continuationResponse = await fetchChatProviderWithRetry(
+                  fetcher,
                   `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
                   {
                     method: "POST",
@@ -1583,6 +1699,7 @@ export async function handleChatPost(
                       },
                     }),
                   },
+                  "Gemini",
                 );
                 if (continuationResponse.ok) {
                   const continuationPayload = (await continuationResponse
@@ -1682,74 +1799,79 @@ export async function handleChatPost(
       readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_MODEL")?.trim() || "openai/gpt-oss-20b";
     const timeout = AbortSignal.timeout(liveResearchRequested ? 25_000 : 12_000);
     try {
-      const response = await fetcher("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + openRouterApiKey,
-          "HTTP-Referer": "https://athara-heritage.app",
-          "X-Title": "ATHARA",
-        },
-        signal: AbortSignal.any([request.signal, timeout]),
-        body: JSON.stringify({
-          model,
-          messages: localPayload.messages,
-          max_tokens: 4096,
-          ...(liveResearchRequested
-            ? {
-                tools: [
-                  {
-                    type: "openrouter:web_search",
-                    parameters: {
-                      engine: "exa",
-                      max_results: 5,
-                      max_total_results: 10,
-                      allowed_domains: [
-                        "egymonuments.gov.eg",
-                        "whc.unesco.org",
-                        "metmuseum.org",
-                        "britishmuseum.org",
-                        "penn.museum",
-                        "si.edu",
-                        "louvre.fr",
-                        "ees.ac.uk",
-                        "ucl.ac.uk",
-                        "uee.ucla.edu",
-                        "escholarship.org",
-                        "thesaurus-linguae-aegyptiae.de",
-                        "biblegateway.com",
-                        "bible.com",
-                        "quran.com",
-                        "sunnah.com",
-                        "dar-alifta.org",
-                        "sefaria.org",
-                        "britannica.com",
-                        "nae.org",
-                        "vatican.va",
-                        "sourcebooks.fordham.edu",
-                        "copticorthodox.church",
-                        "st-takla.org",
-                        "cambridge.org",
-                        "oxfordreference.com",
-                        "ox.ac.uk",
-                        "cam.ac.uk",
-                        "harvard.edu",
-                        "who.int",
-                        "un.org",
-                        "nasa.gov",
-                        "noaa.gov",
-                        "nature.com",
-                        "science.org",
-                        "pubmed.ncbi.nlm.nih.gov",
-                      ],
+      const response = await fetchChatProviderWithRetry(
+        fetcher,
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + openRouterApiKey,
+            "HTTP-Referer": "https://athara-heritage.app",
+            "X-Title": "ATHARA",
+          },
+          signal: AbortSignal.any([request.signal, timeout]),
+          body: JSON.stringify({
+            model,
+            messages: localPayload.messages,
+            max_tokens: 4096,
+            ...(useHostedSearchTools
+              ? {
+                  tools: [
+                    {
+                      type: "openrouter:web_search",
+                      parameters: {
+                        engine: "exa",
+                        max_results: 5,
+                        max_total_results: 10,
+                        allowed_domains: [
+                          "egymonuments.gov.eg",
+                          "whc.unesco.org",
+                          "metmuseum.org",
+                          "britishmuseum.org",
+                          "penn.museum",
+                          "si.edu",
+                          "louvre.fr",
+                          "ees.ac.uk",
+                          "ucl.ac.uk",
+                          "uee.ucla.edu",
+                          "escholarship.org",
+                          "thesaurus-linguae-aegyptiae.de",
+                          "biblegateway.com",
+                          "bible.com",
+                          "quran.com",
+                          "sunnah.com",
+                          "dar-alifta.org",
+                          "sefaria.org",
+                          "britannica.com",
+                          "nae.org",
+                          "vatican.va",
+                          "sourcebooks.fordham.edu",
+                          "copticorthodox.church",
+                          "st-takla.org",
+                          "cambridge.org",
+                          "oxfordreference.com",
+                          "ox.ac.uk",
+                          "cam.ac.uk",
+                          "harvard.edu",
+                          "who.int",
+                          "un.org",
+                          "nasa.gov",
+                          "noaa.gov",
+                          "nature.com",
+                          "science.org",
+                          "pubmed.ncbi.nlm.nih.gov",
+                        ],
+                      },
                     },
-                  },
-                ],
-                tool_choice: "required",
-              }
-            : {}),
-        }),
-      });
+                  ],
+                  tool_choice: "required",
+                }
+              : {}),
+          }),
+        },
+        "OpenRouter",
+      );
       if (response.ok) {
         const payload = (await response.json().catch(() => null)) as {
           choices?: Array<{
@@ -1904,12 +2026,17 @@ export async function handleChatPost(
   const providerTimeout = AbortSignal.timeout(35_000);
   const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
   try {
-    response = await fetcher(chatRequest.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: providerSignal,
-      body: chatRequest.body,
-    });
+    response = await fetchChatProviderWithRetry(
+      fetcher,
+      chatRequest.url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: providerSignal,
+        body: chatRequest.body,
+      },
+      "Ollama",
+    );
   } catch {
     if (providerTimeout.aborted) {
       console.error("[Ollama] Request timed out", { model: requestPayload.model });
@@ -2024,12 +2151,17 @@ export async function handleChatPost(
         const fallbackRequest = createArabicFallbackRequest(chatRequest);
         let fallbackResponse: Response;
         try {
-          fallbackResponse = await fetcher(fallbackRequest.url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: request.signal,
-            body: fallbackRequest.body,
-          });
+          fallbackResponse = await fetchChatProviderWithRetry(
+            fetcher,
+            fallbackRequest.url,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: providerSignal,
+              body: fallbackRequest.body,
+            },
+            "Ollama",
+          );
         } catch {
           console.error("[Ollama] Arabic fallback request could not reach server", {
             model: "qwen3:8b",

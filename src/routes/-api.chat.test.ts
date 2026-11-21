@@ -224,8 +224,56 @@ describe("general research fallbacks", () => {
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
     expect(fetcher.mock.calls.map(([input]) => new URL(String(input)).hostname)).toEqual([
       "api.groq.com",
+      "api.groq.com",
+      "api.groq.com",
+      "generativelanguage.googleapis.com",
+      "generativelanguage.googleapis.com",
+      "generativelanguage.googleapis.com",
+      "generativelanguage.googleapis.com",
+      "generativelanguage.googleapis.com",
       "generativelanguage.googleapis.com",
     ]);
+  });
+
+  it("asks the model from general knowledge after the trusted search returns no results", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const answer = "اللون الأخضر في الأوراق يخفيه الكلوروفيل، ويظهر الأصفر والبرتقالي لما يقل في الخريف.";
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(new URL(String(input)).hostname).toBe("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as {
+        messages: { role: string; content: string }[];
+        tools?: unknown;
+      };
+      expect(payload.tools).toBeUndefined();
+      expect(payload.messages[0]?.content).toContain(
+        "The trusted-source search already returned no usable results",
+      );
+      return Response.json({
+        choices: [{ finish_reason: "stop", message: { content: answer } }],
+      });
+    });
+
+    const response = await handleChatPost(
+      createChatRequest("ليه لون ورق الشجر بيتغير في الخريف؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(answer);
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("answers the Egyptian queens' hair question from reviewed sources when live search fails", async () => {
@@ -249,6 +297,64 @@ describe("general research fallbacks", () => {
     expect(body).toContain("شمع النحل");
     expect(body).not.toContain("المعلومة العامة المستقرة متاحة");
     expect(body).not.toContain("https://intarch.ac.uk");
+  });
+
+  it("answers the lipstick follow-up from reviewed evidence without showing unrequested sources", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const response = await handleChatPost(
+      createChatRequest("والروج على أيامهم كان بيتعمل من إيه؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("المغرة الحمراء");
+    expect(body).toContain("ممزوجة براتنج");
+    expect(body).toContain("مش وصفة موحدة لكل الملكات");
+    expect(body).not.toContain("المعلومة العامة المستقرة متاحة");
+    expect(body).not.toContain("nationalgeographic.com");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("answers a misspelled beetle-makeup question from reviewed evidence when providers are configured", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const response = await handleChatPost(
+      createChatRequest("هل المصريات في مصر القديمة استخدموا حشرة الخنفسا لصنع الميكب؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("رواية صحفية غير مؤكدة أثريًا");
+    expect(body).toContain("لا دليلًا على أن المصريات عمومًا استخدمن الخنافس");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
+      false,
+    );
   });
 
   it("answers the Karnak question without displaying unrequested sources", async () => {
@@ -511,7 +617,8 @@ describe("general research fallbacks", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("أتباع الكنيسة الكاثوليكية");
-    expect(body).toContain("البابا");
+    expect(body).toContain("بابا روما");
+    expect(body).toContain("الليتورجيا");
     expect(body).not.toContain("مش لاقي دليل موثوق");
   });
 
@@ -568,6 +675,40 @@ describe("general research fallbacks", () => {
     expect(body).toContain("البوذية نشأت في شمال الهند القديمة");
     expect(body).not.toContain("مش لاقي دليل موثوق");
     expect(body).not.toContain("المصادر:");
+  });
+
+  it("uses reviewed references for the Evangelical-versus-Catholic typo when chat providers fail", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({ error: "provider unavailable" }, { status: 503 });
+      }
+      throw new Error(`Unexpected request to ${url.hostname}.`);
+    });
+    const response = await handleChatPost(
+      createChatRequest("إيه الفرق بين الانجليين و الكاثوليك؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("غالبًا كلمة «الانجليين»");
+    expect(body).toContain("بابا روما");
+    expect(body).toContain("الأنجليكان");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(body).not.toContain("worldea.org");
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("answers an explicitly sourced question with an accurate general fallback instead of refusing", async () => {
@@ -1476,6 +1617,8 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 429 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 429 }))
       .mockResolvedValueOnce(
         Response.json({
           choices: [{ message: { content: "الكتابة الهيروغليفية نظام كتابة مصري قديم." } }],
@@ -1486,8 +1629,8 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الكتابة الهيروغليفية نظام كتابة مصري قديم");
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect((JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as { model: string }).model).toBe(
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect((JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body)) as { model: string }).model).toBe(
       "openai/gpt-oss-20b",
     );
   });
@@ -1628,11 +1771,13 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الملكة نفرتيتي");
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("ar.wikipedia.org");
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("gemini-3.8-flash");
+    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[4]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[4]?.[0])).toContain("gemini-3.8-flash");
   });
 
   it("passes the same trusted research to Gemini when Groq fails", async () => {
@@ -1697,6 +1842,8 @@ describe("handleChatPost hosted Groq provider", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{ content: { parts: [{ text: "دي إجابة دقيقة." }] } }],
@@ -1707,8 +1854,9 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("دي إجابة دقيقة.");
+    expect(fetcher).toHaveBeenCalledTimes(4);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("gemini-3.8-flash");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.6-flash");
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain("gemini-3.6-flash");
   });
 
   it("continues a truncated Gemini answer before returning it", async () => {
@@ -1765,6 +1913,8 @@ describe("handleChatPost hosted Groq provider", () => {
         }),
       )
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{ content: { parts: [{ text: "خلينا نفهم الموضوع خطوة بخطوة." }] } }],
@@ -1775,10 +1925,12 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("خلينا نفهم الموضوع خطوة بخطوة.");
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
     expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[4]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("does not use the scanner AI binding when chat Groq is throttled", async () => {
@@ -1852,6 +2004,8 @@ describe("handleChatPost hosted Gemini provider", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{ content: { parts: [{ text: "الهيروغليفية نظام كتابة مصري قديم." }] } }],
@@ -1862,8 +2016,8 @@ describe("handleChatPost hosted Gemini provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الهيروغليفية نظام كتابة مصري قديم");
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("gemini-3.6-flash:generateContent");
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain("gemini-3.6-flash:generateContent");
   });
 
   it("does not borrow the scanner AI when both chat providers return incomplete answers", async () => {
@@ -1931,6 +2085,7 @@ describe("handleChatPost hosted Gemini provider", () => {
     const response = await handleChatPost(request, fetcher);
     expect(response.status).toBe(200);
     expect(scannerAI.run).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(6);
   });
 });
 
@@ -1940,22 +2095,21 @@ describe("handleChatPost production provider configuration", () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     vi.stubEnv("CHAT_OLLAMA_BASE_URL", "");
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response("{}", { status: 429 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const host = new URL(String(input)).hostname;
+      return new Response("{}", { status: host === "api.groq.com" ? 429 : 503 });
+    });
 
     const response = await handleChatPost(createChatRequest(), fetcher);
+    const requestedHosts = fetcher.mock.calls.map(([input]) => new URL(String(input)).hostname);
 
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain("مش لاقي دليل موثوق");
-    expect(fetcher).toHaveBeenCalledTimes(4);
-    expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("generativelanguage.googleapis.com");
-    expect(String(fetcher.mock.calls[3]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(requestedHosts).toHaveLength(12);
+    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(6);
+    expect(requestedHosts.filter((host) => host === "generativelanguage.googleapis.com")).toHaveLength(
+      6,
+    );
   });
 
   it("does not try localhost Ollama when no hosted provider is configured in production", async () => {

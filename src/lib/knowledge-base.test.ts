@@ -8,6 +8,29 @@ import {
 } from "./knowledge-base";
 
 describe("retrieveRelevantKnowledge", () => {
+  it("infers the typo in a Catholic-versus-Evangelical question from reviewed sources", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "إيه الفرق بين الانجليين و الكاثوليك؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("غالبًا كلمة «الانجليين»");
+    expect(answer.directAnswer).toContain("مش الإنجليز");
+    expect(answer.directAnswer).toContain("بابا روما");
+    expect(answer.directAnswer).toContain("الأنجليكان");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "World Evangelical Alliance",
+        url: "https://worldea.org/who-we-are/who-are-evangelicals/",
+      }),
+    );
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "The Holy See",
+        url: "https://www.vatican.va/archive/ENG0015/__P2A.HTM",
+      }),
+    );
+  });
+
   it("answers the Karnak question from the Egyptian Ministry reference", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "ايه الي موجود في الكرنك ؟" },
@@ -70,15 +93,51 @@ describe("retrieveRelevantKnowledge", () => {
 
   it("answers makeup and skincare questions with a concrete, limited artifact example", () => {
     const answer = getRelevantKnowledgeAnswer([
-      { role: "user", content: "إيه اللي نعرفه من الآثار عن مكياج وعناية البشرة عند المصريات القدماء؟" },
+      {
+        role: "user",
+        content: "إيه اللي نعرفه من الآثار عن مكياج وعناية البشرة عند المصريات القدماء؟",
+      },
     ]);
 
     expect(answer.directAnswer).toContain("أنبوبًا ومطبّقًا للكحل");
-    expect(answer.directAnswer).toContain("لا يكفي وحده لإعادة بناء روتين يومي كامل");
+    expect(answer.directAnswer).toContain("لا تكفي وحدها لإعادة بناء روتين يومي كامل");
     expect(answer.sources).toContainEqual(
       expect.objectContaining({
         organization: "The Metropolitan Museum of Art",
         url: "https://www.metmuseum.org/art/collection/search/590954",
+      }),
+    );
+  });
+
+  it("answers the ancient Egyptian lipstick question with a qualified pigment recipe", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "والروج على أيامهم كان بيتعمل من إيه؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("المغرة الحمراء");
+    expect(answer.directAnswer).toContain("ممزوجة براتنج");
+    expect(answer.directAnswer).toContain("مش وصفة موحدة لكل الملكات");
+    expect(answer.directAnswer).toContain("لا تثبت وجود فريق محدد");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "National Geographic",
+        url: "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
+      }),
+    );
+  });
+
+  it("handles the misspelled beetle-makeup question without overstating the Cleopatra claim", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "هل المصريات في مصر القديمة استخدموا حشرة الخنفسا لصنع الميكب؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("المغرة الحمراء");
+    expect(answer.directAnswer).toContain("رواية صحفية غير مؤكدة أثريًا");
+    expect(answer.directAnswer).toContain("لا دليلًا على أن المصريات عمومًا استخدمن الخنافس");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "National Geographic",
+        url: "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
       }),
     );
   });
@@ -102,9 +161,10 @@ describe("retrieveRelevantKnowledge", () => {
   });
 
   it("retrieves the reviewed discovery answer for a Japanese question", () => {
-    const answer = getRelevantKnowledgeAnswer([
-      { role: "user", content: "ギザとサッカラのピラミッドで最近発見されたものはありますか？" },
-    ], 1);
+    const answer = getRelevantKnowledgeAnswer(
+      [{ role: "user", content: "ギザとサッカラのピラミッドで最近発見されたものはありますか？" }],
+      1,
+    );
 
     expect(answer.content).toContain("طوله نحو 9 أمتار");
     expect(answer.sources).toContainEqual(
@@ -163,8 +223,7 @@ describe("retrieveRelevantKnowledge", () => {
     const answer = getRelevantKnowledgeAnswer([
       {
         role: "user",
-        content:
-          "حجر رشيد: ما تاريخه وسياق العثور عليه؟ وما دور توماس يونج وشامبليون؟",
+        content: "حجر رشيد: ما تاريخه وسياق العثور عليه؟ وما دور توماس يونج وشامبليون؟",
       },
     ]);
 
@@ -179,12 +238,13 @@ describe("retrieveRelevantKnowledge", () => {
     const answer = getRelevantKnowledgeAnswer([
       {
         role: "user",
-        content:
-          "هل ثبت وجود غرفة خفية خلف الجدار الشمالي في مقبرة توت عنخ آمون KV62؟",
+        content: "هل ثبت وجود غرفة خفية خلف الجدار الشمالي في مقبرة توت عنخ آمون KV62؟",
       },
     ]);
 
-    expect(answer.content).toContain("ولم تجد دراسة المسح الثالث المنشورة سنة 2019 دليلًا جيوفيزيائيًا");
+    expect(answer.content).toContain(
+      "ولم تجد دراسة المسح الثالث المنشورة سنة 2019 دليلًا جيوفيزيائيًا",
+    );
     expect(answer.content).toContain("عثر على الأختام سليمة");
     expect(answer.sources).toContainEqual(
       expect.objectContaining({
@@ -241,7 +301,9 @@ describe("retrieveRelevantKnowledge", () => {
       1,
     );
 
-    expect(answer.directAnswer).toContain("لا يصح مساواة هذا الاستخدام الكيرلسي تلقائيًا بمذهب أوطاخي");
+    expect(answer.directAnswer).toContain(
+      "لا يصح مساواة هذا الاستخدام الكيرلسي تلقائيًا بمذهب أوطاخي",
+    );
     expect(answer.directAnswer).toContain("كامل في لاهوته وكامل في ناسوته");
     expect(answer.directAnswer).toContain("بلا اختلاط ولا تغيير ولا انقسام ولا انفصال");
     expect(answer.directAnswer).toContain("لا يجعل الخلاف مجرد اختلاف ترجمة");
@@ -279,7 +341,9 @@ describe("retrieveRelevantKnowledge", () => {
     ]);
 
     expect(answer.directAnswer).toContain("بدأت أعمال بنائها في عهد أمنحتب الثالث");
-    expect(answer.directAnswer).toContain("البناء الرئيسي والزخارف ارتبطا بعهد سيتي الأول ورمسيس الثاني");
+    expect(answer.directAnswer).toContain(
+      "البناء الرئيسي والزخارف ارتبطا بعهد سيتي الأول ورمسيس الثاني",
+    );
     expect(answer.directAnswer).not.toContain("مش كله اتبنى في عهد ملك واحد");
     expect(answer.sources).toContainEqual(
       expect.objectContaining({
@@ -322,33 +386,33 @@ describe("retrieveRelevantKnowledge", () => {
     expect(answer.directAnswer).toContain("جبل موسى");
     expect(answer.directAnswer).toContain("60,100 هكتار");
     expect(answer.directAnswer).toContain("التمييز بين مدينة سانت كاترين، والدير نفسه");
-    expect(answer.sources).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        organization: "Egyptian Ministry of Tourism and Antiquities",
-        url: "https://egymonuments.gov.eg/en/world-heritage/saint-catherine-s-monastery-and-its-surrounding-area",
-      }),
-      expect.objectContaining({
-        organization: "UNESCO World Heritage Centre",
-        url: "https://whc.unesco.org/en/list/954/",
-      }),
-    ]));
+    expect(answer.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organization: "Egyptian Ministry of Tourism and Antiquities",
+          url: "https://egymonuments.gov.eg/en/world-heritage/saint-catherine-s-monastery-and-its-surrounding-area",
+        }),
+        expect.objectContaining({
+          organization: "UNESCO World Heritage Centre",
+          url: "https://whc.unesco.org/en/list/954/",
+        }),
+      ]),
+    );
   });
 
   it("retrieves reviewed Saint Catherine knowledge after a one-character place-name typo", () => {
-    const answer = getRelevantKnowledgeAnswer([
-      { role: "user", content: "سانت كتيرين فيها ايه؟" },
-    ]);
+    const answer = getRelevantKnowledgeAnswer([{ role: "user", content: "سانت كتيرين فيها ايه؟" }]);
     expect(answer.directAnswer).toContain("دير سانت كاترين");
     expect(answer.directAnswer).toContain("كنيسة العليقة المشتعلة");
-    expect(answer.sources).toEqual(expect.arrayContaining([
-      expect.objectContaining({ url: "https://whc.unesco.org/en/list/954/" }),
-    ]));
+    expect(answer.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ url: "https://whc.unesco.org/en/list/954/" }),
+      ]),
+    );
   });
 
   it("retrieves the biblical account of Joseph's burial with the exact passages", () => {
-    const answer = getRelevantKnowledgeAnswer([
-      { role: "user", content: "أين جسد يوسف الصديق؟" },
-    ]);
+    const answer = getRelevantKnowledgeAnswer([{ role: "user", content: "أين جسد يوسف الصديق؟" }]);
 
     expect(answer.directAnswer).toContain("سفر التكوين 50:26");
     expect(answer.directAnswer).toContain("سفر الخروج 13:19");
@@ -362,7 +426,6 @@ describe("retrieveRelevantKnowledge", () => {
       }),
     );
   });
-
 
   it("does not inject psychology material into ordinary greetings", () => {
     const result = retrieveRelevantKnowledge(
@@ -692,22 +755,13 @@ describe("retrieveRelevantKnowledge", () => {
   });
 
   it.each([
-    [
-      "إزاي أعرف اتجاه قراءة الهيروغليفية؟ هل لازم أبدأ من اليمين دائمًا؟",
-      "وجوه البشر والحيوانات",
-    ],
-    [
-      "إيه الفرق بين العلامة الصوتية والعلامة المحددة في الهيروغليفية؟",
-      "Determinative",
-    ],
+    ["إزاي أعرف اتجاه قراءة الهيروغليفية؟ هل لازم أبدأ من اليمين دائمًا؟", "وجوه البشر والحيوانات"],
+    ["إيه الفرق بين العلامة الصوتية والعلامة المحددة في الهيروغليفية؟", "Determinative"],
     [
       "هل كل علامة هيروغليفية تمثل حرفًا واحدًا؟ اشرح أحادية وثنائية وثلاثية الصوت.",
       "أحادية أو ثنائية أو ثلاثية الصوامت",
     ],
-    [
-      "هل أكتب اسم رمسيس الثاني بالهيروغليفية حرفًا بحرف؟",
-      "تقريبًا صوتيًا",
-    ],
+    ["هل أكتب اسم رمسيس الثاني بالهيروغليفية حرفًا بحرف؟", "تقريبًا صوتيًا"],
   ])("retrieves a focused, sourced hieroglyphic answer for %s", (question, expected) => {
     const answer = getRelevantKnowledgeAnswer([{ role: "user", content: question }], 1);
 

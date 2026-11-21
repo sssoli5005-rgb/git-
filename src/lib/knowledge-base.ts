@@ -28,20 +28,48 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "روم كاثوليك",
     ],
     content:
-      "الكاثوليك هم أتباع الكنيسة الكاثوليكية، وهي كنيسة مسيحية كبيرة تتبع التقاليد واللاهوت الكاثوليكي وتجمعها قيادة البابا والأساقفة. يؤمن الكاثوليك بالكتاب المقدس وبالتقليد المقدس، ويعتبرون البطاركة والأساقفة خلفاءً للتقاليد الرسلية، وتظهر ذلك في العقيدة والعبادة والأسرار السبعة واللوجورجيا. في مصر، كنيسة الإيمان الكاثوليكي جزء من التعدد المسيحي القائم إلى جانب الكنائس القبطية الأرثوذكسية والكاثوليكية والبروتستانتية؛ وتحديد الانتماء الدقيق يعتمد على الطائفة والكنيسة المحلية وليس الاسم وحده.",
+      "الكاثوليك هم أتباع الكنيسة الكاثوليكية، ودي كنائس مسيحية بتجمعها الوحدة مع بابا روما في الإيمان والقيادة الكنسية، مع وجود طقوس مختلفة بينها. بيؤمنوا بالكتاب المقدس والتقليد الكنسي، وبالأسرار السبعة، وبتظهر معتقداتهم في الليتورجيا، يعني صلوات وطقوس العبادة. في مصر فيه كنيسة قبطية كاثوليكية وكنائس كاثوليكية تانية؛ وده مختلف عن الكنيسة القبطية الأرثوذكسية، رغم إن الطرفين مسيحيين.",
+  },
+  {
+    id: "evangelical-catholic-comparison",
+    title: "الفرق بين الإنجيليين والكاثوليك",
+    directResponse: true,
+    keywords: [
+      "الانجليين والكاثوليك",
+      "الانجليين و الكاثوليك",
+      "الإنجليين والكاثوليك",
+      "الإنجليين و الكاثوليك",
+      "الإنجيليين والكاثوليك",
+      "الإنجيليين و الكاثوليك",
+      "الإنجيليون والكاثوليك",
+      "الإنجيليون و الكاثوليك",
+      "الفرق بين الانجليين والكاثوليك",
+      "الفرق بين الانجليين و الكاثوليك",
+      "الفرق بين الإنجيليين والكاثوليك",
+      "الفرق بين الإنجيليين والروم الكاثوليك",
+      "evangelicals and Catholics",
+      "evangelical Catholic differences",
+    ],
+    content:
+      "غالبًا كلمة «الانجليين» هنا مقصود بيها «الإنجيليين»، مش الإنجليز. الإنجيليون تيار مسيحي متنوع، مش كنيسة واحدة لها إدارة مركزية واحدة؛ وكثير من جماعاتهم يركز على مكانة الكتاب المقدس والعلاقة الشخصية بالله والإيمان بيسوع، وفقًا لتحالف الإنجيليين العالمي. أما الكاثوليك فينتموا لكنائس كاثوليكية يجمعها الارتباط ببابا روما وبنية الأساقفة، وفقًا للتعليم المسيحي للكنيسة الكاثوليكية. الاتنين مسيحيين، لكنهم يختلفوا في فهم سلطة الكنيسة والتقليد وبعض المعتقدات والطقوس. ولو المقصود الأنجليكان، مش الإنجيليين، فده تقليد مسيحي مختلف.",
+    sources: [
+      {
+        title: "Who are Evangelicals",
+        organization: "World Evangelical Alliance",
+        url: "https://worldea.org/who-we-are/who-are-evangelicals/",
+      },
+      {
+        title: "Catechism of the Catholic Church, paragraph 877",
+        organization: "The Holy See",
+        url: "https://www.vatican.va/archive/ENG0015/__P2A.HTM",
+      },
+    ],
   },
   {
     id: "judaism-basics",
     title: "من هم اليهود وماذا يقصد باليهودية",
     directResponse: true,
-    keywords: [
-      "اليهود",
-      "اليهودية",
-      "يهودي",
-      "يهودية",
-      "Judaism",
-      "Jewish",
-    ],
+    keywords: ["اليهود", "اليهودية", "يهودي", "يهودية", "Judaism", "Jewish"],
     content:
       "اليهودية دي ديانة إبراهيمية قديمة، ويشترك أتباعها في الإيمان بالله، والتوراة، والتقليد اليهودي. اليهود اسم للأمة والديانة معًا، ولا يندرج كل اليهود في تيار ديني واحد؛ فهناك تيارات أرثوذكسية ومحافظة وإصلاحية وغيرها، واختلافات في الممارسات والهوية.",
   },
@@ -49,13 +77,7 @@ const KNOWLEDGE: KnowledgeEntry[] = [
     id: "islam-basics",
     title: "من هم المسلمون وماذا يقصد بالإسلام",
     directResponse: true,
-    keywords: [
-      "الإسلام",
-      "مسلم",
-      "مسلمين",
-      "Islam",
-      "Muslims",
-    ],
+    keywords: ["الإسلام", "مسلم", "مسلمين", "Islam", "Muslims"],
     content:
       "الإسلام ديانة إبراهيمية توحيدية، ومسلموها يؤمنون بالله ورسالة النبي محمد صلى الله عليه وسلم والقرآن الكريم، ويمارسون في غالبهم أركان الإسلام الخمسة. المسلمين متنوعون في المذاهب والمدارس والبلدان، ولا يصح اختزال جميعهم في رأي واحد.",
   },
@@ -86,6 +108,22 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "مكياج وعناية البشرة",
       "العناية بالبشرة عند المصريات القدماء",
       "مكياج المصريات",
+      "الروج",
+      "روج الفراعنة",
+      "مكونات الروج",
+      "أحمر الشفاه",
+      "احمر الشفاه",
+      "روج الملكات",
+      "حشرة الخنفسا",
+      "حشرة الخنفساء",
+      "الخنفسا في المكياج",
+      "خنفساء الروج",
+      "القرمز",
+      "حشرة القرمز",
+      "هل استخدموا الحشرات في المكياج",
+      "هل استخدموا الخنافس في المكياج",
+      "ancient Egyptian carmine",
+      "ancient Egyptian insect makeup",
       "ميكب الفراعنة",
       "كحل المصريين القدماء",
       "عناية بالبشرة في مصر القديمة",
@@ -94,10 +132,17 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "ancient Egyptian makeup",
       "ancient Egyptian cosmetics",
       "ancient Egyptian skincare",
+      "ancient Egyptian lipstick",
+      "ancient Egyptian rouge",
     ],
     content:
-      "من الشواهد الأثرية على أدوات التجميل مجموعة من الدولة الحديثة محفوظة في متحف المتروبوليتان، تضم أنبوبًا ومطبّقًا للكحل، ومرآة، وموسًا، وملقطًا، وحجر شحذ. ده يثبت استخدام أدوات لتجميل العين وتهذيب المظهر، لكنه لا يكفي وحده لإعادة بناء روتين يومي كامل للعناية بالبشرة أو تعميم عادة واحدة على كل المصريات. وبالنسبة لمستحضرات الترطيب أو مكونات الخلطات، يلزم دليل محدد لكل مادة أو فترة بدل افتراض وصفة موحدة.",
+      "بالنسبة للروج، يذكر تقرير تاريخي في ناشيونال جيوغرافيك أن بعض أرستقراطيي مصر القديمة استخدموا المغرة الحمراء، وهي تراب طبيعي غني بأكاسيد الحديد، ممزوجة براتنج لصنع لون للشفاه. دي وصفة موثقة على مستوى عام، لكنها مش وصفة موحدة لكل الملكات أو كل العصور، وما تثبتش مكونات مستحضر ملكة بعينها. المقال نفسه ينقل أن كليوباترا فضّلت القرمز المستخرج من حشرات، لكنه لا يعرض في النص شاهدًا أثريًا مباشرًا؛ لذلك الأدق اعتبارها رواية صحفية غير مؤكدة أثريًا، لا دليلًا على أن المصريات عمومًا استخدمن الخنافس في المكياج. ومن الشواهد الأثرية على أدوات التجميل مجموعة من الدولة الحديثة محفوظة في متحف المتروبوليتان، تضم أنبوبًا ومطبّقًا للكحل، ومرآة، وموسًا، وملقطًا، وحجر شحذ. الأدوات تثبت استخدام مستحضرات للتجميل والتهذيب، لكنها وحدها لا تثبت وجود فريق محدد من العاملين أو أسماء وظائفهم، ولا تكفي وحدها لإعادة بناء روتين يومي كامل للعناية بالبشرة. يلزم دليل محدد لكل مادة أو فترة بدل افتراض وصفة واحدة.",
     sources: [
+      {
+        title: "The surprising evolution of red lipstick and its ancient origins",
+        organization: "National Geographic",
+        url: "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
+      },
       {
         title: "Cosmetic set of Kohl Tube and Applicator, Razor, Tweezers, Whetstone, and Mirror",
         organization: "The Metropolitan Museum of Art",
@@ -224,7 +269,8 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "أيوه، فيه اكتشافات ودراسات جديدة، لكن الأدق ما أقولش إن ده أحدث اكتشاف على الإطلاق من غير بحث حي. في الجيزة، أُبلغ فريق ScanPyramids في 2016 و2017 عن فراغات غير معروفة سابقًا في هرم خوفو برصد أشعة الميون. وفي دراسة منشورة سنة 2023، قدّم الباحثون قياسات أدق لممر خلف منطقة الشيفرون في الواجهة الشمالية: طوله نحو 9 أمتار ومقطعه قرابة 2 × 2 متر. ده يدعم وجود الممر وأبعاده، لكنه لا يثبت وظيفته الأصلية ولا إنه حجرة دفن أو مكان كنز. بالنسبة لسقارة، المصادر المراجعة المتاحة هنا لا تثبت أحدث كشف هناك؛ وده لا يعني عدم وجود اكتشافات، لكنه يمنعني من تحديد الأحدث أو ترتيب اكتشافات الجيزة وسقارة من غير بحث مباشر.",
     sources: [
       {
-        title: "Precise characterization of a corridor-shaped structure in Khufu’s Pyramid by observation of cosmic-ray muons",
+        title:
+          "Precise characterization of a corridor-shaped structure in Khufu’s Pyramid by observation of cosmic-ray muons",
         organization: "Nature Communications",
         url: "https://www.nature.com/articles/s41467-023-36351-0",
       },
@@ -340,11 +386,23 @@ const KNOWLEDGE: KnowledgeEntry[] = [
     title: "دير سانت كاترين والمنطقة المحيطة به في جنوب سيناء",
     directResponse: true,
     keywords: [
-      "سانت كاترين", "سانت كاثرين", "دير سانت كاترين",
-      "دير القديسة كاترين", "القديسة كاترين", "محمية سانت كاترين",
-      "جبل موسى", "جبل سيناء", "جبل سانت كاترين", "جنوب سيناء",
-      "Saint Catherine", "St Catherine", "Saint Catherine monastery",
-      "Mount Sinai", "Mount Horeb", "Jebel Musa", "South Sinai",
+      "سانت كاترين",
+      "سانت كاثرين",
+      "دير سانت كاترين",
+      "دير القديسة كاترين",
+      "القديسة كاترين",
+      "محمية سانت كاترين",
+      "جبل موسى",
+      "جبل سيناء",
+      "جبل سانت كاترين",
+      "جنوب سيناء",
+      "Saint Catherine",
+      "St Catherine",
+      "Saint Catherine monastery",
+      "Mount Sinai",
+      "Mount Horeb",
+      "Jebel Musa",
+      "South Sinai",
     ],
     content:
       "لو المقصود منطقة سانت كاترين في جنوب سيناء، فهي تضم الدير التاريخي والمنطقة الجبلية والدينية والطبيعية المحيطة به، مش الدير وحده. دير سانت كاترين أُنشئ بأمر الإمبراطور البيزنطي جستنيان الأول بين 548 و565 ميلاديًا، وأُدرجت منطقة سانت كاترين على قائمة التراث العالمي لليونسكو سنة 2002. داخل الدير توجد كنيسة التجلي، وبداخلها تسع كنائس صغيرة من بينها كنيسة العليقة المشتعلة، كما يضم الدير عشر كنائس أخرى، ومكتبة فيها نحو 6,000 مخطوطة، ومسجدًا فاطميًا يرجع إلى القرن الثاني عشر، إلى جانب مساكن الرهبان وقاعة الطعام ومعصرة زيتون ومدافن عظمية. حول الدير يقع جبل موسى، المعروف أيضًا في سجل اليونسكو بجبل حوريب، ويمر مسار موسى في الجبل ببقايا مصليات وبوابتين تاريخيتين، بينما توجد على القمة المقدسة آثار مسجد وكنيسة. والمنطقة الأوسع ذات أهمية دينية للمسيحية والإسلام واليهودية، وتضم مواقع أثرية ودينية ومحمية طبيعية ذات نباتات محلية متوطنة وحياة برية. مساحة منطقة التراث العالمي المسجلة 60,100 هكتار وتشمل محمية طبيعية؛ فلا ينبغي اعتبار كل هذه المساحة جزءًا من مبنى الدير. الأدق التمييز بين مدينة سانت كاترين، والدير نفسه، والمنطقة الجبلية والطبيعية المحيطة.",
@@ -475,7 +533,7 @@ const KNOWLEDGE: KnowledgeEntry[] = [
         title: "Ebers Papyrus",
         organization: "World History Encyclopedia",
         url: "https://www.worldhistory.org/Ebers_Papyrus/",
-      }
+      },
     ],
   },
   {
@@ -769,7 +827,8 @@ const KNOWLEDGE: KnowledgeEntry[] = [
       "الأدلة من العمارنة تُظهر أن إخناتون جعل آتون محور العبادة الملكية، وأسّس عاصمة آخت آتون، وأن ترانيم آتون الملكية استبعدت ذكر معبودات أخرى؛ كما تسجل جامعة لندن محو أسماء وصور آمون عن آثار متاحة في مصر والنوبة. هذه قرائن قوية على إصلاح ديني ملكي حصري وسياسة ضد عبادة آمون، لكنها لا تثبت وحدها أن كل سكان مصر تبنوا توحيدًا بالمعنى الحديث أو أن الممارسة الشعبية كانت واحدة. لذلك الأدق وصفها بعبادة آتون الحصرية في البلاط والدولة، مع اعتبار تصنيفها «توحيدًا» أو «توحيد ملكي» تفسيرًا أكاديميًا يحتاج تعريفًا، لا حقيقة بسيطة متفقًا عليها.",
     sources: [
       {
-        title: "Belief in one god in ancient Egypt: The solitary sun-god in the reign of king Akhenaten",
+        title:
+          "Belief in one god in ancient Egypt: The solitary sun-god in the reign of king Akhenaten",
         organization: "University College London",
         url: "https://www.ucl.ac.uk/museums-static/digitalegypt/amarna/belief.html",
       },
@@ -1805,8 +1864,7 @@ function isContextualFollowUp(latest: string, previous: string): boolean {
   if (!previous) return false;
   const normalizedLatest = normalize(latest);
   return (
-    FOLLOW_UP_PATTERN.test(normalizedLatest) ||
-    CONTEXTUAL_REFERENCE_PATTERN.test(normalizedLatest)
+    FOLLOW_UP_PATTERN.test(normalizedLatest) || CONTEXTUAL_REFERENCE_PATTERN.test(normalizedLatest)
   );
 }
 
@@ -1820,21 +1878,20 @@ function getRelevantEntries(
   const pyramidDiscoveryQuestion = isPyramidDiscoveryQuestion(latest);
   const sourceRequest = isSourceRequest(latest);
   const rawQuery =
-    isContextualFollowUp(latest, previous) || sourceRequest
-      ? `${previous} ${latest}`
-      : latest;
+    isContextualFollowUp(latest, previous) || sourceRequest ? `${previous} ${latest}` : latest;
   const corrections = correctKnownResearchEntities(rawQuery);
-  const query = normalize([
-    rawQuery,
-    ...corrections.map((item) => item.canonical + " " + item.english),
-  ].join(" "));
+  const query = normalize(
+    [rawQuery, ...corrections.map((item) => item.canonical + " " + item.english)].join(" "),
+  );
   if (!query) return [];
   const candidateEntries = KNOWLEDGE.filter((entry) =>
     pyramidDiscoveryQuestion ? entry.discoveryResearch === true : entry.discoveryResearch !== true,
   );
 
   if (query.includes("الهيروغليفية المصرية")) {
-    const exactEntry = candidateEntries.find((entry) => entry.id === "egyptian-hieroglyphic-basics");
+    const exactEntry = candidateEntries.find(
+      (entry) => entry.id === "egyptian-hieroglyphic-basics",
+    );
     return exactEntry ? [exactEntry] : [];
   }
   const hierarchyTopicPhrases = [
@@ -1845,21 +1902,24 @@ function getRelevantEntries(
     "كام علامة أحادية الصوت",
   ];
   if (hierarchyTopicPhrases.some((phrase) => query.includes(normalize(phrase)))) {
-    const exactEntry = candidateEntries.find((entry) => entry.id === "egyptian-hieroglyphic-basics");
+    const exactEntry = candidateEntries.find(
+      (entry) => entry.id === "egyptian-hieroglyphic-basics",
+    );
     return exactEntry ? [exactEntry] : [];
   }
 
-  const ranked = candidateEntries.map((entry) => {
-    let score = 0;
-    for (const keyword of entry.keywords) {
-      const normalizedKeyword = normalize(keyword);
-      if (normalizedKeyword && query.includes(normalizedKeyword)) {
-        const exactKeywordMatch = normalizedKeyword === query;
-        score += exactKeywordMatch ? 20 : normalizedKeyword.includes(" ") ? 4 : 2;
+  const ranked = candidateEntries
+    .map((entry) => {
+      let score = 0;
+      for (const keyword of entry.keywords) {
+        const normalizedKeyword = normalize(keyword);
+        if (normalizedKeyword && query.includes(normalizedKeyword)) {
+          const exactKeywordMatch = normalizedKeyword === query;
+          score += exactKeywordMatch ? 20 : normalizedKeyword.includes(" ") ? 4 : 2;
+        }
       }
-    }
-    return { entry, score };
-  })
+      return { entry, score };
+    })
     .filter((item) => item.score >= 2)
     .sort((a, b) => b.score - a.score)
     .slice(0, Math.max(1, Math.min(limit, 6)));
