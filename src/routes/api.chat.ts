@@ -39,10 +39,10 @@ type ChatProviderEnv = Record<string, unknown> & {
   CHAT_WEB_SEARCH?: ChatWebSearchBinding;
 };
 
-const CHAT_PROVIDER_RETRY_DELAYS_MS = [250, 500] as const;
+const CHAT_PROVIDER_RETRY_DELAYS_MS = [250] as const;
 
 function isRetryableChatProviderStatus(status: number): boolean {
-  return status === 408 || status === 425 || status === 429 || status >= 500;
+  return status === 408 || status === 425 || status >= 500;
 }
 
 function waitForChatProviderRetry(delayMs: number, signal?: AbortSignal | null): Promise<void> {
@@ -763,7 +763,15 @@ async function searchWithChatSpecialists(
     }
   }
 
-  const candidates = [...candidateMap.entries()].slice(0, 12);
+  const candidates = [...candidateMap.entries()]
+    .sort(([firstUrl, first], [secondUrl, second]) => {
+      const rank = (url: string, candidate: { providers: string[] }) => {
+        const trusted = isTrustedResearchHost(new URL(url).hostname) ? 2 : 1;
+        return trusted * 10 + candidate.providers.length;
+      };
+      return rank(secondUrl, second) - rank(firstUrl, first);
+    })
+    .slice(0, 8);
   if (!candidates.length) {
     console.warn("[Chat research] No safe public-web source results were returned", {
       successfulProviders: providerResults
@@ -1171,6 +1179,10 @@ export async function handleChatPost(
       ].join("\n")
     : "";
 
+  // Heritage search is a secondary route. Keep it running in parallel, but
+  // cancel it once the independent specialist search has verified an
+  // institutional source for an ordinary, low-risk heritage question.
+  const redundantHeritageSearch = new AbortController();
   const specialistSearchPromise =
     liveResearchRequested && suppliedEnv?.CHAT_WEB_SEARCH
       ? searchWithChatSpecialists(
@@ -1178,17 +1190,42 @@ export async function handleChatPost(
           latestQuestion,
           fetcher,
           request.signal,
-        ).catch((error: unknown) => {
-          console.warn("[Chat research] Independent search was unavailable", {
-            reason: error instanceof Error ? error.message : "unknown",
-          });
-          return null;
-        })
+        )
+          .then((result) => {
+            const hasTrustedSpecialistSource = Boolean(
+              result?.sources.some((source) => {
+                try {
+                  return isTrustedResearchHost(new URL(source.url).hostname);
+                } catch {
+                  return false;
+                }
+              }),
+            );
+            if (
+              heritageQuestion &&
+              !providerEvidenceRequired &&
+              !wantsSources &&
+              hasTrustedSpecialistSource
+            ) {
+              redundantHeritageSearch.abort();
+            }
+            return result;
+          })
+          .catch((error: unknown) => {
+            console.warn("[Chat research] Independent search was unavailable", {
+              reason: error instanceof Error ? error.message : "unknown",
+            });
+            return null;
+          })
       : Promise.resolve(null);
   const heritageSearchPromise = heritageQuestion
     ? (async () => {
         const searchTimeout = AbortSignal.timeout(10_000);
-        const searchSignal = AbortSignal.any([request.signal, searchTimeout]);
+        const searchSignal = AbortSignal.any([
+          request.signal,
+          searchTimeout,
+          redundantHeritageSearch.signal,
+        ]);
         try {
           return await searchTrustedEgyptianHeritage(
             buildHeritageSearchQuery(parsed.data.messages),
@@ -1198,10 +1235,12 @@ export async function handleChatPost(
             localKnowledgeSources,
           );
         } catch (error) {
-          console.error("[Heritage search] Request failed", {
-            reason: error instanceof Error ? error.message : "unknown",
-            timedOut: searchTimeout.aborted,
-          });
+          if (!redundantHeritageSearch.signal.aborted) {
+            console.error("[Heritage search] Request failed", {
+              reason: error instanceof Error ? error.message : "unknown",
+              timedOut: searchTimeout.aborted,
+            });
+          }
           return null;
         }
       })()

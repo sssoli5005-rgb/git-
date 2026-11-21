@@ -893,7 +893,9 @@ export async function searchTrustedEgyptianHeritage(
     .filter((source): source is HeritageSearchSource => Boolean(source))
     .slice(0, 4);
   if (fetchedCuratedSources.length) return fetchedCuratedSources;
-  if (isDiscoveryResearchQuestion(query)) return [];
+  // If another trusted research path has already returned sufficient
+  // institutional evidence, stop before starting the slower Wikipedia fallback.
+  if (signal?.aborted || isDiscoveryResearchQuestion(query)) return [];
 
   const pages = (await searchWikipedia(language, query, fetcher, signal)).filter((page) =>
     isRelevantSearchResult(query, page),
