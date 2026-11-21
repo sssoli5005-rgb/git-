@@ -273,6 +273,48 @@ describe("general research fallbacks", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("uses the configured Workers AI chat fallback when hosted chat providers are unavailable", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const answer =
+      "لا توجد أدلة أثرية تثبت استخدام السحر في رفع أحجار الأهرامات. تشير الأدلة إلى تنظيم العمال ووسائل النقل والمنحدرات والتخطيط الهندسي، مع وجود معتقدات وطقوس دينية مرتبطة بالعالم الجنائزي.";
+    const run = vi.fn(async (model: string, input: {
+      messages: { role: string; content: string }[];
+      max_tokens: number;
+      temperature: number;
+    }) => {
+      expect(model).toBe("@cf/qwen/qwen3.8-27b");
+      expect(input.messages[0]?.content).toContain("GENERAL-KNOWLEDGE FALLBACK");
+      expect(input.max_tokens).toBe(2048);
+      return { response: answer };
+    });
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ error: { message: "provider unavailable" } }, { status: 503 }),
+    );
+
+    const response = await handleChatPost(
+      createChatRequest("هل كان للسحر دور في بناء الاهرامات؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "test-gemini-key",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        CHAT_AI_RUN: { run },
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(answer);
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(run).toHaveBeenCalledOnce();
+    expect(searchBinding.websearch).toHaveBeenCalled();
+  });
+
   it("answers a biblical question from curated scripture after search is attempted", async () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
