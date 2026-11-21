@@ -450,7 +450,7 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
   {
     topic: "scripture",
     pattern:
-      /(?:إيليا النبي|ايليا النبي|جسد ايليا|قبر ايليا|إيليا|ايليا|إلياس|الياس|Elijah|Elias|يوسف الصديق|يوسف بن يعقوب|جسد يوسف|عظام يوسف|joseph|كتاب مقدس|الكتاب المقدس|الانجيل(?!ي)|إنجيل(?!ي)|انجيل(?!ي)|تكوين|خروج|يشوع|مزامير|رسالة بولس|القرآن|القران|قرآن|قران|سورة|آية|آيات|اية|ايات|حديث نبوي|الحديث النبوي|صحيح البخاري|صحيح مسلم|التوراة|الكتاب العبري|التلمود|المشنا|Qur['’]?an|Koran|hadith|Sahih (?:al-)?(?:Bukhari|Muslim)|Torah|Tanakh|Talmud|Mishnah|Vedas?|Upanishads?|Bhagavad Gita|Tripitaka|Dhammapada|Guru Granth Sahib|Avesta|Bible|biblical|scripture|gospel)/iu,
+      /(?:إيليا النبي|ايليا النبي|جسد ايليا|قبر ايليا|إيليا|ايليا|إلياس|الياس|Elijah|Elias|يوسف الصديق|يوسف بن يعقوب|جسد يوسف|عظام يوسف|joseph|كتاب مقدس|الكتاب المقدس|الانجيل(?!ي)|إنجيل(?!ي)|انجيل(?!ي)|تكوين|خروج|يشوع|مزامير|مزمور|قال الرب لربي|رسالة بولس|القرآن|القران|قرآن|قران|سورة|آية|آيات|اية|ايات|حديث نبوي|الحديث النبوي|صحيح البخاري|صحيح مسلم|التوراة|الكتاب العبري|التلمود|المشنا|Qur['’]?an|Koran|hadith|Sahih (?:al-)?(?:Bukhari|Muslim)|Torah|Tanakh|Talmud|Mishnah|Vedas?|Upanishads?|Bhagavad Gita|Tripitaka|Dhammapada|Guru Granth Sahib|Avesta|Bible|biblical|scripture|gospel)/iu,
   },
   {
     topic: "health",
@@ -475,7 +475,7 @@ const TOPIC_RULES: Array<{ topic: ResearchTopic; pattern: RegExp }> = [
   {
     topic: "archaeology",
     pattern:
-      /(?:اثار|آثار|اثري|أثري|تنقيب|حفائر|مقبره|مقبرة|معبد|قطعه اثريه|قطعة أثرية|مخطوطه|مخطوطة|نقش|artifact|archaeolog|excavation|tomb|temple|inscription|manuscript)/iu,
+      /(?:مكتبة الإسكندرية|مكتبة الاسكندرية|الإسكندرية القديمة|Alexandria|اثار|آثار|اثري|أثري|تنقيب|حفائر|مقبره|مقبرة|معبد|قطعه اثريه|قطعة أثرية|مخطوطه|مخطوطة|نقش|artifact|archaeolog|excavation|tomb|temple|inscription|manuscript)/iu,
   },
   {
     topic: "world-history",
