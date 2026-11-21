@@ -860,7 +860,8 @@ describe("handleChatPost hosted Groq provider", () => {
           tools?: Array<{ type?: string }>;
           messages: { role: string; content: string }[];
         };
-        expect(payload.messages[0]?.content).toContain("MANDATORY THREE-STAGE VERIFIED RESEARCH");
+        expect(payload.messages[0]?.content).toContain("Use browser_search for this factual question");
+        expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
         expect(payload.tools).toEqual([{ type: "browser_search" }]);
         return Response.json({
           choices: [
@@ -925,7 +926,7 @@ describe("handleChatPost hosted Groq provider", () => {
       "https://www.ucl.ac.uk/museums-static/digitalegypt/administration/index.html",
     );
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(true);
-    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(false);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("generativelanguage.googleapis.com"))).toBe(true);
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("localhost"))).toBe(false);
   });
 
@@ -2294,14 +2295,27 @@ describe("handleChatPost Ollama stream handling", () => {
         expect(String(input)).toBe("https://api.groq.com/openai/v1/chat/completions");
         const payload = JSON.parse(String(init?.body)) as {
           model: string;
-          citation_options?: string;
+          messages: { role: string; content: string }[];
+          max_completion_tokens: number;
           tools?: Array<{ type: string }>;
           tool_choice?: string;
         };
         expect(payload.model).toBe("openai/gpt-oss-20b");
-        expect(payload.citation_options).toBe("enabled");
+        expect(payload.max_completion_tokens).toBe(1536);
+        expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
+        expect(payload).not.toHaveProperty("citation_options");
         expect(payload.tools).toEqual([{ type: "browser_search" }]);
         expect(payload.tool_choice).toBe("required");
+        expect(payload.messages.at(-1)?.content).toContain(
+          "ابحث عن أحدث المعلومات عن تلسكوب جيمس ويب مع المصادر",
+        );
+        expect(payload.messages.at(-1)?.content).toContain("<ATHARA_SOURCES>");
+        expect(
+          payload.messages.slice(1).some(
+            (message, index, messages) =>
+              message.role === "user" && messages[index - 1]?.role === "user",
+          ),
+        ).toBe(false);
         return Response.json({
           choices: [
             {
@@ -2334,6 +2348,50 @@ describe("handleChatPost Ollama stream handling", () => {
       expect(response.status).toBe(200);
       expect(await response.text()).toContain("إحالات نتائج البحث");
       expect(fetcher).toHaveBeenCalledOnce();
+    });
+
+    it("hides generated research citations and source sections unless requested", async () => {
+      vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
+      vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+      const fetcher = vi.fn<typeof fetch>(async (input) => {
+        if (String(input).includes("api.groq.com")) {
+          return Response.json({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content:
+                    'أثرت المكتبة في تاريخ العلم 【1†L19-L22】.\n\n### المصادر المستخدمة\n- https://www.britannica.com/topic/Library-of-Alexandria\n<ATHARA_SOURCES>[{"title":"Library of Alexandria","url":"https://en.wikipedia.org/wiki/Library_of_Alexandria","evidence":"The Library of Alexandria was one of the largest and most significant libraries of the ancient world."}]</ATHARA_SOURCES>',
+                  executed_tools: [
+                    {
+                      browser_results: [
+                        {
+                          title: "Library of Alexandria",
+                          url: "https://www.britannica.com/topic/Library-of-Alexandria",
+                          content:
+                            "A historical overview of the Library of Alexandria and its place in the ancient world.",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            ],
+          });
+        }
+        return new Response("Temporarily unavailable", { status: 503 });
+      });
+
+      const response = await handleChatPost(
+        createChatRequest("ما هي مكتبة الإسكندرية القديمة؟"),
+        fetcher,
+      );
+      const body = await response.text();
+
+      expect(body).toContain("أثرت المكتبة في تاريخ العلم");
+      expect(body).not.toContain("【1†L19-L22】");
+      expect(body).not.toContain("المصادر المستخدمة");
+      expect(body).not.toContain("britannica.com");
     });
 
     it("verifies Groq browser-search citations against the opened institutional page", async () => {
@@ -2395,7 +2453,11 @@ describe("handleChatPost Ollama stream handling", () => {
             {
               finishReason: "STOP",
               content: {
-                parts: [{ text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء." }],
+                parts: [
+                  {
+                    text: "تلسكوب جيمس ويب مرصد فضائي يعمل بالأشعة تحت الحمراء. 【1†L1-L2】\n\n### المصادر\n- https://example.com/unverified",
+                  },
+                ],
               },
               groundingMetadata: {
                 groundingChunks: [
@@ -2419,6 +2481,8 @@ describe("handleChatPost Ollama stream handling", () => {
       const body = await response.text();
       expect(response.status).toBe(200);
       expect(body).toContain("تلسكوب جيمس ويب مرصد فضائي");
+      expect(body).not.toContain("【1†L1-L2】");
+      expect(body).not.toContain("example.com/unverified");
       expect(body).toContain("https://science.nasa.gov/mission/webb/");
       expect(body).toContain("https://webbtelescope.org/");
       expect(fetcher).toHaveBeenCalledOnce();
@@ -2431,12 +2495,11 @@ describe("handleChatPost Ollama stream handling", () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
-        citation_options?: string;
         tools?: Array<{ type: string }>;
         tool_choice?: string;
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload.citation_options).toBe("enabled");
+      expect(payload).not.toHaveProperty("citation_options");
       expect(payload.tools).toEqual([{ type: "browser_search" }]);
       expect(payload.tool_choice).toBe("required");
       return Response.json({
@@ -2475,13 +2538,12 @@ describe("handleChatPost Ollama stream handling", () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
-        citation_options?: string;
         tools?: Array<{ type: string }>;
         tool_choice?: string;
         messages: { role: string; content: string }[];
       };
       expect(payload.model).toBe("openai/gpt-oss-20b");
-      expect(payload.citation_options).toBe("enabled");
+      expect(payload).not.toHaveProperty("citation_options");
       expect(payload.tools).toEqual([{ type: "browser_search" }]);
       expect(payload.tool_choice).toBe("required");
       expect(payload.messages[0]?.content).toContain(

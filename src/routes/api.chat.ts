@@ -328,6 +328,14 @@ function requiresVerifiedEvidence(
   heritageQuestion: boolean,
   wantsSources: boolean,
 ): boolean {
+  const normalizedQuery = normalizeResearchQuery(query);
+  if (
+    /(?:\b(?:price|cost)\b|سعر|تكلفه)/u.test(normalizedQuery) &&
+    /(?:\b(?:souvenir|gift|shop)\b|تذكار|هديه|محل)/u.test(normalizedQuery) &&
+    /(?:\b(?:unnamed|unspecified|unknown)\b|غير محدد|غير معروف)/u.test(normalizedQuery)
+  ) {
+    return false;
+  }
   const stablePharaonicReligionOverview =
     /(?:الدين الفرعوني|الديانة الفرعونية|الآلهة المصرية|المعبودات المصرية|ancient Egyptian religion|Egyptian gods|pharaonic religion)/iu.test(
       normalizeResearchQuery(query),
@@ -338,14 +346,21 @@ function requiresVerifiedEvidence(
   if (topics.some((topic) => ["health", "law", "economy", "scripture"].includes(topic))) {
     return true;
   }
-  const normalized = normalizeResearchQuery(query);
+  const normalized = normalizedQuery;
   return /(?:\b(?:latest|current|today|yesterday|this week|recent|news|updated|as of|search|look up|verify|research)\b|dernier|actuel|aujourd'hui|récent|actualité|recherche|vérifier|último|actual|hoy|reciente|noticias|buscar|verificar|investigar|ultimo|attuale|oggi|recente|notizie|cerca|verifica|neueste|aktuell|heute|nachrichten|suche|prüfen|последн|сейчас|сегодня|недавно|новост|найди|проверь|最新|現在|今日|最近|ニュース|調べて|検索|確認|احدث|اخر|حاليا|اليوم|النهارده|امبارح|اخبار|ابحث|موثق|موثوق|اتأكد|تحقق|دورلي|شوفلي|حديث|الاسبوع)/u.test(
     normalized,
   );
 }
 
 function removeInlineResearchCitations(content: string): string {
-  return content.replace(/\s*〖\s*\d+†L\d+(?:-L\d+)?\s*〗/gu, "").trim();
+  return content
+    .replace(/<ATHARA_SOURCES>[\s\S]*?<\/ATHARA_SOURCES>/giu, "")
+    .replace(/\s*(?:〖\s*\d+†L\d+(?:-L\d+)?\s*〗|【\s*\d+†L\d+(?:-L\d+)?\s*】)/gu, "")
+    .replace(
+      /(?:^|\n)\s*(?:#{1,6}\s*)?(?:sources|references|المصادر(?: المستخدمة)?|المراجع)\s*:?\s*[\s\S]*$/iu,
+      "",
+    )
+    .trim();
 }
 
 // The curated directory ranks sources and every accepted web result must still
@@ -429,6 +444,16 @@ type ChatWebSearchResult = {
 function buildSpecialistSearchQuery(question: string): string {
   const normalized = normalizeResearchQuery(question);
   const directoryQuery = buildResearchSearchQuery(question);
+  if (
+    /(?:مكتبه\s+الاسكندريه|مكتبة\s+الإسكندرية|الاسكندريه\s+القديمه|alexandria.{0,30}librar|librar.{0,30}alexandria)/u.test(
+      normalized,
+    )
+  ) {
+    return `${directoryQuery} ancient Library of Alexandria destruction Julius Caesar fire 48 BCE Serapeum 391 CE scholarly history site:britannica.com OR site:cambridge.org OR site:ox.ac.uk`.slice(
+      0,
+      1024,
+    );
+  }
   if (isPyramidDiscoveryQuestion(question)) {
     return `${directoryQuery} Egypt recent archaeological discovery research pyramids Giza Saqqara`.slice(
       0,
@@ -1118,6 +1143,78 @@ export async function handleChatPost(
     const primaryModel =
       readProviderEnv(suppliedEnv, "CHAT_GROQ_MODEL")?.trim() || "qwen/qwen3.8-27b";
     const requestsLiveResearch = liveResearchRequested;
+    const groqMessages = [...localPayload.messages];
+    if (requestsLiveResearch) {
+      const languageNames: Record<LangCode, string> = {
+        ar: "Arabic, using a natural and friendly Egyptian voice",
+        en: "English",
+        fr: "French",
+        es: "Spanish",
+        de: "German",
+        it: "Italian",
+        ru: "Russian",
+        ja: "Japanese",
+        zh: "Chinese",
+      };
+      const spellingEntitySuggestions = correctKnownResearchEntities(latestQuestion);
+      const compactResearchInstruction = [
+        `You are ATHARA, a careful conversational guide. Answer in ${languageNames[parsed.data.language]}. Answer the user's exact question directly, using recent conversation context when relevant.`,
+        "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
+        "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results.",
+        "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
+        ...(/(?:alexandria|اسكندريه)/u.test(
+          normalizeResearchQuery(latestQuestion),
+        )
+          ? [
+              "For the ancient Library of Alexandria, do not claim that one known person destroyed the entire library. Treat the scale of the 48 BCE fire during Caesar's Alexandrian War as disputed; distinguish the later destruction of the Serapeum in 391 CE from the main library, and do not present the later story blaming Arab forces as established fact.",
+            ]
+          : []),
+        "Be concise but explanatory. GENERAL-KNOWLEDGE FALLBACK: if sources are unavailable, answer safe stable questions directly from established knowledge, note only specific limits, and never fabricate sources. Do not return a generic refusal.",
+        "Do not show links or a sources section unless the user asks for sources. At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page.",
+        `Search query: ${buildSpecialistSearchQuery(latestQuestion)}`,
+        spellingEntitySuggestions.length
+          ? "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " +
+            spellingEntitySuggestions
+              .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
+              .join("; ")
+          : "",
+        describeTrustedSourcesForQuestion(latestQuestion, 6),
+        localKnowledgeAnswer.content
+          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content}`
+          : "",
+        searchFallbackContext,
+        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 4_000)}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const recentConversation = localPayload.messages
+        .slice(1)
+        .slice(-4)
+        .map((message, index, messages) => ({
+          ...message,
+          content:
+            index === messages.length - 1
+              ? message.content
+              : message.content.slice(-1_000),
+        }));
+      groqMessages.splice(
+        0,
+        groqMessages.length,
+        { role: "system", content: compactResearchInstruction },
+        ...recentConversation,
+      );
+      const sourceRequirement =
+        'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.';
+      const lastMessage = groqMessages.at(-1);
+      if (lastMessage?.role === "user") {
+        groqMessages[groqMessages.length - 1] = {
+          ...lastMessage,
+          content: `${lastMessage.content}\n\n${sourceRequirement}`,
+        };
+      } else {
+        groqMessages.push({ role: "user", content: sourceRequirement });
+      }
+    }
     // Factual questions must use the search-capable model; never fall back to
     // an ungrounded fast chat model on the same turn.
     const groqModels = requestsLiveResearch
@@ -1137,23 +1234,13 @@ export async function handleChatPost(
           signal: providerSignal,
           body: JSON.stringify({
             model,
-            messages: requestsLiveResearch
-              ? [
-                  ...localPayload.messages,
-                  {
-                    role: "user",
-                    content:
-                      'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.',
-                  },
-                ]
-              : localPayload.messages,
-            max_completion_tokens: 4096,
+            messages: requestsLiveResearch ? groqMessages : localPayload.messages,
+            max_completion_tokens: requestsLiveResearch ? 1536 : 4096,
             ...(heritageQuestion ? { temperature: 0.2 } : {}),
             ...(requestsLiveResearch
               ? {
                   tools: [{ type: "browser_search" }],
                   tool_choice: "required",
-                  citation_options: "enabled",
                   temperature: 1,
                   reasoning_effort: "low",
                 }
@@ -1321,6 +1408,7 @@ export async function handleChatPost(
           if (
             answer &&
             canUseGroqResearchAnswer &&
+            (!verifiedEvidenceRequired || verifiedTurnSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
           ) {
             if (choice?.finish_reason !== "length") {
@@ -1339,7 +1427,17 @@ export async function handleChatPost(
           }
           console.warn("[Groq] Discarded incomplete or invalid-language response", { model });
         } else {
-          console.error("[Groq] Request failed", { model, httpStatus: groqResponse.status });
+          const errorPayload = (await groqResponse.json().catch(() => null)) as {
+            error?: { code?: unknown; type?: unknown; message?: unknown };
+          } | null;
+          const errorMessage = errorPayload?.error?.message;
+          console.error("[Groq] Request failed", {
+            model,
+            httpStatus: groqResponse.status,
+            errorCode: typeof errorPayload?.error?.code === "string" ? errorPayload.error.code : undefined,
+            errorType: typeof errorPayload?.error?.type === "string" ? errorPayload.error.type : undefined,
+            errorMessage: typeof errorMessage === "string" ? errorMessage.replace(/\s+/gu, " ").slice(0, 240) : undefined,
+          });
           if (index === 0 && (groqResponse.status === 401 || groqResponse.status === 403)) break;
         }
       } catch (error) {
@@ -1448,6 +1546,10 @@ export async function handleChatPost(
             ?.map((part) => part.text ?? "")
             .join("")
             .trim();
+          const userFacingAnswer =
+            geminiLiveSearch && answer
+              ? removeInlineResearchCitations(answer)
+              : answer ?? "";
           if (candidate?.finishReason === "MAX_TOKENS") {
             providerFailureCode = "incomplete_response";
             geminiFailureCode = "incomplete_response";
@@ -1537,9 +1639,10 @@ export async function handleChatPost(
           if (
             answer &&
             candidate?.finishReason !== "MAX_TOKENS" &&
-            (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
+            (!verifiedEvidenceRequired || verifiedTurnSources.length > 0) &&
+            (parsed.data.language !== "ar" || !hasArabicLanguageMix(userFacingAnswer))
           ) {
-            const cleaned = removeRepeatedSentences(answer);
+            const cleaned = removeRepeatedSentences(userFacingAnswer);
             if (cleaned.repetitionsRemoved) {
               console.warn("[Gemini] Removed repeated sentences from the response", {
                 model,
@@ -1676,7 +1779,8 @@ export async function handleChatPost(
           verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
           if (includeSources) responseSources = mergeResearchSources(responseSources, sources);
         }
-        const evidenceOk = Boolean(answer);
+        const evidenceOk =
+          Boolean(answer) && (!verifiedEvidenceRequired || verifiedTurnSources.length > 0);
         const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
         if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
           const cleaned = removeRepeatedSentences(

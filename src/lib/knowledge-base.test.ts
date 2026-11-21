@@ -51,6 +51,38 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("answers the Library of Alexandria question with qualified evidence about Caesar's fire", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "ما هي مكتبة الإسكندرية القديمة؟ ومن حرقها؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("بلوتارخ");
+    expect(answer.directAnswer).toContain("48 ق.م.");
+    expect(answer.directAnswer).toContain("لا تثبت وحدها");
+    expect(answer.directAnswer).toContain("تدمير المكتبة كاملةً لشخص واحد معروف");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "Perseus Digital Library, Tufts University",
+        url: "https://www.perseus.tufts.edu/hopper/text?doc=Perseus%3Atext%3A1999.01.0244%3Achapter%3D49%3Asection%3D3",
+      }),
+    );
+  });
+
+  it("answers makeup and skincare questions with a concrete, limited artifact example", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "إيه اللي نعرفه من الآثار عن مكياج وعناية البشرة عند المصريات القدماء؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("أنبوبًا ومطبّقًا للكحل");
+    expect(answer.directAnswer).toContain("لا يكفي وحده لإعادة بناء روتين يومي كامل");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "The Metropolitan Museum of Art",
+        url: "https://www.metmuseum.org/art/collection/search/590954",
+      }),
+    );
+  });
+
   it("uses only reviewed discovery evidence instead of a general Saqqara summary", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "لسه فيه اكتشافات في الأهرامات؟ أقصد الجيزة وسقارة." },
