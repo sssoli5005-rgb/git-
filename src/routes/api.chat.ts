@@ -1272,12 +1272,12 @@ export async function handleChatPost(
     "CHAT_GEMINI_API_KEY",
   ].some((key) => readProviderEnv(suppliedEnv, key)?.trim());
   if (
-    !hasConfiguredHostedProvider &&
-    ((parsed.data.language === "ar" &&
+    (parsed.data.language === "ar" &&
       localKnowledgeAnswer.directAnswer &&
-      localKnowledgeSources.length > 0) ||
-      (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
-      hasReviewedCosmeticsAnswer)
+      localKnowledgeSources.length > 0 &&
+      (searchedSources.length > 0 || !hasConfiguredHostedProvider)) ||
+    (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
+    hasReviewedCosmeticsAnswer
   ) {
     console.info(
       hasReviewedCosmeticsAnswer
