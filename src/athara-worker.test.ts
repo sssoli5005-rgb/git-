@@ -1141,6 +1141,54 @@ describe("ATHARA Cloudflare Worker", () => {
     }
   });
 
+  it("does not promote a generic mummy description from a related catalog record", async () => {
+    stubEmptyHeritageSearch();
+    const catalogUrl = "https://egymonuments.gov.eg/ar/collections/mummy-of-masaharti/";
+    const run = vi.fn().mockResolvedValue({
+      response: JSON.stringify({
+        visualDescription: "A wrapped mummy wearing a mask inside a coffin",
+        identity: "mummy",
+        identityEvidence: "The image shows wrapped linen and a face covering",
+        objectType: "mummy",
+        keywords: ["mummy", "coffin", "mask"],
+        periodClues: [],
+      }),
+    });
+    const response = await worker.fetch(
+      post("/api/scan", { image: png, language: "ar", mode: "objects" }),
+      {
+        AI: { run },
+        ASSETS: {
+          fetch: vi.fn(async (input: RequestInfo | URL) =>
+            String(input).endsWith("/egypt-monuments-official.json")
+              ? Response.json({ records: [{
+                  id: "masaharti-mummy",
+                  title: "Mummy of Masaharti",
+                  description: "A wrapped mummy wearing a mask inside a coffin.",
+                  keywords: ["mummy", "coffin", "mask"],
+                  mode: "objects",
+                  sourceTitle: "Ministry of Tourism and Antiquities",
+                  sourceUrl: catalogUrl,
+                  imageUrls: [],
+                }] })
+              : new Response("", { status: 404 }),
+          ),
+        },
+        SCANNER_FREE_FALLBACK_ENABLED: "false",
+      },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.identificationStatus).toBe("unverified");
+    expect(body.resultType).toBe("unverified");
+    expect(body.matchedArtifact).toBeUndefined();
+    expect(body.sources).toEqual([]);
+    expect(body.researchCandidate).toBeUndefined();
+    expect(body.candidates).toEqual([]);
+    expectUnverifiedScan(body);
+  });
+
   it("does not confirm a Commons-only image lead without an institutional catalogue match", async () => {
     const candidateUrl = "https://commons.wikimedia.org/wiki/File:Abu_Simbel_temple.jpg";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
