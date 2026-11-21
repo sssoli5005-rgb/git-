@@ -2776,72 +2776,25 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(body).not.toContain("OpenRouter");
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
-  it("researches the exact unaccented Arabic question without showing unrequested sources", async () => {
+  it("answers a stable scripture question with the standalone conversational AI", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const payload = JSON.parse(String(init?.body)) as {
-        model: string;
-        tools?: unknown;
-        messages: { role: string; content: string }[];
-      };
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toContain("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown; messages: { role: string; content: string }[] };
       expect(payload.model).toBe("qwen/qwen3.8-27b");
       expect(payload.tools).toBeUndefined();
-      expect(payload.messages[0]?.content).toContain(
-        "For questions about scripture, retrieve the exact passage",
-      );
-      expect(payload.messages[0]?.content).toContain(
-        "For religious history and theology, consult primary council or religious texts",
-      );
-      return Response.json({
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              content:
-                "بحسب سفر التكوين 50:25-26، مات يوسف في مصر وعمره 110 سنوات وحُنّط ووُضع في تابوت. ويذكر الخروج 13:19 أن موسى أخذ عظامه معه. ويحدد يشوع 24:32 شكيم مكانًا لدفن عظامه. أما ربط الموقع التقليدي المعروف بقبر يوسف به فلا يثبت هوية الرفات أثريًا بمفرده.",
-              executed_tools: [
-                {
-                  browser_results: [
-                    {
-                      title: "Genesis 50:25-26; Exodus 13:19; Joshua 24:32 — NRSVUE",
-                      url: "https://www.biblegateway.com/passage/?search=Genesis+50%3A25-26%2CExodus+13%3A19%2CJoshua+24%3A32&version=NRSVUE",
-                      content:
-                        "Genesis 50:25 Joseph asks that his bones be carried up; Genesis 50:26 he is embalmed and placed in a coffin in Egypt. Exodus 13:19 Moses takes the bones of Joseph. Joshua 24:32 says the bones of Joseph were buried at Shechem.",
-                      score: 0.98,
-                    },
-                    {
-                      title: "Joseph's Tomb — Encyclopaedia Britannica",
-                      url: "https://www.britannica.com/place/Josephs-Tomb",
-                      content:
-                        "The traditional site identified as Joseph's Tomb is located at Shechem, near Nablus.",
-                      score: 0.74,
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        ],
-      });
+      expect(payload.messages[0]?.content).toContain("exact verbatim scripture");
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: "بحسب سفر التكوين، مات يوسف في مصر، ثم يذكر سفر الخروج أن موسى أخذ عظامه معه، ويحدد سفر يشوع 24:32 شكيم موضع دفن العظام. ده وصف للرواية الكتابية، وليس إثباتًا أثريًا لهوية رفات معاصرة." } }] });
     });
-
-    const response = await handleChatPost(
-      createChatRequest("اين جسد يوسف الصديق في المسيحية؟"),
-      fetcher,
-    );
+    const response = await handleChatPost(createChatRequest("اين جسد يوسف الصديق في المسيحية؟"), fetcher);
     const body = await response.text();
-
     expect(response.status).toBe(200);
-    expect(body).toContain("التكوين 50:25-26");
-    expect(body).toContain("الخروج 13:19");
     expect(body).toContain("يشوع 24:32");
     expect(body).toContain("شكيم");
-    expect(body).not.toContain("https://www.biblegateway.com/");
     expect(body).not.toContain("المصادر:");
     expect(fetcher).toHaveBeenCalledOnce();
   });
-
   it("does not accept AI-written links or tool metadata as verified website sources", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "chat-groq-key");
     vi.stubEnv("CHAT_GEMINI_API_KEY", "");
@@ -3136,5 +3089,6 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(body).toContain("لا يوجد تاريخ مؤكد");
     expect(body).toContain(openWebUrl);
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+  });
   });
 });
