@@ -418,7 +418,12 @@ function requiresVerifiedEvidence(
   );
 }
 
-function canAnswerFromGeneralKnowledge(query: string, heritageQuestion: boolean): boolean {
+function canAnswerFromGeneralKnowledge(
+  query: string,
+  heritageQuestion: boolean,
+  wantsSources = false,
+): boolean {
+  if (wantsSources) return false;
   const topics = inferResearchTopics(query);
   const normalized = normalizeResearchQuery(query);
   const personalHighImpactAdvice =
@@ -1108,6 +1113,7 @@ export async function handleChatPost(
   const generalKnowledgeFallbackAllowed = canAnswerFromGeneralKnowledge(
     latestQuestion,
     heritageQuestion,
+    wantsSources,
   );
   // Stable, low-risk questions may use cautious general knowledge when live
   // research is empty, even if a related curated entry exists but is incomplete.
