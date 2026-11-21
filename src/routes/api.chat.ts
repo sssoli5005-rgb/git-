@@ -1267,16 +1267,10 @@ export async function handleChatPost(
         source.url ===
         "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
     );
-  const hasReviewedScriptureAnswer =
-    localKnowledgeAnswer.directAnswer &&
-    localKnowledgeSources.some((source) =>
-      source.title === "Deuteronomy 34:5–6" ||
-      source.title === "2 Kings 2:11–18 — Elijah Taken Up to Heaven",
-    );
+  const hasReviewedScriptureAnswer = false;
   const hasConfiguredHostedProvider = [
     "CHAT_GROQ_API_KEY",
     "CHAT_GEMINI_API_KEY",
-    "CHAT_OPENROUTER_API_KEY",
   ].some((key) => readProviderEnv(suppliedEnv, key)?.trim());
   if (
     (parsed.data.language === "ar" &&
@@ -1305,10 +1299,8 @@ export async function handleChatPost(
         : "STRICT EVIDENCE LIMITATION: No approved live-source excerpt was retrieved for this turn. Do not guess or present model memory as verified for this specific identification, inscription, exact date, current fact, high-impact request, or explicit source request. State exactly what could not be confirmed and give the supported general context if available."
       : "";
 
-  // Live sources remain the preferred evidence. When they fail, stable and
-  // low-risk questions can still receive a cautious explanation; strict
-  // identification, current, high-impact, scriptural, and cited requests remain gated.
-  // Provider failover remains Groq, then Gemini, then OpenRouter.
+  // Live sources are separate evidence providers, not conversation models.
+  // Groq answers first and Gemini is the only AI fallback.
 
   const chatRequest = createOllamaChatRequest(
     parsed.data,
@@ -1872,134 +1864,10 @@ export async function handleChatPost(
     }
   }
 
-  // Third independent chat provider: OpenRouter web search (CHAT_* key only).
-  const openRouterApiKey = readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_API_KEY")?.trim();
-  if (openRouterApiKey && !request.signal.aborted) {
-    const localPayload = JSON.parse(chatRequest.body) as {
-      messages: { role: string; content: string }[];
-    };
-    const model =
-      readProviderEnv(suppliedEnv, "CHAT_OPENROUTER_MODEL")?.trim() || "openai/gpt-oss-20b";
-    const timeout = AbortSignal.timeout(liveResearchRequested ? 25_000 : 12_000);
-    try {
-      const response = await fetchChatProviderWithRetry(
-        fetcher,
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + openRouterApiKey,
-            "HTTP-Referer": "https://athara-heritage.app",
-            "X-Title": "ATHARA",
-          },
-          signal: AbortSignal.any([request.signal, timeout]),
-          body: JSON.stringify({
-            model,
-            messages: localPayload.messages,
-            max_tokens: 4096,
-            ...(useHostedSearchTools
-              ? {
-                  tools: [
-                    {
-                      type: "openrouter:web_search",
-                      parameters: {
-                        engine: "exa",
-                        max_results: 5,
-                        max_total_results: 10,
-                        allowed_domains: [
-                          "egymonuments.gov.eg",
-                          "whc.unesco.org",
-                          "metmuseum.org",
-                          "britishmuseum.org",
-                          "penn.museum",
-                          "si.edu",
-                          "louvre.fr",
-                          "ees.ac.uk",
-                          "ucl.ac.uk",
-                          "uee.ucla.edu",
-                          "escholarship.org",
-                          "thesaurus-linguae-aegyptiae.de",
-                          "biblegateway.com",
-                          "bible.com",
-                          "quran.com",
-                          "sunnah.com",
-                          "dar-alifta.org",
-                          "sefaria.org",
-                          "britannica.com",
-                          "nae.org",
-                          "vatican.va",
-                          "sourcebooks.fordham.edu",
-                          "copticorthodox.church",
-                          "st-takla.org",
-                          "cambridge.org",
-                          "oxfordreference.com",
-                          "ox.ac.uk",
-                          "cam.ac.uk",
-                          "harvard.edu",
-                          "who.int",
-                          "un.org",
-                          "nasa.gov",
-                          "noaa.gov",
-                          "nature.com",
-                          "science.org",
-                          "pubmed.ncbi.nlm.nih.gov",
-                        ],
-                      },
-                    },
-                  ],
-                  tool_choice: "required",
-                }
-              : {}),
-          }),
-        },
-        "OpenRouter",
-      );
-      if (response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          choices?: Array<{
-            finish_reason?: string;
-            message?: {
-              content?: string | null;
-              annotations?: Array<{
-                type?: string;
-                url_citation?: { url?: string; title?: string; content?: string };
-              }>;
-            };
-          }>;
-        } | null;
-        const choice = payload?.choices?.[0];
-        const message = choice?.message;
-        const answer = typeof message?.content === "string" ? message.content.trim() : "";
-        const sources = trustedSourcesFromOpenRouter(message ?? {});
-        if (liveResearchRequested && sources.length) {
-          verifiedTurnSources = mergeResearchSources(verifiedTurnSources, sources);
-          if (includeSources) responseSources = mergeResearchSources(responseSources, sources);
-        }
-        const evidenceOk =
-          Boolean(answer) && (!providerEvidenceRequired || verifiedTurnSources.length > 0);
-        const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
-        if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
-          const cleaned = removeRepeatedSentences(
-            liveResearchRequested ? removeInlineResearchCitations(answer) : answer,
-          );
-          return asChatStream(cleaned.content, responseSources, parsed.data.language);
-        }
-        console.warn("[OpenRouter] Discarded answer without complete trusted evidence", {
-          hasAnswer: Boolean(answer),
-          languageOk,
-          evidenceOk,
-        });
-      } else {
-        console.error("[OpenRouter] Request failed", { httpStatus: response.status });
-      }
-    } catch (error) {
-      console.error("[OpenRouter] Provider request failed", {
-        timedOut: timeout.aborted,
-        reason: error instanceof Error ? error.name : "unknown",
-      });
-    }
-  }
+  // Exactly two hosted conversational AI engines are used: Groq, then Gemini.
+  // OpenRouter is not a third answer engine; source verification remains in
+  // the independent specialist website-search pipeline.
+
 
   if (
     liveResearchRequested &&
