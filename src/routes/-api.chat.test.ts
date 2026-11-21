@@ -288,7 +288,7 @@ describe("general research fallbacks", () => {
         choices: [{
           finish_reason: "stop",
           message: {
-            content: "بحسب سفر التثنية 34:5–6، مات موسى في أرض موآب في الوادي المقابل لبيت فغور، لكن النص يقول إن أحدًا لا يعرف موضع قبره. ده وصف للرواية الكتابية، مش إثبات أثري.",
+            content: "بحسب سفر التثنية 34:5–6، مات موسى في أرض موآب في الوادي المقابل لبيت فغور، لكن النص يقول إن أحدًا لا يعرف موضع قبره. ده وصف للرواية الكتابية، مش إثباتًا أثريًا.",
           },
         }],
       });
@@ -324,7 +324,7 @@ describe("general research fallbacks", () => {
     expect(body).toContain("مش إثباتًا أثريًا");
     expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
-    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher).not.toHaveBeenCalled();
     expect(fetcher.mock.calls.some(([input]) =>
       new URL(String(input)).hostname.endsWith("wikipedia.org"),
     )).toBe(false);
@@ -661,8 +661,8 @@ describe("general research fallbacks", () => {
           messages: { role: string; content: string }[];
         };
         const prompt = payload.messages.map((message) => message.content).join("\n");
-        expect(prompt).toContain("Search every safe factual question");
-        expect(prompt).toContain("retry with likely corrected spellings");
+        expect(prompt).toContain("The application's independent website-search layer has already run");
+        expect(prompt).toContain("Correct clear variants gently");
         expect(prompt).toContain("If a term has multiple plausible meanings");
         expect(prompt).toContain("Never use a canned");
         expect(prompt).toContain("National Association of Evangelicals");
@@ -3001,7 +3001,7 @@ describe("handleChatPost Ollama stream handling", () => {
     expect(body).toContain("المصادر:");
     expect(body).toContain("https://www.biblegateway.com/passage/");
     expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(
-      true,
+      false,
     );
   });
 
