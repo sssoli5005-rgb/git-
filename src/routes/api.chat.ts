@@ -1917,6 +1917,9 @@ export async function handleChatPost(
   const hasReviewedPsalm110Answer = localKnowledgeSources.some(
     (source) => source.url === "https://www.biblegateway.com/passage/?search=Psalm%20110%3A1&version=NIV",
   );
+  const hasReviewedSeverusAnswer = localKnowledgeSources.some(
+    (source) => source.url === "https://ccdl.claremont.edu/digital/collection/cce/id/2209/",
+  );
   const hasReviewedAlexandriaAnswer = localKnowledgeSources.some(
     (source) => source.url === "https://www.perseus.tufts.edu/hopper/text?doc=Perseus%3Atext%3A1999.01.0244%3Achapter%3D49%3Asection%3D3",
   );
@@ -1924,7 +1927,7 @@ export async function handleChatPost(
     parsed.data.language === "ar" &&
     localKnowledgeAnswer.directAnswer &&
     localKnowledgeSources.length > 0 &&
-    (heritageQuestion || hasReviewedPsalm110Answer || hasReviewedAlexandriaAnswer)
+    (heritageQuestion || hasReviewedPsalm110Answer || hasReviewedAlexandriaAnswer || hasReviewedSeverusAnswer)
   ) {
     console.warn("[Chat] Using a directly relevant reviewed answer after provider failures");
     return asChatStream(localKnowledgeAnswer.directAnswer, responseSources, parsed.data.language);
