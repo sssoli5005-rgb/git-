@@ -1134,18 +1134,18 @@ export async function handleChatPost(
   const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
-        "MANDATORY THREE-STAGE VERIFIED RESEARCH — use Exa, Linkup, and Ceramic in parallel when the Cloudflare Web Search binding is available:",
+        "INDEPENDENT SOURCE CONTEXT — the application has already run a separate website-search layer and may provide excerpts below:",
         "Understand the user's intent before searching. Normalize high-confidence spelling and transliteration variants, preserve the original wording, and gently surface the likely correction only when it helps. If two meanings remain materially different, ask one focused question rather than guessing.",
-        "Search the exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat an unfamiliar term or an empty first search as proof that no answer exists. If a term has multiple plausible meanings, give the likely interpretations and answer conditionally when safe; ask for clarification only when the distinction materially changes the answer.",
+        "The source-search layer handles exact wording and spelling variants independently. Do not try to perform or claim web searches yourself. Interpret the user's wording, resolve likely spelling variants, and answer the intended question. If multiple meanings materially change the answer, explain the likely interpretations and ask one focused question only when necessary.",
         "Choose sources from the shared categorized trusted-source directory that match the subject. Official sources, universities, national libraries and archives, museums, peer-reviewed journals, and recognized specialist publications have priority. Encyclopedias are orientation sources, not substitutes for primary evidence.",
-        "Search, compare, and synthesize evidence from the current turn. Distinguish directly opened page text from provider snippets. A snippet is limited evidence, not proof that the full page was read. Compare separate publications rather than counting multiple search providers that return the same page as independent corroboration.",
+        "Use the retrieved, opened page excerpts passed into this conversation as evidence. Distinguish page text from search snippets, and do not count multiple search providers returning the same page as independent corroboration.",
         "If providers disagree, explain the disagreement. State dates and current facts only when the retrieved evidence supports them. Correct false premises kindly and explain the supported information. Begin with the direct answer, then explain what supports it.",
         ...(isDiscoveryResearchQuestion(latestQuestion)
           ? [
               "DISCOVERY QUESTIONS: distinguish a peer-reviewed or institutionally confirmed physical finding from a proposed interpretation or an unverified media claim. Give the reported date, location, and detection method only when the retrieved evidence supports them. Do not call an older finding the latest unless the current search verifies that.",
             ]
           : []),
-        "MANDATORY LIVE RESEARCH FOR THIS FACTUAL QUESTION:",
+        "THE APPLICATION'S INDEPENDENT SEARCH CONTEXT FOR THIS QUESTION:",
         "MATCHED TRUSTED SOURCE DIRECTORY FOR THIS QUESTION:\\n" +
           describeTrustedSourcesForQuestion(latestQuestion, 12),
         "NORMALIZED RESEARCH QUERY (preserve the user's intent):\\n" +
@@ -1159,7 +1159,7 @@ export async function handleChatPost(
               "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
             ]
           : []),
-        "The website-search layer is separate from the two conversation AI engines. The application runs Exa, Linkup, and Ceramic independently and may pass opened page excerpts in the conversation context. Groq and Gemini are not search engines: do not call or require provider-native browser/search tools, do not wait for search tools to answer, and do not refuse a safe stable question just because no website result was found. Use retrieved page text when it is present; otherwise answer stable, low-risk questions from your own well-established model knowledge and clearly mark uncertainty where it matters. Keep strict evidence requirements for current facts, explicit source requests, exact verbatim scripture, high-impact personal advice, and direct artifact/image/inscription identification. Never invent citations or claim that an external page was opened when it was not.",
+        "The website-search layer is separate from the two conversation AI engines and has already run independently. Groq and Gemini are conversational models only. Use retrieved page text when it is present; otherwise answer stable, low-risk questions from your own well-established model knowledge. Keep strict evidence requirements for current facts, explicit source requests, exact verbatim scripture, high-impact personal advice, and direct artifact/image/inscription identification. Never invent citations or claim that an external page was opened when it was not.",
         "SCRIPTURE SCOPE: The Bible-text instruction above applies only to biblical questions. For the Qur'an, hadith, Jewish texts, or other traditions, retrieve the requested passage from a recognized text in that tradition; distinguish the primary text from translation, commentary, later interpretation, and historical scholarship. Identify a hadith collection and grading only when verified, and never present one school's interpretation as universal.",
         providerEvidenceRequired
           ? "VERIFIED-EVIDENCE REQUIREMENT: This current, high-impact, or Egyptian-heritage question requires verified sources. If no usable evidence is retrieved, do not guess or present model memory as verified; state the specific verification limit."
