@@ -1266,7 +1266,7 @@ describe("handleChatPost hosted Groq provider", () => {
         };
         expect(payload.messages[0]?.content).toContain("conversational AI engine");
         expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
-        expect(payload.tools).toEqual([{ type: "browser_search" }]);
+        expect(payload.tools).toBeUndefined();
         return Response.json({
           choices: [
             {
