@@ -154,7 +154,7 @@ describe("retrieveRelevantKnowledge", () => {
 
     expect(answer.directAnswer).toContain("بلوتارخ");
     expect(answer.directAnswer).toContain("48 ق.م.");
-    expect(answer.directAnswer).toContain("لا تثبت وحدها");
+    expect(answer.directAnswer).toContain("لا يثبت وحده");
     expect(answer.directAnswer).toContain("تدمير المكتبة كاملةً لشخص واحد معروف");
     expect(answer.sources).toContainEqual(
       expect.objectContaining({
