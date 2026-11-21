@@ -2044,7 +2044,7 @@ export function retrieveRelevantKnowledge(
             : ""
         }`,
     ),
-    "Distinguish source-backed evidence from hypotheses and general background. For stable, low-risk Egyptian heritage explanations, cautiously supplement gaps with well-established knowledge and say when that background was not verified by a live source in this turn. Do not invent exact identities, dates, provenance, inscription readings, quotations, or citations; direct identification and contested claims still require evidence.",
+    "Distinguish evidence from hypotheses. Separate source-backed evidence from hypotheses and general background. For stable, low-risk Egyptian heritage explanations, cautiously supplement gaps with well-established knowledge and say when that background was not verified by a live source in this turn. Do not invent exact identities, dates, provenance, inscription readings, quotations, or citations; direct identification and contested claims still require evidence.",
   ].join("\n\n");
 }
 
