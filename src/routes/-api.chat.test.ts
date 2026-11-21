@@ -248,7 +248,7 @@ describe("general research fallbacks", () => {
       };
       expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain(
-        "The trusted-source search already returned no usable results",
+        "The independent website-search layer returned no usable page text",
       );
       return Response.json({
         choices: [{ finish_reason: "stop", message: { content: answer } }],
@@ -280,7 +280,19 @@ describe("general research fallbacks", () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),
     };
-    const fetcher = vi.fn<typeof fetch>();
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      expect(new URL(String(input)).hostname).toBe("api.groq.com");
+      const payload = JSON.parse(String(init?.body)) as { tools?: unknown };
+      expect(payload.tools).toBeUndefined();
+      return Response.json({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: "بحسب سفر التثنية 34:5–6، مات موسى في أرض موآب في الوادي المقابل لبيت فغور، لكن النص يقول إن أحدًا لا يعرف موضع قبره. ده وصف للرواية الكتابية، مش إثبات أثري.",
+          },
+        }],
+      });
+    });
 
     const request = new Request("http://localhost/api/chat", {
       method: "POST",
@@ -312,7 +324,7 @@ describe("general research fallbacks", () => {
     expect(body).toContain("مش إثباتًا أثريًا");
     expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls.some(([input]) =>
       new URL(String(input)).hostname.endsWith("wikipedia.org"),
     )).toBe(false);
@@ -704,7 +716,7 @@ describe("general research fallbacks", () => {
       };
       expect(payload.tools).toBeUndefined();
       expect(payload.messages[0]?.content).toContain(
-        "The trusted-source search already returned no usable results",
+        "The independent website-search layer returned no usable page text",
       );
       return Response.json({
         choices: [{ finish_reason: "stop", message: { content: answer } }],
@@ -1264,7 +1276,7 @@ describe("handleChatPost hosted Groq provider", () => {
           tools?: Array<{ type?: string }>;
           messages: { role: string; content: string }[];
         };
-        expect(payload.messages[0]?.content).toContain("conversational AI engine");
+        expect(payload.messages[0]?.content).toContain("You are ATHARA, a careful conversational guide");
         expect(payload.messages[0]?.content.length).toBeLessThan(5_000);
         expect(payload.tools).toBeUndefined();
         return Response.json({
@@ -1834,9 +1846,9 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it("uses the alternate Groq model with the same key after a rate limit", async () => {
+  it("falls back to Gemini when Groq rate-limits its primary chat model", async () => {
     vi.stubEnv("CHAT_GROQ_API_KEY", "test-groq-key");
-    vi.stubEnv("CHAT_GEMINI_API_KEY", "");
+    vi.stubEnv("CHAT_GEMINI_API_KEY", "test-gemini-key");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
@@ -1844,7 +1856,7 @@ describe("handleChatPost hosted Groq provider", () => {
       .mockResolvedValueOnce(new Response("{}", { status: 429 }))
       .mockResolvedValueOnce(
         Response.json({
-          choices: [{ message: { content: "الكتابة الهيروغليفية نظام كتابة مصري قديم." } }],
+          candidates: [{ content: { parts: [{ text: "الكتابة الهيروغليفية نظام كتابة مصري قديم." }] } }],
         }),
       );
 
@@ -1853,9 +1865,10 @@ describe("handleChatPost hosted Groq provider", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("الكتابة الهيروغليفية نظام كتابة مصري قديم");
     expect(fetcher).toHaveBeenCalledTimes(4);
-    expect((JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body)) as { model: string }).model).toBe(
-      "openai/gpt-oss-20b",
-    );
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("continues a truncated Groq answer before returning it", async () => {
@@ -2135,9 +2148,6 @@ describe("handleChatPost hosted Groq provider", () => {
           choices: [{ message: { content: "خلينا نفهم الموضوع step by step." } }],
         }),
       )
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(
         Response.json({
           candidates: [{ content: { parts: [{ text: "خلينا نفهم الموضوع خطوة بخطوة." }] } }],
@@ -2148,12 +2158,9 @@ describe("handleChatPost hosted Groq provider", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("خلينا نفهم الموضوع خطوة بخطوة.");
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[2]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[3]?.[0])).toContain("api.groq.com");
-    expect(String(fetcher.mock.calls[4]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("does not use the scanner AI binding when chat Groq is throttled", async () => {
@@ -2328,8 +2335,8 @@ describe("handleChatPost production provider configuration", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain("مش لاقي دليل موثوق");
-    expect(requestedHosts).toHaveLength(12);
-    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(6);
+    expect(requestedHosts).toHaveLength(9);
+    expect(requestedHosts.filter((host) => host === "api.groq.com")).toHaveLength(3);
     expect(requestedHosts.filter((host) => host === "generativelanguage.googleapis.com")).toHaveLength(
       6,
     );
@@ -2736,7 +2743,7 @@ describe("handleChatPost Ollama stream handling", () => {
       const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown; messages: { role: string; content: string }[] };
       expect(payload.model).toBe("qwen/qwen3.8-27b");
       expect(payload.tools).toBeUndefined();
-      expect(payload.messages[0]?.content).toContain("conversational AI engine");
+      expect(payload.messages[0]?.content).toContain("website-search layer");
       return Response.json({ choices: [{ finish_reason: "stop", message: { content: "السما بتبدو زرقا لأن جزيئات الغلاف الجوي بتشتت الأطوال الموجية الزرقاء من ضوء الشمس بدرجة أكبر من الحمراء." } }] });
     });
     const response = await handleChatPost(createChatRequest("ليه السما زرقا؟"), fetcher);
@@ -2784,7 +2791,7 @@ describe("handleChatPost Ollama stream handling", () => {
       const payload = JSON.parse(String(init?.body)) as { model: string; tools?: unknown; messages: { role: string; content: string }[] };
       expect(payload.model).toBe("qwen/qwen3.8-27b");
       expect(payload.tools).toBeUndefined();
-      expect(payload.messages[0]?.content).toContain("exact verbatim scripture");
+      expect(payload.messages[0]?.content).toContain("You are ATHARA, a careful conversational guide");
       return Response.json({ choices: [{ finish_reason: "stop", message: { content: "بحسب سفر التكوين، مات يوسف في مصر، ثم يذكر سفر الخروج أن موسى أخذ عظامه معه، ويحدد سفر يشوع 24:32 شكيم موضع دفن العظام. ده وصف للرواية الكتابية، وليس إثباتًا أثريًا لهوية رفات معاصرة." } }] });
     });
     const response = await handleChatPost(createChatRequest("اين جسد يوسف الصديق في المسيحية؟"), fetcher);
