@@ -69,15 +69,41 @@ export default {
         "CHAT_GEMINI_MODEL",
         "CHAT_OPENROUTER_API_KEY",
         "CHAT_OPENROUTER_MODEL",
+        "CHAT_AI_MODEL",
         "CHAT_OLLAMA_BASE_URL",
         "CHAT_OLLAMA_MODEL",
         "NODE_ENV",
       ]) {
         if (typeof runtimeEnv[key] === "string") chatEnv[key] = runtimeEnv[key] as string;
       }
-      // Chat gets its own search adapter. It uses only the dedicated CHAT_WEB_SEARCH
-      // interface and never receives scanner credentials, scanner results, or AI models.
+      // Chat gets narrow adapters for search and a final text-only answer fallback.
+      // The raw Workers AI binding and scanner credentials are never passed to chat.
       const chatAiBinding = runtimeEnv.AI;
+      if (
+        chatAiBinding &&
+        typeof chatAiBinding === "object" &&
+        "run" in chatAiBinding &&
+        typeof (chatAiBinding as { run?: unknown }).run === "function"
+      ) {
+        chatEnv.CHAT_AI_RUN = {
+          run: (
+            model: string,
+            input: {
+              messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+              max_tokens: number;
+              temperature: number;
+            },
+            options?: { signal?: AbortSignal },
+          ) =>
+            (chatAiBinding as {
+              run: (
+                model: string,
+                input: typeof input,
+                options?: typeof options,
+              ) => Promise<unknown>;
+            }).run(model, input, options),
+        };
+      }
       if (
         chatAiBinding &&
         typeof chatAiBinding === "object" &&

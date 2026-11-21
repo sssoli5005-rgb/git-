@@ -35,8 +35,21 @@ type ChatWebSearchBinding = {
   }) => Promise<Response>;
 };
 
+type ChatAiRunBinding = {
+  run: (
+    model: string,
+    input: {
+      messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+      max_tokens: number;
+      temperature: number;
+    },
+    options?: { signal?: AbortSignal },
+  ) => Promise<unknown>;
+};
+
 type ChatProviderEnv = Record<string, unknown> & {
   CHAT_WEB_SEARCH?: ChatWebSearchBinding;
+  CHAT_AI_RUN?: ChatAiRunBinding;
 };
 
 const CHAT_PROVIDER_RETRY_DELAYS_MS = [250] as const;
@@ -1864,10 +1877,69 @@ export async function handleChatPost(
     }
   }
 
-  // Exactly two hosted conversational AI engines are used: Groq, then Gemini.
-  // OpenRouter is not a third answer engine; source verification remains in
-  // the independent specialist website-search pipeline.
+  // Last-resort conversational fallback: use the already-configured Workers AI
+  // binding only for safe, stable questions after Groq and Gemini are exhausted.
+  // This is a chat-only adapter; it does not change or call the image scanner.
+  const chatAiRun = suppliedEnv?.CHAT_AI_RUN;
+  if (
+    chatAiRun &&
+    typeof chatAiRun.run === "function" &&
+    generalKnowledgeFallbackAllowed &&
+    (!providerEvidenceRequired || verifiedTurnSources.length > 0)
+  ) {
+    const localPayload = JSON.parse(chatRequest.body) as {
+      messages: { role: "system" | "user" | "assistant"; content: string }[];
+    };
+    const model =
+      readProviderEnv(suppliedEnv, "CHAT_AI_MODEL")?.trim() ||
+      "@cf/qwen/qwen3.8-27b";
+    const providerTimeout = AbortSignal.timeout(18_000);
+    try {
+      const result = await chatAiRun.run(
+        model,
+        {
+          messages: localPayload.messages,
+          max_tokens: 2048,
+          temperature: heritageQuestion ? 0.2 : 0.5,
+        },
+        { signal: providerTimeout },
+      );
+      const payload = result as {
+        response?: unknown;
+        choices?: Array<{ message?: { content?: unknown } }>;
+      } | null;
+      const answer =
+        typeof payload?.response === "string"
+          ? payload.response.trim()
+          : typeof payload?.choices?.[0]?.message?.content === "string"
+            ? payload.choices[0].message.content.trim()
+            : "";
+      if (
+        answer &&
+        (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
+      ) {
+        console.info("[Cloudflare AI] Completed the final chat fallback", { model });
+        const userFacingAnswer = liveResearchRequested
+          ? removeInlineResearchCitations(answer)
+          : answer;
+        const cleaned = removeRepeatedSentences(userFacingAnswer);
+        return asChatStream(cleaned.content, responseSources, parsed.data.language);
+      }
+      console.warn("[Cloudflare AI] Discarded empty or invalid-language fallback response", {
+        model,
+      });
+    } catch (error) {
+      console.warn("[Cloudflare AI] Final chat fallback failed", {
+        model,
+        timedOut: providerTimeout.aborted,
+        reason: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
 
+  // Groq and Gemini remain the primary hosted conversational engines.
+  // Workers AI is an additional last-resort chat engine; source verification
+  // remains in the independent specialist website-search pipeline.
 
   if (
     liveResearchRequested &&
