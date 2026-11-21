@@ -68,7 +68,7 @@ export const tourismCopy = {
     stepTwoText: "هنعرض درجة الثقة والمعلومات المتاحة، ولو مش متأكدين هنقولك.",
     stepThree: "اسمع الحكاية بلغتك",
     stepThreeText: "اقرأ التفاصيل أو اسأل المرشد الرقمي عن أي نقطة.",
-    footerText: "رفيقك لاكتشاف الحضارة المصرية — معرفة باحترام ودقة.",
+    footerText: "رفيقك لاكتشاف الحضارة المصرية — معرفة باحتراف ودقة.",
     chatTitle: "اسأل المرشد الذكي",
     chatBadge: "مرشدك السياحي الرقمي",
     chatPlaceholder: "اسأل عن أثر أو مكان أو حكاية…",
@@ -1435,7 +1435,7 @@ export interface Dict {
   principles: { title: string; items: string[] };
   cta: { title: string; text: string; button: string; note: string };
   footer: { tagline: string; note: string; rights: string };
-  projectAdmin: { label: string; admin: string; created: string };
+  projectAdmin: { label: string; created: string };
 }
 
 export const chatQuickReplies: Partial<
@@ -1672,7 +1672,7 @@ const baseTranslations = {
       note: "المحادثات مصممة للدعم والتأمل وليست بديلًا للمتخصصين.",
       rights: "جميع الحقوق محفوظة.",
     },
-    projectAdmin: { label: "إدارة المشروع", admin: "Admin:", created: "Created & Developed by" },
+    projectAdmin: { label: "إدارة المشروع", created: "Created & Developed by" },
   },
 
   en: {
@@ -1887,7 +1887,6 @@ const baseTranslations = {
     },
     projectAdmin: {
       label: "Project administration",
-      admin: "Admin:",
       created: "Created & Developed by",
     },
   },
@@ -2109,7 +2108,6 @@ const baseTranslations = {
     },
     projectAdmin: {
       label: "Administration du projet",
-      admin: "Admin:",
       created: "Created & Developed by",
     },
   },
@@ -2330,7 +2328,6 @@ const baseTranslations = {
     },
     projectAdmin: {
       label: "Administración del proyecto",
-      admin: "Admin:",
       created: "Created & Developed by",
     },
   },
@@ -2556,7 +2553,6 @@ const baseTranslations = {
     },
     projectAdmin: {
       label: "Projektverwaltung",
-      admin: "Admin:",
       created: "Created & Developed by",
     },
   },
@@ -2766,7 +2762,7 @@ const baseTranslations = {
       note: "Ekhtaberha وڈگن¾›و”¯وŒپو€§ه¯¹è¯‌ï¼Œه¹¶é‌‍هŒ»ç–—ه»؛è®®م€‚ه¦‚éپ‡هچ±وœ؛ï¼Œè¯·èپ”ç³»ه½“هœ°ç´§و€¥وœچهٹ،م€‚",
       rights: "آ© 2026 Ekhtaberha. ن؟‌ç•™و‰€وœ‰و‌ƒهˆ©م€‚",
     },
-    projectAdmin: { label: "项目管理", admin: "Admin:", created: "Created & Developed by" },
+    projectAdmin: { label: "项目管理", created: "Created & Developed by" },
   },
 };
 

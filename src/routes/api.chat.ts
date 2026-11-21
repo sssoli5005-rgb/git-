@@ -417,6 +417,19 @@ function requiresVerifiedEvidence(
   );
 }
 
+function canAnswerFromGeneralKnowledge(query: string, heritageQuestion: boolean): boolean {
+  if (
+    heritageQuestion ||
+    inferResearchTopics(query).some((topic) => ["health", "law", "economy"].includes(topic))
+  ) {
+    return false;
+  }
+
+  return !/(?:\b(?:latest|current|today|yesterday|this week|recent|news|updated|as of)\b|احدث|اخر|حاليا|اليوم|النهارده|امبارح|اخبار|الاسبوع)/u.test(
+    normalizeResearchQuery(query),
+  );
+}
+
 function removeInlineResearchCitations(content: string): string {
   return content
     .replace(/<ATHARA_SOURCES>[\s\S]*?<\/ATHARA_SOURCES>/giu, "")
@@ -1042,6 +1055,11 @@ export async function handleChatPost(
     heritageQuestion,
     wantsSources,
   );
+  const generalKnowledgeFallbackAllowed = canAnswerFromGeneralKnowledge(
+    latestQuestion,
+    heritageQuestion,
+  );
+  const providerEvidenceRequired = verifiedEvidenceRequired && !generalKnowledgeFallbackAllowed;
   const includeSources = wantsSources;
   const generalResearchContext = liveResearchRequested
     ? [
@@ -1072,9 +1090,9 @@ export async function handleChatPost(
           : []),
         "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Use retrieved evidence whenever available. For stable general knowledge questions that do not require current or primary-source verification, a cautious explanation from established general knowledge is acceptable if live results fail; clearly state that live verification was unavailable when relevant. Do not invent citations, links, or claims that a search succeeded. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For questions about scripture, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For religious history and theology, consult primary council or religious texts, official statements of the traditions being described, and academic scholarship; identify whose doctrinal perspective each claim represents, explain disputed terms in their historical context, and do not treat confessional positions as universal historical consensus. For ancient Egyptian religion, distinguish textual and archaeological evidence from modern interpretation, and avoid treating beliefs across all periods and local cults as one unchanging system. For disputed claims, compare independent sources.",
         "SCRIPTURE SCOPE: The Bible-text instruction above applies only to biblical questions. For the Qur'an, hadith, Jewish texts, or other traditions, retrieve the requested passage from a recognized text in that tradition; distinguish the primary text from translation, commentary, later interpretation, and historical scholarship. Identify a hadith collection and grading only when verified, and never present one school's interpretation as universal.",
-        verifiedEvidenceRequired
-          ? "VERIFIED-EVIDENCE REQUIREMENT: This question requires current, primary, high-impact, Egyptian-heritage, scriptural, or explicitly requested source verification. If no usable evidence is retrieved, do not guess or present model memory as verified; state the specific verification limit."
-          : "GENERAL-KNOWLEDGE FALLBACK: This is a stable general-knowledge question. If all search tools fail or return no usable results, answer helpfully from well-established general knowledge, state the key limits briefly, and never fabricate sources or citations.",
+        providerEvidenceRequired
+          ? "VERIFIED-EVIDENCE REQUIREMENT: This current, high-impact, or Egyptian-heritage question requires verified sources. If no usable evidence is retrieved, do not guess or present model memory as verified; state the specific verification limit."
+          : "GENERAL-KNOWLEDGE FALLBACK: If research returns no usable evidence for this safe, stable question, still answer from well-established general knowledge. Briefly distinguish what is known from what was not verified in this turn, and never invent sources, quotations, or citations.",
         wantsSources
           ? "The user explicitly requested sources. Include only verified source names and links that directly support the answer."
           : "The user did not request sources. Do not include source names, citations, URLs, or a sources section in the reply; use the retrieved evidence only to ground the answer. Exception: if the user supplied a source and specifically asks for an answer based on it, place that supplied link beside the claim it supports.",
@@ -1151,13 +1169,13 @@ export async function handleChatPost(
   const specialistSearchFoundEvidence = searchedSources.length > 0 || Boolean(searchContext.trim());
   const useHostedSearchTools =
     liveResearchRequested &&
-    (verifiedEvidenceRequired || !specialistSearchAttempted || specialistSearchFoundEvidence);
+    (providerEvidenceRequired || !specialistSearchAttempted || specialistSearchFoundEvidence);
   const generalKnowledgeAfterSearchFailure =
     liveResearchRequested &&
-    !verifiedEvidenceRequired &&
+    generalKnowledgeFallbackAllowed &&
     specialistSearchAttempted &&
     !specialistSearchFoundEvidence
-      ? "The trusted-source search already ran for this turn and returned no usable results. Do not retry web search; answer the stable, low-risk question directly from well-established general knowledge. Do not invent citations, and briefly distinguish what was not verified."
+      ? "The trusted-source search already ran for this turn and returned no usable results. Do not retry web search; answer the safe, stable question directly from well-established general knowledge. Do not invent citations, and briefly distinguish what was not verified."
       : "";
 
   const knowledgeSources = [...searchedSources, ...localKnowledgeSources]
@@ -1180,6 +1198,9 @@ export async function handleChatPost(
         source.url ===
         "https://www.nationalgeographic.com/history/article/history-of-red-lipstick",
     );
+  const hasReviewedScriptureAnswer =
+    localKnowledgeAnswer.directAnswer &&
+    localKnowledgeSources.some((source) => source.title === "Deuteronomy 34:5–6");
   const hasConfiguredHostedProvider = [
     "CHAT_GROQ_API_KEY",
     "CHAT_GEMINI_API_KEY",
@@ -1191,7 +1212,8 @@ export async function handleChatPost(
       localKnowledgeSources.length > 0 &&
       (searchedSources.length > 0 || !hasConfiguredHostedProvider)) ||
     (localKnowledgeAnswer.directAnswer && stableGeneralDirectQuestion) ||
-    hasReviewedCosmeticsAnswer
+    hasReviewedCosmeticsAnswer ||
+    hasReviewedScriptureAnswer
   ) {
     console.info(
       hasReviewedCosmeticsAnswer
@@ -1255,6 +1277,9 @@ export async function handleChatPost(
         useHostedSearchTools
           ? "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results."
           : "The trusted-source search already returned no usable results. Answer this stable, low-risk question directly from established general knowledge, state any important uncertainty, and do not invent citations.",
+        generalKnowledgeFallbackAllowed
+          ? "If browser_search returns no usable evidence, do not refuse or ask for unnecessary clarification. Answer the stable question from established knowledge, say briefly that the answer was not live-verified, and do not invent citations or exact quotations."
+          : "",
         "For ancient Egypt, distinguish archaeological or textual evidence from interpretation and identify uncertainty. For questions about scripture, retrieve the exact passage from a reputable text and distinguish it from later interpretation. For religious history and theology, consult primary council or religious texts and academic scholarship; identify whose doctrine each claim represents, not as universal consensus. Answer safe questions about religious traditions broadly without endorsing one doctrine.",
         ...(/(?:alexandria|اسكندريه)/u.test(
           normalizeResearchQuery(latestQuestion),
@@ -1513,7 +1538,7 @@ export async function handleChatPost(
           if (
             answer &&
             canUseGroqResearchAnswer &&
-            (!verifiedEvidenceRequired || verifiedTurnSources.length > 0) &&
+            (!providerEvidenceRequired || verifiedTurnSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(answer))
           ) {
             if (choice?.finish_reason !== "length") {
@@ -1642,7 +1667,7 @@ export async function handleChatPost(
               if (includeSources)
                 responseSources = mergeResearchSources(responseSources, geminiGroundedSources);
             }
-            if (!geminiGroundedSources.length && verifiedEvidenceRequired) {
+            if (!geminiGroundedSources.length && providerEvidenceRequired) {
               console.warn(
                 "[Gemini] Search grounding returned no source URLs; discarding the ungrounded factual answer",
                 { model },
@@ -1748,7 +1773,7 @@ export async function handleChatPost(
           if (
             answer &&
             candidate?.finishReason !== "MAX_TOKENS" &&
-            (!verifiedEvidenceRequired || verifiedTurnSources.length > 0) &&
+            (!providerEvidenceRequired || verifiedTurnSources.length > 0) &&
             (parsed.data.language !== "ar" || !hasArabicLanguageMix(userFacingAnswer))
           ) {
             const cleaned = removeRepeatedSentences(userFacingAnswer);
@@ -1894,7 +1919,7 @@ export async function handleChatPost(
           if (includeSources) responseSources = mergeResearchSources(responseSources, sources);
         }
         const evidenceOk =
-          Boolean(answer) && (!verifiedEvidenceRequired || verifiedTurnSources.length > 0);
+          Boolean(answer) && (!providerEvidenceRequired || verifiedTurnSources.length > 0);
         const languageOk = parsed.data.language !== "ar" || !hasArabicLanguageMix(answer);
         if (answer && choice?.finish_reason !== "length" && languageOk && evidenceOk) {
           const cleaned = removeRepeatedSentences(

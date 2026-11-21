@@ -276,6 +276,48 @@ describe("general research fallbacks", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("answers a biblical question from curated scripture after search is attempted", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>();
+
+    const request = new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        language: "ar",
+        messages: [
+          { role: "user", content: "إيه أهم الآثار في مصر القديمة؟" },
+          { role: "assistant", content: "فيها آثار من عصور مختلفة." },
+          { role: "user", content: "مين هما الكاثوليك؟" },
+          { role: "assistant", content: "الكاثوليك أتباع كنائس كاثوليكية." },
+          { role: "user", content: "أين جسد موسى النبي؟" },
+        ],
+      }),
+    });
+
+    const response = await handleChatPost(request, fetcher, {
+      CHAT_GROQ_API_KEY: "test-groq-key",
+      CHAT_GEMINI_API_KEY: "",
+      CHAT_OPENROUTER_API_KEY: "",
+      CHAT_OLLAMA_BASE_URL: "",
+      CHAT_WEB_SEARCH: searchBinding,
+      NODE_ENV: "test",
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("أحدًا لا يعرف موضع قبره");
+    expect(body).toContain("مش إثباتًا أثريًا");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls.some(([input]) =>
+      new URL(String(input)).hostname.endsWith("wikipedia.org"),
+    )).toBe(false);
+  });
+
   it("answers the Ark location from reviewed knowledge when live search has no results", async () => {
     const searchBinding = {
       websearch: vi.fn(async () => Response.json({ items: [] })),

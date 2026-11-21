@@ -24,6 +24,22 @@ describe("retrieveRelevantKnowledge", () => {
     );
   });
 
+  it("answers the Moses burial question from the biblical text without inventing a location", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "أين جسد موسى النبي؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("أحدًا لا يعرف موضع قبره");
+    expect(answer.directAnswer).toContain("مش إثباتًا أثريًا");
+    expect(answer.directAnswer).toContain("لكنه لا يقول إنه نُقل إلى السماء");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        title: "Deuteronomy 34:5–6",
+        url: "https://www.biblegateway.com/passage/?search=Deuteronomy%2034%3A5-6&version=NIV",
+      }),
+    );
+  });
+
   it("infers the typo in a Catholic-versus-Evangelical question from reviewed sources", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "إيه الفرق بين الانجليين و الكاثوليك؟" },

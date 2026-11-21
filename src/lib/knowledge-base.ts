@@ -97,6 +97,38 @@ const KNOWLEDGE: KnowledgeEntry[] = [
     ],
   },
   {
+    id: "moses-burial-place",
+    title: "مكان دفن موسى ومصير جسده",
+    directResponse: true,
+    keywords: [
+      "جسد موسى النبي",
+      "جسد موسى",
+      "جثمان موسى",
+      "قبر موسى",
+      "مكان دفن موسى",
+      "أين دفن موسى",
+      "أين جسد موسى",
+      "موسى النبي أين دفن",
+      "Moses burial place",
+      "where was Moses buried",
+      "where is Moses buried",
+    ],
+    content:
+      "بحسب سفر التثنية (34:5–6)، مات موسى في أرض موآب ودُفن في الوادي المقابل لبيت فغور، لكن النص يقول إن أحدًا لا يعرف موضع قبره «إلى هذا اليوم». لذلك فالمكان الدقيق لقبره أو جسده غير معروف، ولا يحدد النص موقعًا أثريًا مؤكدًا لرفاته. أما يهوذا (1:9) فيذكر جدالًا حول جسد موسى، لكنه لا يقول إنه نُقل إلى السماء ولا يحدد مكان دفنه. دي رواية النص الكتابي، مش إثباتًا أثريًا لموضع الرفات.",
+    sources: [
+      {
+        title: "Deuteronomy 34:5–6",
+        organization: "Bible Gateway, New International Version",
+        url: "https://www.biblegateway.com/passage/?search=Deuteronomy%2034%3A5-6&version=NIV",
+      },
+      {
+        title: "Jude 1:9",
+        organization: "Bible Gateway, New International Version",
+        url: "https://www.biblegateway.com/passage/?search=Jude%201%3A9&version=NIV",
+      },
+    ],
+  },
+  {
     id: "islam-basics",
     title: "من هم المسلمون وماذا يقصد بالإسلام",
     directResponse: true,

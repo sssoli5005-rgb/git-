@@ -80,6 +80,19 @@ describe("trusted Egyptian heritage search", () => {
     expect(buildHeritageSearchQuery(conversation)).toContain("من هو رمسيس الثاني؟");
   });
 
+  it("does not carry heritage context across a new standalone topic", () => {
+    const conversation = [
+      { role: "user" as const, content: "إيه أهم الآثار في مصر القديمة؟" },
+      { role: "assistant" as const, content: "فيها آثار من عصور مختلفة." },
+      { role: "user" as const, content: "مين هما الكاثوليك؟" },
+      { role: "assistant" as const, content: "الكاثوليك أتباع كنائس كاثوليكية." },
+      { role: "user" as const, content: "أين جسد موسى النبي؟" },
+    ];
+
+    expect(isEgyptianHeritageQuery(conversation)).toBe(false);
+    expect(buildHeritageSearchQuery(conversation)).toBe("أين جسد موسى النبي؟");
+  });
+
   it("includes a prior heritage question when searching a short follow-up", () => {
     expect(
       buildHeritageSearchQuery([

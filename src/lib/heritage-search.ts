@@ -487,6 +487,46 @@ function matchesHeritageQuery(value: string): boolean {
   );
 }
 
+function isContextualHeritageFollowUp(value: string): boolean {
+  if (isSourceRequest(value)) return true;
+  const normalized = normalizeSearchText(value).replace(/[ىي]/gu, "ي");
+  if (normalized.length > 60) return false;
+  const withoutConversationalPrefix = normalized.replace(
+    /^(?:(?:طب|طيب|و|وكمان|كمان|بس)\s+)+/u,
+    "",
+  );
+
+  return /^(?:ليه|لماذا|ازاي|كيف|امتي|متي|فين|اين|مين|من|هل|why|how|when|where|who|what about it|what about that|and what)\s*[؟?]?$/u.test(
+    withoutConversationalPrefix,
+  ) || /^(?:(?:هو|هي|هما|هم|ده|دي|دول|حكمه|حكمها|مكانه|مكانها|عصره|عصرها)(?:\s+(?:كان|كانت|بقى|بقا|يعني|ده|دي|هو|هي|دول|الاقدم|الاول|كده|there|it|that))?|(?:كان|كانت)\s+(?:حكمه|حكمها|عصره|مكانه|مكانها)\s+(?:امتي|متي|فين|اين)|(?:ايه|ما|ماذا)\s+(?:الاقدم|الاول|السبب|مصيره|مصادره|مكانه|حكمه|عصره))\s*[؟?]?$/u.test(
+    withoutConversationalPrefix,
+  );
+}
+
+function isConversationFiller(value: string): boolean {
+  return /^(?:شكرا(?:\s+(?:لك|جزيلا|يا\s+\S+))?|متشكر(?:ة)?|تسلم(?:ي)?|عندي\s+سوال\s+تاني|سوال\s+تاني|ممكن\s+اسال\s+سوال|خليني\s+اسال\s+حاجه\s+تانيه|thanks|thank\s+you|okay|ok)$/u.test(
+    normalizeSearchText(value),
+  );
+}
+
+function findPriorHeritageQuestion(
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+): { role: "user"; content: string } | undefined {
+  const priorUserMessages = messages
+    .filter((message): message is { role: "user"; content: string } => message.role === "user")
+    .slice(0, -1)
+    .reverse();
+
+  for (const message of priorUserMessages) {
+    if (matchesHeritageQuery(message.content)) return message;
+    if (isConversationFiller(message.content) || isContextualHeritageFollowUp(message.content)) {
+      continue;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
 function searchTerms(query: string): string[] {
   return [
     ...new Set(
@@ -765,40 +805,23 @@ export function isEgyptianHeritageQuery(
   const latestUserMessage =
     [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
   if (matchesHeritageQuery(latestUserMessage)) return true;
-
-  const normalizedLatest = normalizeSearchText(latestUserMessage);
-  const isContextualFollowUp =
-    isSourceRequest(latestUserMessage) ||
-    /^(?:طب|طيب|و|وكمان|كمان|بس|ليه|لماذا|ازاي|كيف|امتى|متى|فين|اين|مين|من|هل|وماذا|ماذا عن|what about|and what|who|why|how|when|where)(?:\s|$)/u.test(
-      normalizedLatest,
-    );
-  if (!isContextualFollowUp) return false;
-
-  const recentContext = messages
-    .slice(-13, -1)
-    .map((message) => message.content)
-    .join("\n");
-  return matchesHeritageQuery(recentContext);
+  return (
+    isContextualHeritageFollowUp(latestUserMessage) &&
+    Boolean(findPriorHeritageQuestion(messages))
+  );
 }
 
 export function buildHeritageSearchQuery(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
 ): string {
   const latestQuestion = messages.at(-1)?.content ?? "";
+  const priorHeritageQuestion = findPriorHeritageQuestion(messages);
   if (isSourceRequest(latestQuestion)) {
-    const previousHeritageQuestion = messages
-      .slice(-13, -1)
-      .reverse()
-      .find((message) => message.role === "user" && matchesHeritageQuery(message.content));
-    if (previousHeritageQuestion) return focusedHeritageSearchQuery(previousHeritageQuestion.content);
+    if (priorHeritageQuestion) return focusedHeritageSearchQuery(priorHeritageQuestion.content);
   }
   if (matchesHeritageQuery(latestQuestion)) return focusedHeritageSearchQuery(latestQuestion);
 
-  const priorHeritageQuestion = messages
-    .slice(-13, -1)
-    .reverse()
-    .find((message) => message.role === "user" && matchesHeritageQuery(message.content));
-  return priorHeritageQuestion
+  return priorHeritageQuestion && isContextualHeritageFollowUp(latestQuestion)
     ? focusedHeritageSearchQuery(`${priorHeritageQuestion.content}\nFollow-up: ${latestQuestion}`)
     : latestQuestion.slice(0, 1000);
 }
