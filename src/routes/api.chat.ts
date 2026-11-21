@@ -431,7 +431,12 @@ function canAnswerFromGeneralKnowledge(
     /(?:\b(?:my case|my contract|my symptoms|i have|i take|should i take|what dose|dosage for me|diagnose me|treat me|my debt|my taxes|invest my money|should i buy|should i sell|sue my|legal advice for me|medical advice for me|emergency)\b|عندي|عندي الم|عندي ألم|اعاني|أعاني|اخد|أخد|اخذ|آخذ|جرعة|جرعات|ينفع اخد|هل اتناول|هل أتناول|نتيجة تحليلي|تحليلي|قضيتي|عقدي|ارفع قضية|أرفع قضية|محامي|حقوقي|حضانة|طلاق|استثمر فلوسي|فلوسي|مدخراتي|ديوني|قرضي|ضرايبي|ضرائبي)/u.test(
       normalized,
     );
-  if (topics.includes("scripture") || personalHighImpactAdvice) return false;
+  const exactScriptureQuotationRequested =
+    topics.includes("scripture") &&
+    /(?:\\b(?:quote verbatim|verbatim text|exact wording|full text of|recite the verse|quote the verse|copy the passage)\\b|اقتبس(?:\\s+لي)?|اقتباس حرفي|النص الحرفي|النص الكامل للآية|نص الآية حرفيًا|اكتب(?:\\s+لي)?\\s+نص(?:\\s+الآية)?|هات نص الآية|اذكر نص الآية|بالنص الحرفي)/iu.test(
+      normalized,
+    );
+  if (exactScriptureQuotationRequested || personalHighImpactAdvice) return false;
 
   const directArtifactIdentification =
     heritageQuestion &&
@@ -1154,7 +1159,7 @@ export async function handleChatPost(
               "Briefly surface the corrected name when it helps, then answer the intended question. Do not interrupt the user for a correction when the intended entity is clear.",
             ]
           : []),
-        "Use the independent ATHARA specialist web-search pipeline first: query Exa, Linkup, and Ceramic concurrently through Cloudflare Web Search, accept safe public HTTPS results from the open web, rank known institutional and academic domains more highly, and retrieve page text when possible. Then use Groq browser search, Gemini Google Search grounding, and the dedicated OpenRouter web-search provider as separate fallback checks if the three-index research pass yields no usable evidence. Search snippets may be used only as clearly labelled limited evidence when the trusted site blocks direct retrieval. These providers are independent search indexes, not automatically independent factual sources. If a provider reaches quota, returns an error, times out, returns only untrusted domains, or supplies no usable evidence, discard it and move to the next provider. Use retrieved evidence whenever available. For stable general knowledge questions that do not require current or primary-source verification, a cautious explanation from established general knowledge is acceptable if live results fail; clearly state that live verification was unavailable when relevant. Do not invent citations, links, or claims that a search succeeded. Prefer primary documents, official institutions, universities, recognized publishers, and specialist academic sources. For questions about scripture, retrieve the exact passage from a reputable Bible text in the user's language and distinguish what the text explicitly says from later tradition, interpretation, or archaeological claims. For religious history and theology, consult primary council or religious texts, official statements of the traditions being described, and academic scholarship; identify whose doctrinal perspective each claim represents, explain disputed terms in their historical context, and do not treat confessional positions as universal historical consensus. For ancient Egyptian religion, distinguish textual and archaeological evidence from modern interpretation, and avoid treating beliefs across all periods and local cults as one unchanging system. For disputed claims, compare independent sources.",
+        "The website-search layer is separate from the two conversation AI engines. The application runs Exa, Linkup, and Ceramic independently and may pass opened page excerpts in the conversation context. Groq and Gemini are not search engines: do not call or require provider-native browser/search tools, do not wait for search tools to answer, and do not refuse a safe stable question just because no website result was found. Use retrieved page text when it is present; otherwise answer stable, low-risk questions from your own well-established model knowledge and clearly mark uncertainty where it matters. Keep strict evidence requirements for current facts, explicit source requests, exact verbatim scripture, high-impact personal advice, and direct artifact/image/inscription identification. Never invent citations or claim that an external page was opened when it was not.",
         "SCRIPTURE SCOPE: The Bible-text instruction above applies only to biblical questions. For the Qur'an, hadith, Jewish texts, or other traditions, retrieve the requested passage from a recognized text in that tradition; distinguish the primary text from translation, commentary, later interpretation, and historical scholarship. Identify a hadith collection and grading only when verified, and never present one school's interpretation as universal.",
         providerEvidenceRequired
           ? "VERIFIED-EVIDENCE REQUIREMENT: This current, high-impact, or Egyptian-heritage question requires verified sources. If no usable evidence is retrieved, do not guess or present model memory as verified; state the specific verification limit."
@@ -1231,9 +1236,9 @@ export async function handleChatPost(
 
   const specialistSearchAttempted = Boolean(suppliedEnv?.CHAT_WEB_SEARCH);
   const specialistSearchFoundEvidence = searchedSources.length > 0 || Boolean(searchContext.trim());
-  const useHostedSearchTools =
-    liveResearchRequested &&
-    (providerEvidenceRequired || !specialistSearchAttempted || specialistSearchFoundEvidence);
+  // AI providers are independent conversation engines. Website retrieval is
+  // performed only by the specialist search pipeline above, never by model tools.
+  const useHostedSearchTools = false;
   const generalKnowledgeAfterSearchFailure =
     liveResearchRequested &&
     generalKnowledgeFallbackAllowed &&
@@ -1348,9 +1353,9 @@ export async function handleChatPost(
         "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
         "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
         "For evangelical Christianity, prefer recognized bodies such as the National Association of Evangelicals; for Catholic teaching, use the Holy See (الكرسي الرسولي) and its official Catechism. Identify doctrinal perspectives rather than treating one institution as universal Christianity.",
-        useHostedSearchTools
-          ? "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results."
-          : "The trusted-source search already returned no usable results. Answer this stable, low-risk question directly from established general knowledge, state any important uncertainty, and do not invent citations.",
+        specialistSearchFoundEvidence
+          ? "The application's independent website-search layer supplied excerpts in the system context. Use those excerpts for claims they support, and distinguish them from your own general knowledge. You are the conversational AI, not the search tool."
+          : "The independent website-search layer returned no usable page text. Still answer this safe, stable question directly from your own well-established knowledge. Do not invent citations or claim that you searched.",
         generalKnowledgeFallbackAllowed
           ? "If browser_search returns no usable evidence, do not refuse or ask for unnecessary clarification. Answer the stable question from established knowledge, say briefly that the answer was not live-verified, and do not invent citations or exact quotations."
           : "",
@@ -1398,28 +1403,14 @@ export async function handleChatPost(
         { role: "system", content: compactResearchInstruction },
         ...recentConversation,
       );
-      const sourceRequirement = useHostedSearchTools
-        ? 'Final research-output requirement: Use the browser_search tool for this exact question. After your normal answer, append a machine-readable block exactly in this format: <ATHARA_SOURCES>[{"title":"page title","url":"https://full-source-url","evidence":"one exact sentence copied verbatim from that page"}]</ATHARA_SOURCES>. Include only URLs you actually opened with browser search, and copy the evidence sentence exactly from the page. Do not invent, infer, or reconstruct a URL or quotation. If no page was actually opened, return an empty array. The application removes this block before showing the answer.'
-        : "";
-      const lastMessage = groqMessages.at(-1);
-      if (sourceRequirement && lastMessage?.role === "user") {
-        groqMessages[groqMessages.length - 1] = {
-          ...lastMessage,
-          content: `${lastMessage.content}\n\n${sourceRequirement}`,
-        };
-      } else if (sourceRequirement) {
-        groqMessages.push({ role: "user", content: sourceRequirement });
-      }
+      // Source links are attached by the application's independent
+      // research pipeline, never invented by the language model.
     }
-    // Factual questions must use the search-capable model; never fall back to
-    // an ungrounded fast chat model on the same turn.
-    const groqModels = requestsLiveResearch
-      ? ["openai/gpt-oss-20b"]
-      : [...new Set([primaryModel, "openai/gpt-oss-20b"])];
+    // Groq is the first independent conversation AI. Use its configured
+    // general-purpose chat model for factual and casual questions alike.
+    const groqModels = [primaryModel];
     for (const [index, model] of groqModels.entries()) {
-      const providerTimeout = AbortSignal.timeout(
-        requestsLiveResearch && model === "openai/gpt-oss-20b" ? 25_000 : 8_000,
-      );
+      const providerTimeout = AbortSignal.timeout(15_000);
       const providerSignal = AbortSignal.any([request.signal, providerTimeout]);
       try {
         const headers = new Headers({ "Content-Type": "application/json" });
@@ -1434,16 +1425,9 @@ export async function handleChatPost(
             body: JSON.stringify({
               model,
               messages: requestsLiveResearch ? groqMessages : localPayload.messages,
-              max_completion_tokens: requestsLiveResearch ? 1536 : 4096,
+              max_completion_tokens: 4096,
               ...(heritageQuestion ? { temperature: 0.2 } : {}),
-              ...(useHostedSearchTools
-                ? {
-                    tools: [{ type: "browser_search" }],
-                    tool_choice: "required",
-                    temperature: heritageQuestion ? 0.2 : 1,
-                    reasoning_effort: "low",
-                  }
-                : { reasoning_effort: "medium", reasoning_format: "hidden" }),
+              reasoning_effort: "medium",
             }),
           },
           "Groq",
@@ -1660,7 +1644,8 @@ export async function handleChatPost(
   // Gemini is the second hosted provider. Try a stable, lightweight model when
   // the primary is unavailable or cannot produce a valid answer.
   const geminiApiKey = readProviderEnv(suppliedEnv, "CHAT_GEMINI_API_KEY")?.trim();
-  const geminiLiveSearch = useHostedSearchTools;
+  // Gemini is an independent language model, not a web-search connector.
+  const geminiLiveSearch = false;
   let geminiFailureCode = "provider_error";
   let geminiFailureStatus = 502;
   if (geminiApiKey) {
