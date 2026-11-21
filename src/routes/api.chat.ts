@@ -1364,12 +1364,12 @@ export async function handleChatPost(
               .map((item) => `${item.matched} → ${item.canonical} (${item.english})`)
               .join("; ")
           : "",
-        describeTrustedSourcesForQuestion(latestQuestion, 6),
+        describeTrustedSourcesForQuestion(latestQuestion, 4),
         localKnowledgeAnswer.content
-          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content}`
+          ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 1_200)}`
           : "",
         searchFallbackContext,
-        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 4_000)}` : "",
+        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_000)}` : "",
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -1431,7 +1431,7 @@ export async function handleChatPost(
                 ? {
                     tools: [{ type: "browser_search" }],
                     tool_choice: "required",
-                    temperature: 1,
+                    temperature: heritageQuestion ? 0.2 : 1,
                     reasoning_effort: "low",
                   }
                 : { reasoning_effort: "medium", reasoning_format: "hidden" }),
