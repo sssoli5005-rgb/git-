@@ -276,6 +276,48 @@ describe("general research fallbacks", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("answers the Ark location from reviewed knowledge when live search has no results", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const hostname = new URL(String(input)).hostname;
+      if (hostname.endsWith("wikipedia.org")) {
+        return Response.json({ query: { search: [] } });
+      }
+      if (
+        hostname === "api.groq.com" ||
+        hostname === "generativelanguage.googleapis.com"
+      ) {
+        return new Response("Temporarily unavailable", { status: 503 });
+      }
+      throw new Error(`Unexpected request to ${hostname}.`);
+    });
+    const response = await handleChatPost(
+      createChatRequest("فين تابوت العهد؟"),
+      fetcher,
+      {
+        CHAT_GROQ_API_KEY: "test-groq-key",
+        CHAT_GEMINI_API_KEY: "test-gemini-key",
+        CHAT_OPENROUTER_API_KEY: "",
+        CHAT_OLLAMA_BASE_URL: "",
+        CHAT_WEB_SEARCH: searchBinding,
+        NODE_ENV: "test",
+      },
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("مكان تابوت العهد الحالي غير معروف");
+    expect(body).toContain("586 قبل الميلاد");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(body).not.toContain("bibleodyssey.org");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.some(([input]) =>
+      new URL(String(input)).hostname === "api.groq.com",
+    )).toBe(true);
+  });
+
   it("answers the Egyptian queens' hair question from reviewed sources when live search fails", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       new Response("Temporarily unavailable", { status: 503 }),
@@ -3269,6 +3311,9 @@ describe("handleChatPost Ollama stream handling", () => {
     };
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
+      if (url.hostname.endsWith("wikipedia.org")) {
+        return Response.json({ query: { search: [] } });
+      }
       if (url.hostname === "isac.uchicago.edu") {
         return new Response(
           "<html><body><main>" +

@@ -8,6 +8,22 @@ import {
 } from "./knowledge-base";
 
 describe("retrieveRelevantKnowledge", () => {
+  it("answers the Ark's present location cautiously from a reviewed biblical-studies source", () => {
+    const answer = getRelevantKnowledgeAnswer([
+      { role: "user", content: "فين تابوت العهد؟" },
+    ]);
+
+    expect(answer.directAnswer).toContain("مكان تابوت العهد الحالي غير معروف");
+    expect(answer.directAnswer).toContain("586 قبل الميلاد");
+    expect(answer.directAnswer).toContain("غير مؤكدة أثريًا");
+    expect(answer.sources).toContainEqual(
+      expect.objectContaining({
+        organization: "Bible Odyssey, Society of Biblical Literature",
+        url: "https://www.bibleodyssey.org/articles/the-ark-of-the-covenant/",
+      }),
+    );
+  });
+
   it("infers the typo in a Catholic-versus-Evangelical question from reviewed sources", () => {
     const answer = getRelevantKnowledgeAnswer([
       { role: "user", content: "إيه الفرق بين الانجليين و الكاثوليك؟" },
