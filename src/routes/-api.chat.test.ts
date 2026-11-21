@@ -596,6 +596,49 @@ describe("general research fallbacks", () => {
     expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
   });
 
+  it("answers Elijah's body question from the reviewed Bible reference when hosted AI providers fail", async () => {
+    const searchBinding = {
+      websearch: vi.fn(async () => Response.json({ items: [] })),
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.groq.com") {
+        return Response.json({
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "Unverified generated answer without source evidence." },
+          }],
+        });
+      }
+      if (url.hostname === "generativelanguage.googleapis.com") {
+        return Response.json({
+          candidates: [{
+            content: { parts: [{ text: "Unverified Gemini answer." }] },
+            groundingMetadata: { groundingChunks: [] },
+          }],
+        });
+      }
+      throw new Error("Unexpected request to " + url.hostname);
+    });
+
+    const response = await handleChatPost(createChatRequest("اين جسد ايليا النبي ؟"), fetcher, {
+      CHAT_GROQ_API_KEY: "test-groq-key",
+      CHAT_GEMINI_API_KEY: "test-gemini-key",
+      CHAT_WEB_SEARCH: searchBinding,
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("سفر الملوك الثاني 2:11");
+    expect(body).toContain("صعد إلى السماء في زوبعة");
+    expect(body).toContain("لا يذكر النص قبرًا أرضيًا لإيليا");
+    expect(body).not.toContain("خدمة الإجابة مش متاحة مؤقتًا");
+    expect(body).not.toContain("Unverified generated answer");
+    expect(body).not.toContain("Unverified Gemini answer");
+    expect(searchBinding.websearch).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.some(([input]) => String(input).includes("api.groq.com"))).toBe(false);
+  });
+
   it.each([
     "إيه الفرق بين الإنجيليين والكاثوليك؟",
     "ايه الفرق بين الانجليين و الكاثوليك",
