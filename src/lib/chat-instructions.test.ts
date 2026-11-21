@@ -168,9 +168,9 @@ describe("buildChatSystemInstruction for Egypt Smart Guide", () => {
     expect(prompt).toContain("do not force an Egyptian connection");
     expect(prompt).toContain("Answer ordinary and specialist questions across the world");
     expect(prompt).toContain(
-      "For every safe factual question, first search reliable primary or institutional sources when available",
+      "The application has a separate institutional website-search layer that may provide retrieved excerpts",
     );
-    expect(prompt).toContain("SEARCH EVERY FACTUAL QUESTION; INTERPRET BEFORE ASKING");
+    expect(prompt).toContain("ANSWER EVERY SAFE FACTUAL QUESTION; INTERPRET BEFORE ASKING");
     expect(prompt).toContain(
       "For stable general-knowledge questions outside those strict categories",
     );
