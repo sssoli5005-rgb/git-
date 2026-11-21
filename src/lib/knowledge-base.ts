@@ -165,6 +165,30 @@ const KNOWLEDGE: KnowledgeEntry[] = [
     ],
   },
   {
+    id: "severus-of-antioch",
+    title: "القديس ساويرس الأنطاكي",
+    directResponse: true,
+    keywords: [
+      "ساويرس الأنطاكي", "ساويرس الانطاكي", "ساويرس الأنطاقي", "ساويرس الانطاقي",
+      "الأنبا ساويرس الأنطاكي", "الانبا ساويرس الانطاكي", "سويروس الأنطاكي",
+      "Severus of Antioch", "Severos of Antioch", "Severus Antiochenus",
+    ],
+    content:
+      "القديس ساويرس الأنطاكي (ويُكتب أيضًا سويروس أو Severus/Severos of Antioch) كان لاهوتيًا وأسقفًا مسيحيًا بارزًا في أواخر القرن الخامس والنصف الأول من القرن السادس. وُلد نحو سنة 465م في سوزوبوليس بآسيا الصغرى، وتلقى دراسة في الإسكندرية وبيروت، ثم اختار الحياة الرهبانية. انتُخب بطريركًا لأنطاكية سنة 512م، وظل في المنصب حتى سنة 518م. وبعد تولي الإمبراطور يوستينوس الأول الحكم وفرض الموقف المؤيد لمجمع خلقيدونية، غادر ساويرس أنطاكية ولجأ إلى مصر، حيث عاش بقية حياته وتوفي في 8 فبراير 538م. يُعد من أبرز المدافعين عن الموقف اللاخلقيدوني، ويُوصف لاهوته في الدراسات الحديثة غالبًا بالميافيزي؛ وكان يؤكد وحدة طبيعة الكلمة المتجسد، مع رفضه فهم ذلك على أنه إنكار لتمام ناسوت المسيح. لذلك من الأدق شرح الخلاف العقائدي في سياقه التاريخي بدل الاكتفاء بوصف جدلي مثل «هرطوقي». ترك عددًا كبيرًا من العظات والرسائل والكتابات اللاهوتية، ويُكرَّم قديسًا في التقليدين القبطي الأرثوذكسي والسرياني الأرثوذكسي.",
+    sources: [
+      {
+        title: "Severus of Antioch: Update",
+        organization: "Claremont Coptic Encyclopedia, Sebastian Brock",
+        url: "https://ccdl.claremont.edu/digital/collection/cce/id/2209/",
+      },
+      {
+        title: "Severus of Antioch",
+        organization: "The Blackwell Encyclopedia of Ancient History, Volker L. Menze (CEU)",
+        url: "https://research.ceu.edu/en/publications/severus-of-antioch/",
+      },
+    ],
+  },
+  {
     id: "psalm-110-the-lord-said-to-my-lord",
     title: "معنى عبارة قال الرب لربي في مزمور 110:1",
     directResponse: true,
