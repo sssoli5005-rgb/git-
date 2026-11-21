@@ -1344,6 +1344,7 @@ export async function handleChatPost(
         "Infer the user's intended meaning despite spelling errors. Correct clear variants gently, and answer that likely question in the same reply; ask one brief clarification only when meanings materially differ.",
         "Search every safe factual question, even stable general questions and questions that do not explicitly ask for research. Use the user's exact wording first; if results are weak, retry with likely corrected spellings, phonetic or transliterated forms, synonyms, standard names, and useful English equivalents. Do not treat unfamiliar wording or an empty first search as proof that no answer exists.",
         "If a term has multiple plausible meanings, name the likely interpretations (for example, 'Do you mean X or Y?'), answer the likely meaning conditionally when safe, and ask for clarification only when the distinction materially changes the answer.",
+        "For evangelical Christianity, prefer recognized bodies such as the National Association of Evangelicals; for Catholic teaching, use the Holy See (الكرسي الرسولي) and its official Catechism. Identify doctrinal perspectives rather than treating one institution as universal Christianity.",
         useHostedSearchTools
           ? "Use browser_search for this factual question. Prefer official institutions, universities, museums, national libraries, primary texts, and peer-reviewed research. Encyclopedias are orientation only; do not rely on Wikipedia as the sole evidence. Compare sources when a claim is disputed. Never invent sources, quotations, or search results."
           : "The trusted-source search already returned no usable results. Answer this stable, low-risk question directly from established general knowledge, state any important uncertainty, and do not invent citations.",
@@ -1363,7 +1364,6 @@ export async function handleChatPost(
           (useHostedSearchTools
             ? "At the end, provide the requested machine-readable source block using only pages actually opened by browser_search and one exact sentence from each page."
             : "Do not include a machine-readable source block because no browser search is being used."),
-        `Search query: ${buildSpecialistSearchQuery(latestQuestion)}`,
         spellingEntitySuggestions.length
           ? "HIGH-CONFIDENCE SPELLING/ENTITY SUGGESTION: " +
             spellingEntitySuggestions
@@ -1375,7 +1375,7 @@ export async function handleChatPost(
           ? `Relevant reviewed background:\n${localKnowledgeAnswer.content.slice(0, 350)}`
           : "",
         searchFallbackContext,
-        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_800)}` : "",
+        searchContext ? `Retrieved search evidence:\n${searchContext.slice(0, 2_400)}` : "",
       ]
         .filter(Boolean)
         .join("\n\n");
