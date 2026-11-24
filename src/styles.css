@@ -1632,3 +1632,27 @@ body {
   .athara-compare-selects,.athara-compare-grid { grid-template-columns:1fr; }
   .athara-feature-header h2 { font-size:18px; }
 }
+
+
+/* Real photographic artwork for each independent heritage experience.
+   Images are hosted on Wikimedia Commons; linked file pages retain author/license details. */
+.athara-art-timeline {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Columns_in_Karnak_Temple.JPG?width=1400");
+  background-position: center 42%;
+}
+.athara-art-map {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Giza-pyramids.JPG?width=1400");
+  background-position: center 48%;
+}
+.athara-art-compare {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Grand_Egyptian_Museum_-_Inscribed_stela_and_statue.jpg?width=1400");
+  background-position: center 38%;
+}
+.athara-art-notebook {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Egyptian_Papyrus%2C_Hieratic_document_of_mid_2000_BC_Wellcome_L0015015.jpg?width=1400");
+  background-position: center 45%;
+}
+.athara-art-detective {
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Pyramid_of_Djoser_excavation.jpg?width=1400");
+  background-position: center 42%;
+}
