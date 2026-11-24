@@ -304,6 +304,154 @@ const artifacts = [
   { id: "palette", name: "لوحة صيادين ما قبل الأسرات", period: "نقادة الثانية/الثالثة", function: "لوحة احتفالية أو تجميلية", material: "حجر", significance: "تساعد مناظرها على دراسة الرموز والسلطة والصيد والتعبير الفني قبل قيام الدولة." },
 ];
 
+
+const localizedArtifactDetails = {
+  en: {
+    djoser: ["Old Kingdom – Third Dynasty", "Royal funerary complex", "Limestone", "An early landmark in the development of pyramid building and stone architecture."],
+    khufu: ["Old Kingdom – Fourth Dynasty", "Royal funerary pyramid", "Limestone and granite", "The largest pyramid at Giza, demonstrating major organizational and engineering capabilities."],
+    bent: ["Old Kingdom – Fourth Dynasty", "Royal funerary pyramid", "Limestone", "Illustrates an important experimental stage in the development of the true pyramid."],
+    "abu-simbel": ["New Kingdom – Nineteenth Dynasty", "Two rock-cut temples", "Sandstone", "Part of Ramesses II’s royal and religious program in Nubia."],
+    red: ["Old Kingdom – Fourth Dynasty", "Royal funerary pyramid", "Limestone", "Associated with Sneferu at Dahshur; one of the earliest completed smooth-sided pyramids."],
+    sphinx: ["Old Kingdom – Fourth Dynasty", "Monumental royal statue associated with a funerary complex", "Natural limestone bedrock", "Combines a lion’s body with a human head; commonly associated with Khafre, though dating details remain debated."],
+    narmer: ["Early Dynastic Period – First Dynasty", "Ceremonial/royal palette", "Schist", "Depicts royal imagery and symbols associated with the unification of the Two Lands and the beginnings of the state."],
+    rosetta: ["Ptolemaic Period – 196 BCE", "Royal decree written in three scripts", "Granodiorite", "Its parallel hieroglyphic, Demotic and Greek texts helped scholars decipher hieroglyphs."],
+    "tut-mask": ["New Kingdom – Eighteenth Dynasty", "Funerary mask", "Gold and various inlaid materials", "Part of the king’s burial equipment, displaying advanced goldworking and funerary symbolism."],
+    senusret: ["Middle Kingdom – Twelfth Dynasty", "Royal statue", "Limestone", "Represents Middle Kingdom royal portrait traditions and the continuity of kingship symbols."],
+    "hat-shepsut": ["New Kingdom – Eighteenth Dynasty", "Royal and religious statues", "Various stones", "Shows the range of Hatshepsut’s official images, from Osirian forms to representations as king."],
+    canopic: ["Various periods of ancient Egypt", "Containers for preserving internal organs during mummification", "Stone, alabaster, pottery and other materials", "Associated with the protection of the organs and the four Sons of Horus; forms changed over time."],
+    shabti: ["Middle Kingdom and later", "Symbolic funerary figures", "Wood, stone, pottery and faience", "Believed to perform tasks on behalf of the deceased in the afterlife; their numbers and inscriptions varied."],
+    merneptah: ["New Kingdom – Nineteenth Dynasty", "Royal victory stele", "Granite", "Contains a royal text mentioning a people called Israel in the context of a military campaign in Canaan."],
+    senet: ["Old Kingdom onward", "Board game", "Wood, ivory, stone and other materials", "A popular game with social and symbolic meanings that later also appeared in funerary contexts."],
+    palette: ["Naqada II/III", "Ceremonial or cosmetic palette", "Stone", "Its imagery helps researchers study symbolism, authority, hunting and artistic expression before the formation of the state."]
+  },
+  fr: {
+    djoser: ["Ancien Empire – IIIe dynastie", "Complexe funéraire royal", "Calcaire", "Une étape majeure des débuts de la construction des pyramides et de l’architecture en pierre."],
+    khufu: ["Ancien Empire – IVe dynastie", "Pyramide funéraire royale", "Calcaire et granite", "La plus grande pyramide de Gizeh, témoignant de grandes capacités d’organisation et d’ingénierie."],
+    bent: ["Ancien Empire – IVe dynastie", "Pyramide funéraire royale", "Calcaire", "Illustre une étape expérimentale importante dans l’évolution de la pyramide à faces lisses."],
+    "abu-simbel": ["Nouvel Empire – XIXe dynastie", "Deux temples creusés dans la roche", "Grès", "Associés au programme royal et religieux de Ramsès II en Nubie."],
+    red: ["Ancien Empire – IVe dynastie", "Pyramide funéraire royale", "Calcaire", "Associée à Snéfrou à Dahchour, c’est l’une des premières pyramides à faces lisses achevées."],
+    sphinx: ["Ancien Empire – IVe dynastie", "Statue royale monumentale liée à un complexe funéraire", "Rocher calcaire naturel", "Associe un corps de lion à une tête humaine ; généralement lié à Khéphren, malgré des débats sur sa datation."],
+    narmer: ["Époque thinite – Ire dynastie", "Palette cérémonielle/royale", "Schiste", "Présente des images royales et des symboles liés à l’unification des Deux Terres et aux débuts de l’État."],
+    rosetta: ["Époque ptolémaïque – 196 av. J.-C.", "Décret royal en trois systèmes d’écriture", "Granodiorite", "Ses textes parallèles en hiéroglyphes, démotique et grec ont aidé au déchiffrement des hiéroglyphes."],
+    "tut-mask": ["Nouvel Empire – XVIIIe dynastie", "Masque funéraire", "Or et matériaux incrustés", "Élément du mobilier funéraire du roi, illustrant le savoir-faire de l’orfèvrerie et la symbolique funéraire."],
+    senusret: ["Moyen Empire – XIIe dynastie", "Statue royale", "Calcaire", "Représente les traditions du portrait royal au Moyen Empire et la continuité des symboles royaux."],
+    "hat-shepsut": ["Nouvel Empire – XVIIIe dynastie", "Statues royales et religieuses", "Pierres variées", "Révèle la diversité des images officielles d’Hatchepsout, de la forme osirienne à celle du roi."],
+    canopic: ["Plusieurs périodes de l’Égypte ancienne", "Récipients destinés à conserver les viscères lors de la momification", "Pierre, albâtre, poterie et autres matériaux", "Liés à la protection des viscères et aux quatre fils d’Horus ; leurs formes ont évolué."],
+    shabti: ["Moyen Empire et périodes suivantes", "Figurines funéraires symboliques", "Bois, pierre, poterie et faïence", "Censées accomplir des tâches pour le défunt dans l’au-delà ; leur nombre et leurs inscriptions variaient."],
+    merneptah: ["Nouvel Empire – XIXe dynastie", "Stèle royale de victoire", "Granite", "Comporte un texte royal mentionnant un groupe appelé Israël lors d’une campagne militaire en Canaan."],
+    senet: ["Depuis l’Ancien Empire", "Jeu de plateau", "Bois, ivoire, pierre et autres matériaux", "Jeu populaire aux significations sociales et symboliques, présent plus tard dans des contextes funéraires."],
+    palette: ["Naqada II/III", "Palette cérémonielle ou cosmétique", "Pierre", "Ses scènes éclairent les symboles, le pouvoir, la chasse et l’expression artistique avant la formation de l’État."]
+  },
+  es: {
+    djoser: ["Reino Antiguo – III dinastía", "Complejo funerario real", "Piedra caliza", "Un hito temprano en el desarrollo de las pirámides y la arquitectura en piedra."],
+    khufu: ["Reino Antiguo – IV dinastía", "Pirámide funeraria real", "Piedra caliza y granito", "La mayor pirámide de Guiza; refleja grandes capacidades de organización e ingeniería."],
+    bent: ["Reino Antiguo – IV dinastía", "Pirámide funeraria real", "Piedra caliza", "Muestra una etapa experimental importante en el desarrollo de la pirámide de caras lisas."],
+    "abu-simbel": ["Reino Nuevo – XIX dinastía", "Dos templos excavados en la roca", "Arenisca", "Forman parte del programa real y religioso de Ramsés II en Nubia."],
+    red: ["Reino Antiguo – IV dinastía", "Pirámide funeraria real", "Piedra caliza", "Vinculada a Esnofru en Dahshur; una de las primeras pirámides de caras lisas completadas."],
+    sphinx: ["Reino Antiguo – IV dinastía", "Estatua real monumental asociada a un complejo funerario", "Roca caliza natural", "Combina cuerpo de león y cabeza humana; suele relacionarse con Kefrén, aunque se debate su datación."],
+    narmer: ["Época Tinita – I dinastía", "Paleta ceremonial/real", "Esquisto", "Presenta imágenes reales y símbolos relacionados con la unificación de las Dos Tierras y los inicios del Estado."],
+    rosetta: ["Época ptolemaica – 196 a. C.", "Decreto real escrito en tres sistemas", "Granodiorita", "Sus textos paralelos en jeroglífico, demótico y griego ayudaron a descifrar los jeroglíficos."],
+    "tut-mask": ["Reino Nuevo – XVIII dinastía", "Máscara funeraria", "Oro y diversos materiales incrustados", "Parte del ajuar funerario del rey; muestra la destreza orfebre y el simbolismo funerario."],
+    senusret: ["Reino Medio – XII dinastía", "Estatua real", "Piedra caliza", "Representa las tradiciones del retrato real del Reino Medio y la continuidad de los símbolos monárquicos."],
+    "hat-shepsut": ["Reino Nuevo – XVIII dinastía", "Estatuas reales y religiosas", "Piedras variadas", "Muestra la diversidad de las imágenes oficiales de Hatshepsut, desde la forma osiríaca hasta la del rey."],
+    canopic: ["Diversos períodos del antiguo Egipto", "Recipientes para conservar las vísceras durante la momificación", "Piedra, alabastro, cerámica y otros materiales", "Se relacionan con la protección de las vísceras y los cuatro hijos de Horus; sus formas variaron."],
+    shabti: ["Reino Medio y épocas posteriores", "Figuras funerarias simbólicas", "Madera, piedra, cerámica y fayenza", "Se creía que realizaban tareas por el difunto en el más allá; variaban en número e inscripciones."],
+    merneptah: ["Reino Nuevo – XIX dinastía", "Estela real de victoria", "Granito", "Incluye un texto real que menciona a un grupo llamado Israel en el contexto de una campaña en Canaán."],
+    senet: ["Desde el Reino Antiguo", "Juego de mesa", "Madera, marfil, piedra y otros materiales", "Juego popular con significados sociales y simbólicos, presente después también en contextos funerarios."],
+    palette: ["Naqada II/III", "Paleta ceremonial o cosmética", "Piedra", "Sus escenas ayudan a estudiar símbolos, autoridad, caza y expresión artística antes de la formación del Estado."]
+  },
+  it: {
+    djoser: ["Antico Regno – III dinastia", "Complesso funerario reale", "Calcare", "Una tappa iniziale fondamentale nello sviluppo delle piramidi e dell’architettura in pietra."],
+    khufu: ["Antico Regno – IV dinastia", "Piramide funeraria reale", "Calcare e granito", "La più grande piramide di Giza, testimonianza di notevoli capacità organizzative e ingegneristiche."],
+    bent: ["Antico Regno – IV dinastia", "Piramide funeraria reale", "Calcare", "Mostra un’importante fase sperimentale nello sviluppo della piramide a facce lisce."],
+    "abu-simbel": ["Nuovo Regno – XIX dinastia", "Due templi scavati nella roccia", "Arenaria", "Parte del programma reale e religioso di Ramses II in Nubia."],
+    red: ["Antico Regno – IV dinastia", "Piramide funeraria reale", "Calcare", "Legata a Snefru a Dahshur, è una delle prime piramidi a facce lisce completate."],
+    sphinx: ["Antico Regno – IV dinastia", "Monumentale statua regale legata a un complesso funerario", "Roccia calcarea naturale", "Unisce corpo leonino e testa umana; è spesso associata a Chefren, sebbene la datazione sia discussa."],
+    narmer: ["Periodo Protodinastico – I dinastia", "Tavolozza cerimoniale/regale", "Scisto", "Mostra immagini regali e simboli legati all’unificazione delle Due Terre e alla nascita dello Stato."],
+    rosetta: ["Periodo tolemaico – 196 a.C.", "Decreto reale in tre sistemi di scrittura", "Granodiorite", "I testi paralleli in geroglifico, demotico e greco contribuirono alla decifrazione dei geroglifici."],
+    "tut-mask": ["Nuovo Regno – XVIII dinastia", "Maschera funeraria", "Oro e vari materiali intarsiati", "Parte del corredo funerario del re, mostra abilità orafe e simbolismo funerario."],
+    senusret: ["Medio Regno – XII dinastia", "Statua regale", "Calcare", "Rappresenta le tradizioni del ritratto regale del Medio Regno e la continuità dei simboli monarchici."],
+    "hat-shepsut": ["Nuovo Regno – XVIII dinastia", "Statue regali e religiose", "Pietre diverse", "Mostra la varietà delle immagini ufficiali di Hatshepsut, dalla forma osiriaca a quella del re."],
+    canopic: ["Diverse epoche dell’antico Egitto", "Contenitori per conservare gli organi durante la mummificazione", "Pietra, alabastro, ceramica e altri materiali", "Legati alla protezione degli organi e ai quattro figli di Horus; le forme cambiarono nel tempo."],
+    shabti: ["Medio Regno e periodi successivi", "Statuette funerarie simboliche", "Legno, pietra, ceramica e faience", "Si riteneva svolgessero compiti per il defunto nell’aldilà; numero e iscrizioni variavano."],
+    merneptah: ["Nuovo Regno – XIX dinastia", "Stele reale della vittoria", "Granito", "Contiene un testo reale che menziona un gruppo chiamato Israele nel contesto di una campagna in Canaan."],
+    senet: ["Dal Medio Regno antico in poi", "Gioco da tavolo", "Legno, avorio, pietra e altri materiali", "Gioco popolare con significati sociali e simbolici, presente in seguito anche in contesti funerari."],
+    palette: ["Naqada II/III", "Tavolozza cerimoniale o cosmetica", "Pietra", "Le scene aiutano a studiare simboli, autorità, caccia ed espressione artistica prima della formazione dello Stato."]
+  },
+  de: {
+    djoser: ["Altes Reich – 3. Dynastie", "Königlicher Pyramidenkomplex", "Kalkstein", "Ein früher Meilenstein in der Entwicklung des Pyramidenbaus und der Steinarchitektur."],
+    khufu: ["Altes Reich – 4. Dynastie", "Königliche Grabpyramide", "Kalkstein und Granit", "Die größte Pyramide von Gizeh; sie bezeugt große organisatorische und technische Fähigkeiten."],
+    bent: ["Altes Reich – 4. Dynastie", "Königliche Grabpyramide", "Kalkstein", "Zeigt eine wichtige Experimentierphase bei der Entwicklung der echten Pyramide."],
+    "abu-simbel": ["Neues Reich – 19. Dynastie", "Zwei Felsentempel", "Sandstein", "Teil des königlichen und religiösen Programms Ramses’ II. in Nubien."],
+    red: ["Altes Reich – 4. Dynastie", "Königliche Grabpyramide", "Kalkstein", "Mit Snofru in Dahschur verbunden; eine der frühesten fertiggestellten glattseitigen Pyramiden."],
+    sphinx: ["Altes Reich – 4. Dynastie", "Monumentale Königsstatue im Zusammenhang mit einem Grabkomplex", "Natürlicher Kalksteinfels", "Verbindet einen Löwenkörper mit einem Menschenkopf; meist Chephren zugeordnet, die Datierung bleibt diskutiert."],
+    narmer: ["Frühdynastische Zeit – 1. Dynastie", "Zeremonielle/königliche Palette", "Schiefer", "Zeigt königliche Szenen und Symbole zur Vereinigung der beiden Länder und den Anfängen des Staates."],
+    rosetta: ["Ptolemäische Zeit – 196 v. Chr.", "Königlicher Erlass in drei Schriftsystemen", "Granodiorit", "Die parallelen Texte in Hieroglyphen, Demotisch und Griechisch ermöglichten die Entzifferung der Hieroglyphen."],
+    "tut-mask": ["Neues Reich – 18. Dynastie", "Totenmaske", "Gold und verschiedene Einlagen", "Teil der Grabausstattung des Königs; zeigt Goldschmiedekunst und funeräre Symbolik."],
+    senusret: ["Mittleres Reich – 12. Dynastie", "Königsstatue", "Kalkstein", "Veranschaulicht die königliche Bildtradition des Mittleren Reiches und die Kontinuität königlicher Symbole."],
+    "hat-shepsut": ["Neues Reich – 18. Dynastie", "Königliche und religiöse Statuen", "Verschiedene Gesteine", "Zeigt die Vielfalt der offiziellen Darstellungen Hatschepsuts, von osirischen Formen bis zur Königsgestalt."],
+    canopic: ["Verschiedene Epochen des alten Ägypten", "Gefäße zur Aufbewahrung der inneren Organe bei der Mumifizierung", "Stein, Alabaster, Keramik und weitere Materialien", "Mit dem Schutz der Organe und den vier Horussöhnen verbunden; die Formen veränderten sich im Lauf der Zeit."],
+    shabti: ["Mittleres Reich und spätere Zeit", "Symbolische Grabfiguren", "Holz, Stein, Keramik und Fayence", "Sollten Aufgaben für den Verstorbenen im Jenseits übernehmen; Anzahl und Inschriften variierten."],
+    merneptah: ["Neues Reich – 19. Dynastie", "Königliche Siegesstele", "Granit", "Enthält einen Königstext, der im Zusammenhang eines Feldzugs in Kanaan eine Gruppe namens Israel erwähnt."],
+    senet: ["Seit dem Alten Reich", "Brettspiel", "Holz, Elfenbein, Stein und weitere Materialien", "Ein beliebtes Spiel mit sozialen und symbolischen Bedeutungen, später auch in funerären Zusammenhängen."],
+    palette: ["Naqada II/III", "Zeremonielle oder kosmetische Palette", "Stein", "Die Darstellungen helfen, Symbole, Herrschaft, Jagd und Kunst vor der Staatsbildung zu untersuchen."]
+  },
+  ru: {
+    djoser: ["Древнее царство — III династия", "Царский погребальный комплекс", "Известняк", "Ранний важный этап развития строительства пирамид и каменной архитектуры."],
+    khufu: ["Древнее царство — IV династия", "Царская погребальная пирамида", "Известняк и гранит", "Крупнейшая пирамида Гизы, свидетельствующая о высоком уровне организации и инженерного мастерства."],
+    bent: ["Древнее царство — IV династия", "Царская погребальная пирамида", "Известняк", "Отражает важный экспериментальный этап развития пирамид с гладкими гранями."],
+    "abu-simbel": ["Новое царство — XIX династия", "Два высеченных в скале храма", "Песчаник", "Связаны с царской и религиозной программой Рамсеса II в Нубии."],
+    red: ["Древнее царство — IV династия", "Царская погребальная пирамида", "Известняк", "Связана с Снофру в Дахшуре; одна из первых завершённых пирамид с гладкими гранями."],
+    sphinx: ["Древнее царство — IV династия", "Монументальная царская статуя при погребальном комплексе", "Естественная известняковая скала", "Сочетает тело льва и человеческую голову; обычно связывается с Хефреном, хотя датировка обсуждается."],
+    narmer: ["Раннединастический период — I династия", "Церемониальная/царская палетка", "Сланец", "Изображает царские сцены и символы объединения Двух земель и становления государства."],
+    rosetta: ["Птолемеевский период — 196 г. до н. э.", "Царский указ в трёх системах письма", "Гранодиорит", "Параллельные тексты на иероглифическом, демотическом и греческом языках помогли расшифровать иероглифы."],
+    "tut-mask": ["Новое царство — XVIII династия", "Погребальная маска", "Золото и различные вставки", "Часть погребального убранства царя, демонстрирующая мастерство ювелиров и погребальную символику."],
+    senusret: ["Среднее царство — XII династия", "Царская статуя", "Известняк", "Отражает традиции царского изображения Среднего царства и преемственность символов власти."],
+    "hat-shepsut": ["Новое царство — XVIII династия", "Царские и религиозные статуи", "Различные породы камня", "Показывает разнообразие официальных образов Хатшепсут — от осирических форм до образа царя."],
+    canopic: ["Разные периоды Древнего Египта", "Сосуды для хранения внутренних органов при мумификации", "Камень, алебастр, керамика и другие материалы", "Связаны с защитой органов и четырьмя сыновьями Хора; формы менялись со временем."],
+    shabti: ["Среднее царство и позднее", "Символические погребальные фигурки", "Дерево, камень, керамика и фаянс", "Считалось, что они выполняют работу за умершего в загробном мире; число и надписи различались."],
+    merneptah: ["Новое царство — XIX династия", "Царская победная стела", "Гранит", "Содержит царский текст с упоминанием группы под названием Израиль в контексте похода в Ханаан."],
+    senet: ["Начиная с Древнего царства", "Настольная игра", "Дерево, слоновая кость, камень и другие материалы", "Популярная игра с социальным и символическим значением, позднее встречавшаяся и в погребальном контексте."],
+    palette: ["Накада II/III", "Церемониальная или косметическая палетка", "Камень", "Изображения помогают изучать символику, власть, охоту и искусство до образования государства."]
+  },
+  ja: {
+    djoser: ["古王国時代・第3王朝", "王の葬祭複合施設", "石灰岩", "ピラミッド建設と石造建築の発展初期を示す重要な遺構です。"],
+    khufu: ["古王国時代・第4王朝", "王の葬祭ピラミッド", "石灰岩と花崗岩", "ギザ最大のピラミッドで、高度な組織力と工学技術を示しています。"],
+    bent: ["古王国時代・第4王朝", "王の葬祭ピラミッド", "石灰岩", "真正ピラミッドの形が発展する過程の重要な試行段階を示します。"],
+    "abu-simbel": ["新王国時代・第19王朝", "岩を掘って造られた二つの神殿", "砂岩", "ヌビアにおけるラムセス2世の王権・宗教政策に関連しています。"],
+    red: ["古王国時代・第4王朝", "王の葬祭ピラミッド", "石灰岩", "ダハシュールのスネフェル王に関連し、完成した滑らかな側面を持つ初期のピラミッドの一つです。"],
+    sphinx: ["古王国時代・第4王朝", "葬祭複合施設に関連する巨大な王の像", "自然の石灰岩", "ライオンの胴体と人間の頭部を組み合わせています。一般にカフラー王と関連づけられますが、年代には議論があります。"],
+    narmer: ["初期王朝時代・第1王朝", "儀式用・王権を示すパレット", "片岩", "上下エジプトの統一と国家形成の始まりに関係する王の図像や象徴を描いています。"],
+    rosetta: ["プトレマイオス朝時代・紀元前196年", "三つの文字体系で記された王の布告", "花崗閃緑岩", "ヒエログリフ、民衆文字、ギリシャ語の対照文がヒエログリフ解読に役立ちました。"],
+    "tut-mask": ["新王国時代・第18王朝", "葬祭用マスク", "金と各種象嵌材料", "王の埋葬品の一部で、金工技術と葬祭の象徴性を示しています。"],
+    senusret: ["中王国時代・第12王朝", "王の像", "石灰岩", "中王国時代の王の肖像表現と王権の象徴の継続を示します。"],
+    "hat-shepsut": ["新王国時代・第18王朝", "王権・宗教に関わる彫像", "さまざまな石材", "オシリス風の姿から王としての表現まで、ハトシェプストの公式な図像の多様性を示します。"],
+    canopic: ["古代エジプトのさまざまな時代", "ミイラ作りで内臓を保存する容器", "石、アラバスター、土器など", "内臓の保護とホルスの四人の息子に関連し、形は時代とともに変化しました。"],
+    shabti: ["中王国時代以降", "象徴的な葬祭用小像", "木、石、土器、ファイアンス", "死者に代わって来世で労働すると信じられ、数や銘文はさまざまでした。"],
+    merneptah: ["新王国時代・第19王朝", "王の戦勝碑", "花崗岩", "カナン遠征の文脈で「イスラエル」と呼ばれる集団に言及する王の碑文を含みます。"],
+    senet: ["古王国時代以降", "盤上ゲーム", "木、象牙、石など", "社会的・象徴的な意味を持つ人気の遊戯で、後には葬祭の場面にも登場します。"],
+    palette: ["ナカダII・III期", "儀式用または化粧用パレット", "石", "国家成立以前の象徴、権力、狩猟、芸術表現を研究する手がかりになります。"]
+  },
+  zh: {
+    djoser: ["古王国时期—第三王朝", "皇家陵葬建筑群", "石灰岩", "体现了金字塔建造和石建筑发展的早期重要阶段。"],
+    khufu: ["古王国时期—第四王朝", "皇家陵墓金字塔", "石灰岩和花岗岩", "吉萨规模最大的金字塔，体现了高水平的组织和工程能力。"],
+    bent: ["古王国时期—第四王朝", "皇家陵墓金字塔", "石灰岩", "展示了真正金字塔形制发展过程中的重要试验阶段。"],
+    "abu-simbel": ["新王国时期—第十九王朝", "两座岩窟神庙", "砂岩", "与拉美西斯二世在努比亚推行的王权和宗教工程有关。"],
+    red: ["古王国时期—第四王朝", "皇家陵墓金字塔", "石灰岩", "与达舒尔的斯尼夫鲁有关，是较早建成的平滑侧面金字塔之一。"],
+    sphinx: ["古王国时期—第四王朝", "与陵葬建筑群相关的巨型王室雕像", "天然石灰岩基岩", "结合了狮身和人头，通常与卡夫拉有关，但具体年代仍有学术讨论。"],
+    narmer: ["早王朝时期—第一王朝", "礼仪或王权调色板", "片岩", "呈现与上下埃及统一及早期国家形成有关的王室图像和象征。"],
+    rosetta: ["托勒密时期—公元前196年", "以三种文字书写的王室诏令", "花岗闪长岩", "其象形文字、世俗体和希腊文对照文本帮助学者释读象形文字。"],
+    "tut-mask": ["新王国时期—第十八王朝", "葬礼面具", "黄金及多种镶嵌材料", "属于国王葬具的一部分，体现了金工技艺和葬礼象征意义。"],
+    senusret: ["中王国时期—第十二王朝", "王室雕像", "石灰岩", "体现了中王国时期的王室肖像传统及王权象征的延续。"],
+    "hat-shepsut": ["新王国时期—第十八王朝", "王室及宗教雕像", "多种石材", "展现了哈特谢普苏特官方形象的多样性，从奥西里斯式形象到国王形象。"],
+    canopic: ["古埃及多个时期", "木乃伊制作时保存内脏的容器", "石材、雪花石膏、陶器等", "与保护内脏及荷鲁斯四子有关，器形随时代而变化。"],
+    shabti: ["中王国时期及以后", "象征性的葬礼俑", "木材、石材、陶器和彩釉陶", "人们相信它们会在来世代替死者劳动，数量和铭文各不相同。"],
+    merneptah: ["新王国时期—第十九王朝", "王室胜利石碑", "花岗岩", "碑文在迦南军事行动的背景下提及一个名为以色列的群体。"],
+    senet: ["古王国时期起", "棋盘游戏", "木材、象牙、石材等", "一种具有社会和象征意义的流行游戏，后来也出现在葬礼场景中。"],
+    palette: ["纳卡达二期/三期", "礼仪或化妆调色板", "石材", "其图像有助于研究国家形成前的象征、权力、狩猎和艺术表达。"]
+  }
+} as const;
+
 const quiz = [
   {
     question: "أي موقع يرتبط بهرم زوسر المدرج؟",
@@ -536,8 +684,8 @@ export function HeritageExperiences() {
                 </div>
                 <div className="athara-compare-grid">
                   {[first, second].map((item, index) => (
-                    <article key={index}><span className="athara-compare-mark">{index === 0 ? "𓏞" : "𓊹"}</span><h3>{item.name}</h3><dl>
-                      <dt>{c.period}</dt><dd>{item.period}</dd><dt>{c.function}</dt><dd>{item.function}</dd><dt>{c.material}</dt><dd>{item.material}</dd><dt>{c.significance}</dt><dd>{item.significance}</dd>
+                    <article key={index}><span className="athara-compare-mark">{index === 0 ? "𓏞" : "𓊹"}</span><h3>{optionNames?.artifacts[item.id as keyof typeof researcherOptionNames.fr.artifacts] ?? item.name}</h3><dl>
+                      <dt>{c.period}</dt><dd>{localizedArtifactDetails[lang as keyof typeof localizedArtifactDetails]?.[item.id as keyof typeof localizedArtifactDetails.en]?.[0] ?? item.period}</dd><dt>{c.function}</dt><dd>{localizedArtifactDetails[lang as keyof typeof localizedArtifactDetails]?.[item.id as keyof typeof localizedArtifactDetails.en]?.[1] ?? item.function}</dd><dt>{c.material}</dt><dd>{localizedArtifactDetails[lang as keyof typeof localizedArtifactDetails]?.[item.id as keyof typeof localizedArtifactDetails.en]?.[2] ?? item.material}</dd><dt>{c.significance}</dt><dd>{localizedArtifactDetails[lang as keyof typeof localizedArtifactDetails]?.[item.id as keyof typeof localizedArtifactDetails.en]?.[3] ?? item.significance}</dd>
                     </dl></article>
                   ))}
                 </div>
