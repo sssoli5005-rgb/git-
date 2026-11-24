@@ -142,12 +142,14 @@ const features: {
   titleKey: keyof typeof heritageExperienceCopy.ar;
   descKey: keyof typeof heritageExperienceCopy.ar;
   art: string;
+  image: string;
+  imageCredit: string;
 }[] = [
-  { id: "timeline", icon: Clock3, symbol: "𓆣", titleKey: "timeline", descKey: "timelineDesc", art: "timeline" },
-  { id: "map", icon: MapPinned, symbol: "𓊹", titleKey: "map", descKey: "mapDesc", art: "map" },
-  { id: "compare", icon: GitCompareArrows, symbol: "𓏞", titleKey: "compare", descKey: "compareDesc", art: "compare" },
-  { id: "notebook", icon: NotebookPen, symbol: "𓏛", titleKey: "notebook", descKey: "notebookDesc", art: "notebook" },
-  { id: "detective", icon: SearchCheck, symbol: "𓂀", titleKey: "detective", descKey: "detectiveDesc", art: "detective" },
+  { id: "timeline", icon: Clock3, symbol: "𓆣", titleKey: "timeline", descKey: "timelineDesc", art: "timeline", image: "https://egymonuments.gov.eg/media/1215/pyramidsss.jpg?crop=0.26411576704545459%2C0.10024175153587361%2C0.025656960227272589%2C0.22526225483213388&cropmode=percentage&height=423&rnd=134159695430000000&width=645", imageCredit: "وزارة السياحة والآثار المصرية" },
+  { id: "map", icon: MapPinned, symbol: "𓊹", titleKey: "map", descKey: "mapDesc", art: "map", image: "/heritage-experiences/map.svg", imageCredit: "خريطة استكشافية من أثَرة" },
+  { id: "compare", icon: GitCompareArrows, symbol: "𓏞", titleKey: "compare", descKey: "compareDesc", art: "compare", image: "https://collectionapi.metmuseum.org/api/collection/v1/iiif/590699/1421657/main-image", imageCredit: "The Metropolitan Museum of Art · Open Access" },
+  { id: "notebook", icon: NotebookPen, symbol: "𓏛", titleKey: "notebook", descKey: "notebookDesc", art: "notebook", image: "https://images.metmuseum.org/CRDImages/eg/original/DP292923.jpg", imageCredit: "The Metropolitan Museum of Art · Open Access" },
+  { id: "detective", icon: SearchCheck, symbol: "𓂀", titleKey: "detective", descKey: "detectiveDesc", art: "detective", image: "https://images.metmuseum.org/CRDImages/eg/original/DP-35426-001.jpg", imageCredit: "The Metropolitan Museum of Art · Open Access" },
 ];
 
 export function HeritageExperiences() {
@@ -201,7 +203,7 @@ export function HeritageExperiences() {
         </div>
         <div className="athara-experience-grid">
           {features.map(({ id, icon: Icon, symbol, titleKey, descKey, art }) => (
-            <button key={id} type="button" className={`athara-experience-card athara-art-${art}`} onClick={() => setActive(id)}>
+            <button key={id} type="button" className={`athara-experience-card athara-art-${art}`} style={{ backgroundImage: `linear-gradient(180deg, rgba(12,9,6,.12), rgba(12,9,6,.88)), url("${image}")` }} onClick={() => setActive(id)} aria-label={`${c[titleKey]} — ${c[descKey]}`}>
               <span className="athara-experience-symbol" aria-hidden="true">{symbol}</span>
               <span className="athara-experience-icon"><Icon size={20} /></span>
               <span className="athara-experience-copy">
