@@ -96,6 +96,31 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      // Start the remote image connections early so CSS background images do not
+      // have to wait for a separate DNS/TLS connection after the stylesheet loads.
+      { rel: "preconnect", href: "https://commons.wikimedia.org" },
+      { rel: "preconnect", href: "https://smarthistory.org" },
+      { rel: "preconnect", href: "https://static.wixstatic.com" },
+      { rel: "preconnect", href: "https://www.ansa.it" },
+      { rel: "preconnect", href: "https://i0.wp.com" },
+      { rel: "preconnect", href: "https://the-past.com" },
+      // These are the first backgrounds users encounter (login + welcome cards).
+      // Preloading them lets the browser fetch them while the app stylesheet is parsed.
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Pyramids%20of%20Giza.jpg?width=2000",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Pyramids%20of%20Giza.jpg?width=1200",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Sphinx%20and%20pyramids%20of%20Giza%20panorama.jpg?width=1200",
+      },
       {
         rel: "stylesheet",
         href: appCss,
