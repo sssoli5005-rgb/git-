@@ -687,7 +687,10 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
     },
   ];
   return (
-    <div className="egypt-app min-h-screen" dir={lang === "ar" ? "rtl" : "ltr"}>
+    <>
+      <link rel="preload" as="image" href="https://www.ansa.it/webimages/news_base/2025/6/14/1ab3286f8d80d2a4527088c1c40ae267.jpg" fetchPriority="high" />
+      <link rel="preload" as="image" href="https://static.wixstatic.com/media/8a573e_d67f6bd991dc474991dd41b038075fad~mv2.png/v1/fill/w_980%2Ch_1307%2Cal_c%2Cq_90%2Cusm_0.66_1.00_0.01%2Cenc_avif%2Cquality_auto/8a573e_d67f6bd991dc474991dd41b038075fad~mv2.png" fetchPriority="high" />
+      <div className="egypt-app min-h-screen" dir={lang === "ar" ? "rtl" : "ltr"}>
       <header className="egypt-header">
         <a href="/" className="egypt-brand" aria-label={c.home}>
           <span className="egypt-brand-mark">𓂀</span>
@@ -1259,6 +1262,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
