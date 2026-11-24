@@ -2982,7 +2982,7 @@ export const heritageExperienceCopy = {
   ar: {
     toolsEyebrow: "مساحة الباحث",
     toolsTitle: "اكتشف الآثار بطريقة مختلفة",
-    toolsText: "ثلاث أدوات تفاعلية للتعلّم والمقارنة وتسجيل اكتشافاتك.",
+    toolsText: "خمس تجارب أثرية تفاعلية تجمع بين الاستكشاف البصري والبحث والمقارنة وتوثيق اكتشافاتك.",
     timeline: "رحلة عبر الزمن",
     timelineDesc: "شاهد محطات من تاريخ المواقع الأثرية عبر العصور.",
     map: "خريطة مصر القديمة",
@@ -3035,7 +3035,7 @@ export const heritageExperienceCopy = {
   en: {
     toolsEyebrow: "RESEARCHER'S WORKSPACE",
     toolsTitle: "Explore heritage in a different way",
-    toolsText: "Three interactive tools for learning, comparing and recording discoveries.",
+    toolsText: "Five interactive heritage experiences for visual exploration, research, comparison and recording discoveries.",
     timeline: "Journey Through Time",
     timelineDesc: "Explore milestones in the history of archaeological sites.",
     map: "Ancient Egypt Map",
