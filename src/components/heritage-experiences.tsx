@@ -260,15 +260,13 @@ export function HeritageExperiences() {
                     </select>
                   </label>
                 </div>
-                <div className="athara-schematic-map" role="img" aria-label={c.map}>
-                  <div className="athara-map-nile" />
+                <div className="athara-schematic-map" role="group" aria-label={c.map}>
                   <span className="athara-map-compass">𓇳 N</span>
                   {visibleSites.map((site) => (
                     <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={site.name}>
                       <span>𓊹</span><small>{site.name}</small>
                     </button>
                   ))}
-                  <span className="athara-map-label">وادي النيل</span>
                 </div>
                 <div className="athara-map-detail">
                   <Landmark size={20} /><div><strong>{currentSite.name}</strong><p>{currentSite.region} · {c[currentSite.period as keyof typeof c]}</p><small>{currentSite.events[0].detail}</small></div>
