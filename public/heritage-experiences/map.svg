@@ -1,1 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-label="map"><defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#59401f"/><stop offset="1" stop-color="#17110b"/></linearGradient><linearGradient id="gold" x2="1" y2="1"><stop stop-color="#f0d18a"/><stop offset="1" stop-color="#a66d2b"/></linearGradient><pattern id="stars" width="65" height="65" patternUnits="userSpaceOnUse"><circle cx="12" cy="13" r="2" fill="#e5c47f" opacity=".35"/><path d="M42 34v10m-5-5h10" stroke="#e5c47f" opacity=".22"/></pattern></defs><rect width="900" height="520" fill="url(#bg)"/><rect width="900" height="520" fill="url(#stars)"/><path d="M0 420 Q220 370 450 420 T900 410 V520 H0Z" fill="#0c0906" opacity=".65"/><g fill="none" stroke="url(#gold)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d='M435 55c-25 85 45 95 8 170s45 100 0 230' stroke='#6db0b0' stroke-width='24' opacity='.75'/><path d='M435 55c-25 85 45 95 8 170s45 100 0 230' stroke='#b9dddd' stroke-width='4' stroke-dasharray='9 14'/><path d='M130 160l90-60 120 35 95-50 120 50 105-25 90 65-20 210-110 45-125-35-120 45-125-55-120 15z' stroke-dasharray='7 12' opacity='.45'/><g fill='#e6c17a'><circle cx='520' cy='120' r='13'/><circle cx='460' cy='260' r='13'/><circle cx='420' cy='390' r='13'/><circle cx='495' cy='310' r='13'/></g></g><g fill="#e8c77e" opacity=".85"><circle cx="780" cy="85" r="34" fill="none" stroke="#e8c77e" stroke-width="3"/><path d="M780 40v-16m0 122v-16m-45-45h-16m122 0h-16" stroke-width="3"/></g><path d="M40 470H860" stroke="#c79a51" stroke-width="2" opacity=".45"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" role="img" aria-label="Simple map of ancient Egypt showing the Nile, Delta and archaeological regions">
+<defs>
+ <pattern id="paper" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="4" cy="6" r="1" fill="#8e744c" opacity=".12"/></pattern>
+</defs>
+<rect width="800" height="560" rx="18" fill="#eee1c2"/>
+<rect width="800" height="560" rx="18" fill="url(#paper)"/>
+<path d="M245 48 L545 48 L585 118 L560 188 L525 250 L500 335 L490 505 L310 505 L300 410 L280 330 L250 255 L225 175 L225 95 Z" fill="#d7c49a" stroke="#96794d" stroke-width="5" stroke-linejoin="round"/>
+<path d="M400 112 L280 45 L250 25 L385 78 L400 112 L520 32 L555 20 L425 85 Z" fill="#d7c49a" stroke="#96794d" stroke-width="4" stroke-linejoin="round"/>
+<path d="M400 112 C390 165 420 210 400 265 S390 370 400 440 L400 500" fill="none" stroke="#4d9692" stroke-width="23" stroke-linecap="round"/>
+<path d="M400 112 L330 57 M400 112 L470 52 M400 112 L275 38 M400 112 L525 28" fill="none" stroke="#4d9692" stroke-width="12" stroke-linecap="round"/>
+<path d="M400 112 C390 165 420 210 400 265 S390 370 400 440 L400 500" fill="none" stroke="#d7efdc" stroke-width="3" stroke-dasharray="7 11" stroke-linecap="round"/>
+<g fill="#8b744f" font-family="Arial,sans-serif" font-size="20" font-weight="600">
+ <text x="400" y="20" text-anchor="middle">دلتا النيل</text>
+ <text x="435" y="310">وادي النيل</text>
+ <text x="400" y="540" text-anchor="middle" font-size="16">مصر القديمة · خريطة مبسطة للمواقع الأثرية</text>
+</g>
+<g fill="none" stroke="#b99b68" stroke-width="2" opacity=".8">
+ <path d="M115 150h90M595 150h90M115 410h90M595 410h90"/>
+ <circle cx="155" cy="150" r="28"/><circle cx="645" cy="150" r="28"/>
+ <circle cx="155" cy="410" r="28"/><circle cx="645" cy="410" r="28"/>
+</g>
+</svg>
