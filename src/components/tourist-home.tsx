@@ -6,7 +6,6 @@ import {
   X,
   Menu,
   MessageCircle,
-  ChevronLeft,
   ShieldCheck,
   ScanLine,
 } from "lucide-react";
