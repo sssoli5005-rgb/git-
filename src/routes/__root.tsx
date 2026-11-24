@@ -121,6 +121,32 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         as: "image",
         href: "https://commons.wikimedia.org/wiki/Special:FilePath/Sphinx%20and%20pyramids%20of%20Giza%20panorama.jpg?width=1200",
       },
+      // Preload the five heritage experience card backgrounds during initial page load.
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Columns_in_Karnak_Temple.JPG?width=1400",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Giza-pyramids.JPG?width=1400",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Grand_Egyptian_Museum_-_Inscribed_stela_and_statue.jpg?width=1400",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Egyptian_Papyrus%2C_Hieratic_document_of_mid_2000_BC_Wellcome_L0015015.jpg?width=1400",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://commons.wikimedia.org/wiki/Special:FilePath/Pyramid_of_Djoser_excavation.jpg?width=1400",
+      },
       {
         rel: "stylesheet",
         href: appCss,
