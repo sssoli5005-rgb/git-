@@ -59,6 +59,18 @@ type ScanArtifactCandidate = {
 export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
   const { lang } = useLanguage();
   const c = tourismCopy[lang as keyof typeof tourismCopy] ?? tourismCopy.en;
+  const homeInfoCopyMap = {
+    ar: { aboutTitle: "معلومات عن الموقع", aboutDesc: "اضغط لعرض نبذة عن أثَرة", howTitle: "كيفية الاستخدام", howDesc: "اضغط لعرض خطوات استخدام الشات والماسح", welcome: "مرحبًا بيك في أثَرة", aboutHeading: "اكتشف حكاية كل أثر", aboutBody: "أثَرة دليل سياحي رقمي بيساعدك تتعرف على الآثار المصرية والكتابة الهيروغليفية والأماكن التاريخية والحكايات المرتبطة بيها. اسأل المرشد أو استخدم الماسح لتحليل صورة، مع توضيح الفرق بين المعلومات الموثقة والروايات والأساطير." },
+    en: { aboutTitle: "About the website", aboutDesc: "Tap to learn about ATHARA", howTitle: "How to use", howDesc: "Tap to see how to use chat and scanner", welcome: "WELCOME TO ATHARA", aboutHeading: "Discover the story behind every artifact", aboutBody: "ATHARA is a digital heritage guide to Egyptian artifacts, hieroglyphs, historic places and their stories. Ask the guide or scan an image, with a clear distinction between documented facts, interpretations and legends." },
+    fr: { aboutTitle: "À propos du site", aboutDesc: "Touchez pour découvrir ATHARA", howTitle: "Mode d’emploi", howDesc: "Touchez pour découvrir le chat et le scanner", welcome: "BIENVENUE SUR ATHARA", aboutHeading: "Découvrez l’histoire de chaque artefact", aboutBody: "ATHARA est un guide numérique du patrimoine égyptien : artefacts, hiéroglyphes, sites historiques et récits associés. Posez vos questions au guide ou analysez une image, en distinguant les faits documentés, les interprétations et les légendes." },
+    es: { aboutTitle: "Acerca del sitio", aboutDesc: "Pulsa para conocer ATHARA", howTitle: "Cómo se usa", howDesc: "Pulsa para ver cómo usar el chat y el escáner", welcome: "BIENVENIDO A ATHARA", aboutHeading: "Descubre la historia detrás de cada pieza", aboutBody: "ATHARA es una guía digital del patrimonio egipcio: artefactos, jeroglíficos, lugares históricos y sus relatos. Pregunta a la guía o analiza una imagen, distinguiendo los hechos documentados, las interpretaciones y las leyendas." },
+    it: { aboutTitle: "Informazioni sul sito", aboutDesc: "Tocca per conoscere ATHARA", howTitle: "Come si usa", howDesc: "Tocca per scoprire come usare chat e scanner", welcome: "BENVENUTO SU ATHARA", aboutHeading: "Scopri la storia dietro ogni reperto", aboutBody: "ATHARA è una guida digitale al patrimonio egizio: reperti, geroglifici, luoghi storici e le loro storie. Puoi chiedere alla guida o analizzare un’immagine, distinguendo i fatti documentati, le interpretazioni e le leggende." },
+    de: { aboutTitle: "Über die Website", aboutDesc: "Tippe hier, um ATHARA kennenzulernen", howTitle: "So funktioniert es", howDesc: "Tippe hier für eine Anleitung zu Chat und Scanner", welcome: "WILLKOMMEN BEI ATHARA", aboutHeading: "Entdecke die Geschichte hinter jedem Artefakt", aboutBody: "ATHARA ist ein digitaler Führer zum ägyptischen Kulturerbe mit Artefakten, Hieroglyphen, historischen Orten und ihren Geschichten. Stelle dem Guide Fragen oder analysiere ein Bild – mit klarer Unterscheidung zwischen belegten Fakten, Interpretationen und Legenden." },
+    ru: { aboutTitle: "О сайте", aboutDesc: "Нажмите, чтобы узнать об ATHARA", howTitle: "Как пользоваться", howDesc: "Нажмите, чтобы узнать, как пользоваться чатом и сканером", welcome: "ДОБРО ПОЖАЛОВАТЬ В ATHARA", aboutHeading: "Откройте историю каждого артефакта", aboutBody: "ATHARA — цифровой путеводитель по египетскому наследию: артефактам, иероглифам, историческим местам и связанным с ними историям. Задавайте вопросы гиду или анализируйте изображения, различая подтверждённые факты, интерпретации и легенды." },
+    ja: { aboutTitle: "サイトについて", aboutDesc: "タップしてATHARAについて見る", howTitle: "使い方", howDesc: "タップしてチャットとスキャナーの使い方を見る", welcome: "ATHARAへようこそ", aboutHeading: "すべての遺物に秘められた物語を発見", aboutBody: "ATHARAは、エジプトの遺物、ヒエログリフ、史跡、それらにまつわる物語を紹介するデジタルガイドです。ガイドに質問したり、画像をスキャンしたりできます。記録された事実、解釈、伝説を明確に区別して紹介します。" },
+    zh: { aboutTitle: "关于网站", aboutDesc: "点击了解 ATHARA", howTitle: "使用方法", howDesc: "点击查看聊天和扫描器的使用方法", welcome: "欢迎来到 ATHARA", aboutHeading: "探索每件文物背后的故事", aboutBody: "ATHARA 是一款埃及文化遗产数字导览，介绍埃及文物、象形文字、历史遗址及相关故事。你可以向导览助手提问或扫描图片；我们会明确区分有文献依据的事实、解释和传说。" }
+  } as const;
+  const homeInfoCopy = homeInfoCopyMap[lang as keyof typeof homeInfoCopyMap] ?? homeInfoCopyMap.en;
   const scanCopy = scannerCopy[lang];
   const resultCopy = scannerResultCopy[lang];
   const wikipediaUnavailableCopy = scannerWikipediaCopy[lang];
@@ -727,9 +739,9 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           >
             <span className="egypt-quick-symbol">𓂀</span>
             <span className="egypt-quick-copy">
-              <strong>{lang === "ar" ? "معلومات عن الموقع" : "About the website"}</strong>
+              <strong>{homeInfoCopy.aboutTitle}</strong>
               <small>
-                {lang === "ar" ? "اضغط لعرض نبذة عن أثَرة" : "Tap to learn about ATHARA"}
+                {homeInfoCopy.aboutDesc}
               </small>
             </span>
             <span className="egypt-quick-arrow">{openInfo === "about" ? "−" : "+"}</span>
@@ -745,11 +757,9 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
           >
             <span className="egypt-quick-symbol">𓏏</span>
             <span className="egypt-quick-copy">
-              <strong>{lang === "ar" ? "كيفية الاستخدام" : "How to use"}</strong>
+              <strong>{homeInfoCopy.howTitle}</strong>
               <small>
-                {lang === "ar"
-                  ? "اضغط لعرض خطوات استخدام الشات والماسح"
-                  : "Tap to see how to use chat and scanner"}
+                {homeInfoCopy.howDesc}
               </small>
             </span>
             <span className="egypt-quick-arrow">{openInfo === "how" ? "−" : "+"}</span>
@@ -783,15 +793,13 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
         {openInfo === "about" && (
           <section id="about" className="egypt-about-section">
             <span className="egypt-eyebrow">
-              {lang === "ar" ? "مرحبًا بيك في أثَرة" : "WELCOME TO ATHARA"}
+              {homeInfoCopy.welcome}
             </span>
             <h1>
-              {lang === "ar" ? "اكتشف حكاية كل أثر" : "Discover the story behind every artifact"}
+              {homeInfoCopy.aboutHeading}
             </h1>
             <p>
-              {lang === "ar"
-                ? "أثَرة دليل سياحي رقمي بيساعدك تتعرف على الآثار المصرية والكتابة الهيروغليفية والأماكن التاريخية والحكايات المرتبطة بيها. اسأل المرشد أو استخدم الماسح لتحليل صورة، مع توضيح الفرق بين المعلومات الموثقة والروايات والأساطير."
-                : "ATHARA is a digital heritage guide to Egyptian artifacts, hieroglyphs, historic places and their stories. Ask the guide or scan an image, with a clear distinction between documented facts, interpretations and legends."}
+              {homeInfoCopy.aboutBody}
             </p>
           </section>
         )}
