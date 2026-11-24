@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Camera,
-  BookOpen,
   Landmark,
-  Sparkles,
   Image as ImageIcon,
   X,
   Menu,
   MessageCircle,
-  ChevronLeft,
   ShieldCheck,
   ScanLine,
 } from "lucide-react";
 import { useLanguage } from "@/i18n/language";
+import { HeritageExperiences } from "./heritage-experiences";
 import {
   scannerCopy,
   scannerResultCopy,
@@ -687,8 +685,6 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
       desc: c.hieroglyphsDesc,
       symbol: "𓋹",
     },
-    { id: "stories", icon: BookOpen, title: c.stories, desc: c.storiesDesc, symbol: "𓏏" },
-    { id: "heritage", icon: Sparkles, title: c.heritage, desc: c.heritageDesc, symbol: "𓆣" },
   ];
   return (
     <div className="egypt-app min-h-screen" dir={lang === "ar" ? "rtl" : "ltr"}>
@@ -825,6 +821,7 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
               </button>
             ))}
           </div>
+          <HeritageExperiences />
         </section>
       </main>
 
