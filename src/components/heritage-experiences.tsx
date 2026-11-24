@@ -476,7 +476,7 @@ export function HeritageExperiences() {
               <div className="athara-feature-content">
                 <label className="athara-field-label">{c.chooseSite}
                   <select value={selectedSite} onChange={(event) => setSelectedSite(event.target.value)}>
-                    {sites.map((site) => <option key={site.id} value={site.id}>{optionNames?.sites[site.id as keyof typeof optionNames.sites] ?? site.name}</option>)}
+                    {sites.map((site) => <option key={site.id} value={site.id}>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</option>)}
                   </select>
                 </label>
                 <div className="athara-timeline-hero">
@@ -510,8 +510,8 @@ export function HeritageExperiences() {
                 <div className="athara-schematic-map" role="group" aria-label={c.map}>
                   <span className="athara-map-compass">𓇳 N</span>
                   {visibleSites.map((site) => (
-                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={site.name}>
-                      <span>𓊹</span><small>{site.name}</small>
+                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}>
+                      <span>𓊹</span><small>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</small>
                     </button>
                   ))}
                 </div>
@@ -526,7 +526,7 @@ export function HeritageExperiences() {
               <div className="athara-feature-content">
                 <p className="athara-feature-note">{c.compareHint}</p>
                 <div className="athara-compare-selects">
-                  <label className="athara-field-label">{c.firstArtifact}<select value={firstArtifact} onChange={(event) => setFirstArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{optionNames?.artifacts[item.id as keyof typeof optionNames.artifacts] ?? item.name}</option>)}</select></label>
+                  <label className="athara-field-label">{c.firstArtifact}<select value={firstArtifact} onChange={(event) => setFirstArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{optionNames?.artifacts[item.id as keyof typeof researcherOptionNames.fr.artifacts] ?? item.name}</option>)}</select></label>
                   <label className="athara-field-label">{c.secondArtifact}<select value={secondArtifact} onChange={(event) => setSecondArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
                 </div>
                 <div className="athara-compare-grid">
