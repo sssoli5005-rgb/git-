@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Camera,
-  BookOpen,
   Landmark,
-  Sparkles,
   Image as ImageIcon,
   X,
   Menu,
