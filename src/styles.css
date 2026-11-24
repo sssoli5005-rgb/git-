@@ -1536,11 +1536,12 @@ body {
 .athara-experiences-heading p { color: #b7a486; font-size: 13px; }
 .athara-experience-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .athara-experience-card {
-  min-height: 230px; position: relative; display: flex; align-items: flex-end; overflow: hidden;
-  text-align: start; padding: 18px; border: 1px solid #96703c66; border-radius: 3px;
+  min-height: 245px; position: relative; display: flex; align-items: flex-end; overflow: hidden;
+  text-align: start; padding: 20px; border: 1px solid #96703c88; border-radius: 3px;
   background-color: #21170d; background-position: center; background-size: cover; transition: transform .2s,border-color .2s;
 }
-.athara-experience-card:before { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#100b0820 0%,#100b0870 42%,#100b08f2 100%); }
+.athara-experience-card:before { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#100b0808 0%,#100b0830 38%,#100b08e8 100%); }
+.athara-experience-card:after { content:""; position:absolute; inset:9px; border:1px solid #e4c17b55; pointer-events:none; }
 .athara-experience-card:hover { transform: translateY(-4px); border-color:#d3a44f; }
 .athara-experience-card > * { position:relative; z-index:1; }
 .athara-art-timeline { background-image:url("/heritage-experiences/timeline.svg"); }
@@ -1548,10 +1549,10 @@ body {
 .athara-art-compare { background-image:url("/heritage-experiences/compare.svg"); }
 .athara-art-notebook { background-image:url("/heritage-experiences/notebook.svg"); }
 .athara-art-detective { background-image:url("/heritage-experiences/detective.svg"); }
-.athara-experience-symbol { position:absolute!important; top:14px; inset-inline-start:17px; color:#f0d18a; font-size:35px; text-shadow:0 2px 8px #000; }
+.athara-experience-symbol { position:absolute!important; top:20px; inset-inline-start:22px; color:#f6d78f; font-size:42px; line-height:1; text-shadow:0 3px 12px #000,0 0 18px #000; background:#1a120bbd; border:1px solid #d4a65388; width:58px; height:58px; display:grid; place-items:center; border-radius:50%; }
 .athara-experience-icon { position:absolute!important; top:18px; inset-inline-end:18px; color:#f0d18a; }
 .athara-experience-copy { display:block; }
-.athara-experience-copy strong { display:block; color:#fff0d2; font-size:17px; font-weight:800; }
+.athara-experience-copy strong { display:block; color:#fff0d2; font-size:18px; font-weight:800; text-shadow:0 2px 8px #000; }
 .athara-experience-copy small { display:block; color:#e0cba8; font-size:12px; line-height:1.8; margin-top:5px; max-width:95%; }
 .athara-experience-open { display:flex; align-items:center; gap:5px; color:#f1c66e; font-size:12px; margin-top:12px; }
 .athara-feature-backdrop { position:fixed; inset:0; z-index:80; background:#050403d9; display:grid; place-items:center; padding:18px; }
@@ -1575,13 +1576,14 @@ body {
 .athara-timeline-event small { color:#d4a95f; }
 .athara-timeline-event h3 { font-size:16px; margin:3px 0; }
 .athara-timeline-event p,.athara-compare-grid dd,.athara-map-detail small { color:#c0ae8d; font-size:13px; line-height:1.9; }
-.athara-schematic-map { position:relative; height:390px; overflow:hidden; border:1px solid #94703d; background:radial-gradient(ellipse at 55% 55%,#3b321f,#1a170f 75%); }
-.athara-map-nile { position:absolute; left:43%; top:-15%; height:130%; width:15%; background:#367f82aa; clip-path:polygon(40% 0,65% 0,57% 35%,100% 52%,63% 100%,35% 100%,48% 58%,0 45%); filter:drop-shadow(0 0 10px #65a8a8); }
+.athara-schematic-map { position:relative; height:450px; overflow:hidden; border:2px solid #94703d; background:#b89b68 url("/heritage-experiences/map.svg") center/cover no-repeat; box-shadow:inset 0 0 45px #21170d66,0 10px 28px #0005; }
+.athara-schematic-map:after { content:""; position:absolute; inset:8px; border:1px solid #694b2b99; pointer-events:none; }
+.athara-map-nile { display:none; }
 .athara-map-compass { position:absolute; top:15px; inset-inline-end:18px; color:#e9c77f; font-size:20px; }
-.athara-map-pin { position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center; gap:5px; color:#e8c77e; background:#17110be8; border:1px solid #99723d; padding:5px 8px; font-size:11px; white-space:nowrap; }
+.athara-map-pin { position:absolute; z-index:2; transform:translate(-50%,-50%); display:flex; align-items:center; gap:5px; color:#fff0cf; background:#24180deF; border:2px solid #d3a653; padding:6px 9px; font-size:11px; white-space:nowrap; box-shadow:0 3px 12px #0008; }
 .athara-map-pin span { font-size:18px; }
-.athara-map-pin.is-selected { background:#7a5426; border-color:#f0cf86; box-shadow:0 0 0 3px #d4a65333; }
-.athara-map-label { position:absolute; left:45%; top:47%; color:#c5e1d7; font-size:11px; transform:rotate(-76deg); }
+.athara-map-pin.is-selected { background:#765025; border-color:#fff0b8; box-shadow:0 0 0 4px #d4a65366,0 4px 16px #0009; }
+.athara-map-label { display:none; }
 .athara-map-detail { display:flex; gap:12px; align-items:flex-start; padding:15px; margin-top:14px; border:1px solid #96703c66; background:#1b140d; }
 .athara-map-detail > svg { color:#d9ad62; flex:none; }
 .athara-map-detail p { color:#d4a95f; font-size:12px; margin:3px 0; }
@@ -1622,7 +1624,7 @@ body {
   .athara-feature-backdrop { padding:8px; }
   .athara-feature-panel { max-height:94vh; }
   .athara-feature-content { padding:14px; }
-  .athara-schematic-map { height:320px; }
+  .athara-schematic-map { height:350px; background-position:center; }
 }
 @media(max-width:430px) {
   .athara-experience-grid { grid-template-columns:1fr; }
