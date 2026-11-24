@@ -1265,4 +1265,4 @@ export function TouristHome({ onStartChat }: { onStartChat: () => void }) {
       </div>
     </>
   );
-}\n
+}
