@@ -91,6 +91,11 @@ const researcherLocaleCopy = {
 
 
 const researcherOptionNames = {
+  en: {
+    sites: { giza: "Giza Plateau", karnak: "Karnak Temple Complex", "abu-simbel": "Abu Simbel", saqqara: "Saqqara", hawara: "Pyramid of Lahun", tanis: "Tanis (San el-Hagar)", "luxor-west-bank": "West Bank of Luxor", "deir-el-medina": "Deir el-Medina", edfu: "Temple of Edfu", philae: "Philae Island", dahshur: "Dahshur", abydos: "Abydos", amarna: "Tell el-Amarna", memphis: "Memphis" },
+    artifacts: { djoser: "Step Pyramid of Djoser", khufu: "Pyramid of Khufu", bent: "Bent Pyramid", "abu-simbel": "Temples of Abu Simbel", red: "Red Pyramid", sphinx: "Great Sphinx of Giza", narmer: "Narmer Palette", rosetta: "Rosetta Stone", "tut-mask": "Golden Mask of Tutankhamun", senusret: "Standing Statue of Senusret I", "hat-shepsut": "Statues of Hatshepsut", canopic: "Canopic Jars", shabti: "Shabti Figures", merneptah: "Merneptah Stele", senet: "Senet Game", palette: "Predynastic Hunters Palette" }
+  },
+
   fr: {
     sites: { giza: "Plateau de Gizeh", karnak: "Complexe de Karnak", "abu-simbel": "Abou Simbel", saqqara: "Saqqarah", hawara: "Pyramide de Lahun", tanis: "Tanis (San el-Hagar)", "luxor-west-bank": "Rive ouest de Louxor", "deir-el-medina": "Deir el-Médineh", edfu: "Temple d’Edfou", philae: "Île de Philae", dahshur: "Dahchour", abydos: "Abydos", amarna: "Tell el-Amarna", memphis: "Memphis" },
     artifacts: { djoser: "Pyramide à degrés de Djéser", khufu: "Pyramide de Khéops", bent: "Pyramide rhomboïdale", "abu-simbel": "Temples d’Abou Simbel", red: "Pyramide rouge", sphinx: "Grand Sphinx de Gizeh", narmer: "Palette de Narmer", rosetta: "Pierre de Rosette", "tut-mask": "Masque d’or de Toutânkhamon", senusret: "Statue de Sésostris Ier", "hat-shepsut": "Statues d’Hatchepsout", canopic: "Vases canopes", shabti: "Ouch virtuels", merneptah: "Stèle de Mérenptah", senet: "Jeu de senet", palette: "Palette des chasseurs prédynastiques" }
@@ -527,7 +532,7 @@ export function HeritageExperiences() {
                 <p className="athara-feature-note">{c.compareHint}</p>
                 <div className="athara-compare-selects">
                   <label className="athara-field-label">{c.firstArtifact}<select value={firstArtifact} onChange={(event) => setFirstArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{optionNames?.artifacts[item.id as keyof typeof researcherOptionNames.fr.artifacts] ?? item.name}</option>)}</select></label>
-                  <label className="athara-field-label">{c.secondArtifact}<select value={secondArtifact} onChange={(event) => setSecondArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                  <label className="athara-field-label">{c.secondArtifact}<select value={secondArtifact} onChange={(event) => setSecondArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{optionNames?.artifacts[item.id as keyof typeof researcherOptionNames.fr.artifacts] ?? item.name}</option>)}</select></label>
                 </div>
                 <div className="athara-compare-grid">
                   {[first, second].map((item, index) => (
