@@ -14,6 +14,81 @@ import {
 import { useLanguage } from "@/i18n/language";
 import { heritageExperienceCopy } from "@/i18n/translations";
 
+const researcherLocaleCopy = {
+  ar: heritageExperienceCopy.ar,
+  en: heritageExperienceCopy.en,
+  fr: {
+    toolsEyebrow: "ESPACE DU CHERCHEUR", toolsTitle: "Explorez le patrimoine autrement", toolsText: "Cinq expériences interactives pour rechercher, explorer, comparer et consigner vos découvertes.",
+    timeline: "Voyage dans le temps", timelineDesc: "Découvrez les grandes étapes de l’histoire des sites archéologiques.", map: "Carte de l’Égypte ancienne", mapDesc: "Explorez les sites archéologiques liés aux époques et aux souverains.",
+    compare: "Comparer deux objets", compareDesc: "Découvrez les ressemblances et les différences entre des objets égyptiens.", notebook: "Carnet de l’archéologue", notebookDesc: "Enregistrez vos notes et découvertes sur cet appareil.", detective: "Enquête archéologique", detectiveDesc: "Résolvez des énigmes historiques et rassemblez vous-même les indices.",
+    close: "Fermer", chooseSite: "Choisir un site historique", timelineNote: "Les dates sont approximatives et peuvent varier selon les références.", mapNote: "Carte schématique d’exploration, sans échelle ni fonction de navigation.",
+    allPeriods: "Toutes les périodes", oldKingdom: "Ancien Empire", middleKingdom: "Moyen Empire", newKingdom: "Nouvel Empire", latePeriods: "Basse époque",
+    site: "Site", period: "Période", function: "Fonction", material: "Matériau", significance: "Importance", firstArtifact: "Premier objet", secondArtifact: "Deuxième objet", chooseArtifact: "Choisir un objet", compareHint: "Choisissez deux objets pour les comparer.",
+    noteTitle: "Titre de la note", notePlaceholder: "Écrivez une note ou un détail à retenir sur un objet…", saveNote: "Enregistrer la note", savedNotes: "Notes enregistrées", noNotes: "Aucune note enregistrée pour le moment.", deleteNote: "Supprimer", localStorageNote: "Vos notes sont enregistrées uniquement dans ce navigateur sur cet appareil.",
+    startQuiz: "Commencer le défi", nextQuestion: "Question suivante", showResult: "Voir le résultat", restartQuiz: "Recommencer", correct: "Bonne réponse !", incorrect: "Ce n’est pas la bonne réponse.", score: "Votre score", question: "Question", of: "sur", timelineEvents: "Étapes chronologiques", explore: "Explorer", yearsAgo: "av. J.-C.", answerExplanation: "Explication"
+  },
+  es: {
+    toolsEyebrow: "ESPACIO DEL INVESTIGADOR", toolsTitle: "Explora el patrimonio de otra manera", toolsText: "Cinco experiencias interactivas para investigar, explorar, comparar y registrar descubrimientos.",
+    timeline: "Viaje a través del tiempo", timelineDesc: "Descubre momentos clave en la historia de los sitios arqueológicos.", map: "Mapa del Antiguo Egipto", mapDesc: "Explora sitios arqueológicos vinculados a épocas y gobernantes.",
+    compare: "Comparar dos piezas", compareDesc: "Descubre similitudes y diferencias entre piezas egipcias.", notebook: "Cuaderno del arqueólogo", notebookDesc: "Guarda tus notas y descubrimientos en este dispositivo.", detective: "Detective arqueológico", detectiveDesc: "Resuelve enigmas históricos y reúne las pruebas por tu cuenta.",
+    close: "Cerrar", chooseSite: "Elige un sitio histórico", timelineNote: "Las fechas son aproximadas y los detalles pueden variar según las fuentes.", mapNote: "Mapa esquemático de exploración; no está a escala ni sirve para navegación.",
+    allPeriods: "Todos los períodos", oldKingdom: "Reino Antiguo", middleKingdom: "Reino Medio", newKingdom: "Reino Nuevo", latePeriods: "Períodos tardíos",
+    site: "Sitio", period: "Período", function: "Función", material: "Material", significance: "Importancia", firstArtifact: "Primera pieza", secondArtifact: "Segunda pieza", chooseArtifact: "Elige una pieza", compareHint: "Elige dos piezas para compararlas.",
+    noteTitle: "Título de la nota", notePlaceholder: "Escribe una nota o algo que quieras recordar sobre una pieza…", saveNote: "Guardar nota", savedNotes: "Notas guardadas", noNotes: "Todavía no hay notas guardadas.", deleteNote: "Eliminar", localStorageNote: "Tus notas se guardan solo en este navegador y dispositivo.",
+    startQuiz: "Comenzar el reto", nextQuestion: "Siguiente pregunta", showResult: "Ver resultado", restartQuiz: "Volver a intentarlo", correct: "¡Respuesta correcta!", incorrect: "Esa no es la respuesta correcta.", score: "Tu puntuación", question: "Pregunta", of: "de", timelineEvents: "Hitos cronológicos", explore: "Explorar", yearsAgo: "a. C.", answerExplanation: "Explicación"
+  },
+  it: {
+    toolsEyebrow: "SPAZIO DEL RICERCATORE", toolsTitle: "Esplora il patrimonio in modo diverso", toolsText: "Cinque esperienze interattive per ricercare, esplorare, confrontare e registrare le tue scoperte.",
+    timeline: "Viaggio nel tempo", timelineDesc: "Scopri le tappe della storia dei siti archeologici.", map: "Mappa dell’antico Egitto", mapDesc: "Esplora i siti archeologici legati alle epoche e ai sovrani.",
+    compare: "Confronta due reperti", compareDesc: "Scopri somiglianze e differenze tra reperti egizi.", notebook: "Taccuino dell’archeologo", notebookDesc: "Salva appunti e scoperte su questo dispositivo.", detective: "Investigatore archeologico", detectiveDesc: "Risolvi enigmi storici e raccogli personalmente gli indizi.",
+    close: "Chiudi", chooseSite: "Scegli un sito storico", timelineNote: "Le date sono approssimative e possono variare secondo le fonti.", mapNote: "Mappa schematica esplorativa, non in scala e non adatta alla navigazione.",
+    allPeriods: "Tutti i periodi", oldKingdom: "Antico Regno", middleKingdom: "Medio Regno", newKingdom: "Nuovo Regno", latePeriods: "Epoche tarde",
+    site: "Sito", period: "Periodo", function: "Funzione", material: "Materiale", significance: "Importanza", firstArtifact: "Primo reperto", secondArtifact: "Secondo reperto", chooseArtifact: "Scegli un reperto", compareHint: "Scegli due reperti da confrontare.",
+    noteTitle: "Titolo della nota", notePlaceholder: "Scrivi una nota o ciò che vuoi ricordare su un reperto…", saveNote: "Salva nota", savedNotes: "Note salvate", noNotes: "Non ci sono ancora note salvate.", deleteNote: "Elimina", localStorageNote: "Le note vengono salvate solo in questo browser su questo dispositivo.",
+    startQuiz: "Inizia la sfida", nextQuestion: "Domanda successiva", showResult: "Mostra risultato", restartQuiz: "Riprova", correct: "Risposta corretta!", incorrect: "La risposta non è corretta.", score: "Il tuo punteggio", question: "Domanda", of: "di", timelineEvents: "Tappe cronologiche", explore: "Esplora", yearsAgo: "a.C.", answerExplanation: "Spiegazione"
+  },
+  de: {
+    toolsEyebrow: "ARBEITSBEREICH FÜR FORSCHENDE", toolsTitle: "Kulturerbe auf neue Weise entdecken", toolsText: "Fünf interaktive Erlebnisse zum Recherchieren, Erkunden, Vergleichen und Festhalten von Entdeckungen.",
+    timeline: "Reise durch die Zeit", timelineDesc: "Entdecke wichtige Stationen in der Geschichte archäologischer Stätten.", map: "Karte des alten Ägypten", mapDesc: "Erkunde archäologische Stätten aus verschiedenen Epochen und Herrscherzeiten.",
+    compare: "Zwei Artefakte vergleichen", compareDesc: "Entdecke Gemeinsamkeiten und Unterschiede ägyptischer Artefakte.", notebook: "Archäologisches Notizbuch", notebookDesc: "Speichere deine Notizen und Entdeckungen auf diesem Gerät.", detective: "Archäologie-Detektiv", detectiveDesc: "Löse historische Rätsel und sammle selbst die Hinweise.",
+    close: "Schließen", chooseSite: "Historische Stätte auswählen", timelineNote: "Die Daten sind ungefähre Angaben und können je nach Quelle abweichen.", mapNote: "Schematische Erkundungskarte, nicht maßstabsgetreu und nicht zur Navigation geeignet.",
+    allPeriods: "Alle Epochen", oldKingdom: "Altes Reich", middleKingdom: "Mittleres Reich", newKingdom: "Neues Reich", latePeriods: "Spätzeit",
+    site: "Stätte", period: "Epoche", function: "Funktion", material: "Material", significance: "Bedeutung", firstArtifact: "Erstes Artefakt", secondArtifact: "Zweites Artefakt", chooseArtifact: "Artefakt auswählen", compareHint: "Wähle zwei Artefakte zum Vergleichen aus.",
+    noteTitle: "Notiztitel", notePlaceholder: "Schreibe eine Notiz oder etwas, das du zu einem Artefakt behalten möchtest …", saveNote: "Notiz speichern", savedNotes: "Gespeicherte Notizen", noNotes: "Noch keine Notizen gespeichert.", deleteNote: "Löschen", localStorageNote: "Deine Notizen werden nur in diesem Browser auf diesem Gerät gespeichert.",
+    startQuiz: "Herausforderung starten", nextQuestion: "Nächste Frage", showResult: "Ergebnis anzeigen", restartQuiz: "Erneut versuchen", correct: "Richtige Antwort!", incorrect: "Das ist leider nicht richtig.", score: "Dein Ergebnis", question: "Frage", of: "von", timelineEvents: "Zeitliche Stationen", explore: "Erkunden", yearsAgo: "v. Chr.", answerExplanation: "Erklärung"
+  },
+  ru: {
+    toolsEyebrow: "РАБОЧЕЕ ПРОСТРАНСТВО ИССЛЕДОВАТЕЛЯ", toolsTitle: "Откройте наследие по-новому", toolsText: "Пять интерактивных возможностей для исследования, сравнения и записи открытий.",
+    timeline: "Путешествие во времени", timelineDesc: "Узнайте об основных этапах истории археологических памятников.", map: "Карта Древнего Египта", mapDesc: "Исследуйте археологические памятники разных эпох и правителей.",
+    compare: "Сравнить два артефакта", compareDesc: "Найдите сходства и различия между египетскими артефактами.", notebook: "Записная книжка археолога", notebookDesc: "Сохраняйте заметки и открытия на этом устройстве.", detective: "Археологический детектив", detectiveDesc: "Решайте исторические загадки и самостоятельно собирайте улики.",
+    close: "Закрыть", chooseSite: "Выберите историческое место", timelineNote: "Даты приблизительные; сведения могут различаться в источниках.", mapNote: "Схематическая карта для изучения, не в масштабе и не для навигации.",
+    allPeriods: "Все периоды", oldKingdom: "Древнее царство", middleKingdom: "Среднее царство", newKingdom: "Новое царство", latePeriods: "Поздний период",
+    site: "Место", period: "Период", function: "Назначение", material: "Материал", significance: "Значение", firstArtifact: "Первый артефакт", secondArtifact: "Второй артефакт", chooseArtifact: "Выберите артефакт", compareHint: "Выберите два артефакта для сравнения.",
+    noteTitle: "Название заметки", notePlaceholder: "Запишите заметку или то, что хотите запомнить об артефакте…", saveNote: "Сохранить заметку", savedNotes: "Сохранённые заметки", noNotes: "Пока нет сохранённых заметок.", deleteNote: "Удалить", localStorageNote: "Заметки сохраняются только в этом браузере на этом устройстве.",
+    startQuiz: "Начать испытание", nextQuestion: "Следующий вопрос", showResult: "Показать результат", restartQuiz: "Повторить", correct: "Правильный ответ!", incorrect: "Это неверный ответ.", score: "Ваш результат", question: "Вопрос", of: "из", timelineEvents: "Хронологические этапы", explore: "Изучить", yearsAgo: "до н. э.", answerExplanation: "Объяснение"
+  },
+  ja: {
+    toolsEyebrow: "研究者ワークスペース", toolsTitle: "新しい視点でエジプトの遺産を探る", toolsText: "調査、探索、比較、発見の記録ができる5つのインタラクティブ体験。",
+    timeline: "時をたどる旅", timelineDesc: "遺跡の歴史における主な出来事をたどります。", map: "古代エジプト地図", mapDesc: "時代や王に関連する遺跡を探索します。",
+    compare: "2つの遺物を比較", compareDesc: "エジプトの遺物の共通点と違いを見つけます。", notebook: "考古学者のノート", notebookDesc: "メモや発見をこの端末に保存します。", detective: "考古学ミステリー", detectiveDesc: "歴史の謎を解き、自分で証拠を集めます。",
+    close: "閉じる", chooseSite: "史跡を選択", timelineNote: "年代は概算で、資料によって異なる場合があります。", mapNote: "探索用の概略図です。縮尺やナビゲーションには対応していません。",
+    allPeriods: "すべての時代", oldKingdom: "古王国", middleKingdom: "中王国", newKingdom: "新王国", latePeriods: "末期王朝時代",
+    site: "遺跡", period: "時代", function: "用途", material: "素材", significance: "重要性", firstArtifact: "1つ目の遺物", secondArtifact: "2つ目の遺物", chooseArtifact: "遺物を選択", compareHint: "比較する2つの遺物を選んでください。",
+    noteTitle: "メモのタイトル", notePlaceholder: "遺物についてのメモや覚えておきたいことを入力…", saveNote: "メモを保存", savedNotes: "保存したメモ", noNotes: "保存されたメモはありません。", deleteNote: "削除", localStorageNote: "メモはこの端末のこのブラウザーにのみ保存されます。",
+    startQuiz: "チャレンジ開始", nextQuestion: "次の質問", showResult: "結果を見る", restartQuiz: "もう一度挑戦", correct: "正解です！", incorrect: "正解ではありません。", score: "スコア", question: "質問", of: "/", timelineEvents: "年表の出来事", explore: "探索", yearsAgo: "紀元前", answerExplanation: "解説"
+  },
+  zh: {
+    toolsEyebrow: "研究者工作区", toolsTitle: "以不同方式探索埃及遗产", toolsText: "五种互动体验，帮助你研究、探索、比较并记录发现。",
+    timeline: "穿越时光", timelineDesc: "了解考古遗址历史上的重要阶段。", map: "古埃及地图", mapDesc: "探索与不同时代和统治者相关的考古遗址。",
+    compare: "比较两件文物", compareDesc: "发现埃及文物之间的相似之处和差异。", notebook: "考古学家笔记本", notebookDesc: "在此设备上保存笔记和发现。", detective: "考古侦探", detectiveDesc: "破解历史谜题并亲自收集线索。",
+    close: "关闭", chooseSite: "选择历史遗址", timelineNote: "年代为约数，不同资料中的具体年代可能有所差异。", mapNote: "此为探索示意图，并非比例地图或导航地图。",
+    allPeriods: "所有时期", oldKingdom: "古王国时期", middleKingdom: "中王国时期", newKingdom: "新王国时期", latePeriods: "后期王朝时期",
+    site: "遗址", period: "时期", function: "用途", material: "材料", significance: "重要性", firstArtifact: "第一件文物", secondArtifact: "第二件文物", chooseArtifact: "选择文物", compareHint: "选择两件文物进行比较。",
+    noteTitle: "笔记标题", notePlaceholder: "写下关于文物的笔记或想记住的内容……", saveNote: "保存笔记", savedNotes: "已保存的笔记", noNotes: "暂时没有保存的笔记。", deleteNote: "删除", localStorageNote: "笔记仅保存在此设备的此浏览器中。",
+    startQuiz: "开始挑战", nextQuestion: "下一题", showResult: "查看结果", restartQuiz: "重新挑战", correct: "回答正确！", incorrect: "答案不正确。", score: "你的得分", question: "问题", of: "/", timelineEvents: "时间节点", explore: "探索", yearsAgo: "公元前", answerExplanation: "解析"
+  }
+} as const;
+
 type FeatureId = "timeline" | "map" | "compare" | "notebook" | "detective";
 
 type Site = {
@@ -291,7 +366,7 @@ const features: {
 
 export function HeritageExperiences() {
   const { lang } = useLanguage();
-  const c = heritageExperienceCopy[lang === "ar" ? "ar" : "en"];
+  const c = researcherLocaleCopy[lang] ?? researcherLocaleCopy.en;
   const [active, setActive] = useState<FeatureId | null>(null);
   const [selectedSite, setSelectedSite] = useState(sites[0].id);
   const [period, setPeriod] = useState("all");
