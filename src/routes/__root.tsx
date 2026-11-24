@@ -121,6 +121,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         as: "image",
         href: "https://commons.wikimedia.org/wiki/Special:FilePath/Sphinx%20and%20pyramids%20of%20Giza%20panorama.jpg?width=1200",
       },
+      // Preload the four actual category-card backgrounds used on the home screen.
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://smarthistory.org/wp-content/uploads/2022/01/18999591014_5a0b6d2b9a_k.jpg",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://static.wixstatic.com/media/8a573e_d67f6bd991dc474991dd41b038075fad~mv2.png/v1/fill/w_980%2Ch_1307%2Cal_c%2Cq_90%2Cusm_0.66_1.00_0.01%2Cenc_avif%2Cquality_auto/8a573e_d67f6bd991dc474991dd41b038075fad~mv2.png",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://www.ansa.it/webimages/news_base/2025/6/14/1ab3286f8d80d2a4527088c1c40ae267.jpg",
+      },
+      {
+        rel: "preload",
+        as: "image",
+        href: "https://i0.wp.com/the-past.com/wp-content/uploads/2025/04/AE148OutandAbout13.jpg?resize=782%2C1024&ssl=1",
+      },
       {
         rel: "stylesheet",
         href: appCss,
