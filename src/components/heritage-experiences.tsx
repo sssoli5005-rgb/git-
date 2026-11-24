@@ -89,6 +89,38 @@ const researcherLocaleCopy = {
   }
 } as const;
 
+
+const researcherOptionNames = {
+  fr: {
+    sites: { giza: "Plateau de Gizeh", karnak: "Complexe de Karnak", "abu-simbel": "Abou Simbel", saqqara: "Saqqarah", hawara: "Pyramide de Lahun", tanis: "Tanis (San el-Hagar)", "luxor-west-bank": "Rive ouest de Louxor", "deir-el-medina": "Deir el-Médineh", edfu: "Temple d’Edfou", philae: "Île de Philae", dahshur: "Dahchour", abydos: "Abydos", amarna: "Tell el-Amarna", memphis: "Memphis" },
+    artifacts: { djoser: "Pyramide à degrés de Djéser", khufu: "Pyramide de Khéops", bent: "Pyramide rhomboïdale", "abu-simbel": "Temples d’Abou Simbel", red: "Pyramide rouge", sphinx: "Grand Sphinx de Gizeh", narmer: "Palette de Narmer", rosetta: "Pierre de Rosette", "tut-mask": "Masque d’or de Toutânkhamon", senusret: "Statue de Sésostris Ier", "hat-shepsut": "Statues d’Hatchepsout", canopic: "Vases canopes", shabti: "Ouch virtuels", merneptah: "Stèle de Mérenptah", senet: "Jeu de senet", palette: "Palette des chasseurs prédynastiques" }
+  },
+  es: {
+    sites: { giza: "Meseta de Guiza", karnak: "Complejo de Karnak", "abu-simbel": "Abu Simbel", saqqara: "Saqqara", hawara: "Pirámide de Lahun", tanis: "Tanis (San el-Hagar)", "luxor-west-bank": "Orilla occidental de Luxor", "deir-el-medina": "Deir el-Medina", edfu: "Templo de Edfu", philae: "Isla de File", dahshur: "Dahshur", abydos: "Abidos", amarna: "Tell el-Amarna", memphis: "Menfis" },
+    artifacts: { djoser: "Pirámide escalonada de Zoser", khufu: "Pirámide de Keops", bent: "Pirámide acodada", "abu-simbel": "Templos de Abu Simbel", red: "Pirámide Roja", sphinx: "Gran Esfinge de Guiza", narmer: "Paleta de Narmer", rosetta: "Piedra de Rosetta", "tut-mask": "Máscara dorada de Tutankamón", senusret: "Estatua de Sesostris I", "hat-shepsut": "Estatuas de Hatshepsut", canopic: "Vasos canopos", shabti: "Ushebtis", merneptah: "Estela de Merenptah", senet: "Juego del senet", palette: "Paleta de los cazadores predinásticos" }
+  },
+  it: {
+    sites: { giza: "Altopiano di Giza", karnak: "Complesso di Karnak", "abu-simbel": "Abu Simbel", saqqara: "Saqqara", hawara: "Piramide di Lahun", tanis: "Tanis (San el-Hagar)", "luxor-west-bank": "Riva occidentale di Luxor", "deir-el-medina": "Deir el-Medina", edfu: "Tempio di Edfu", philae: "Isola di File", dahshur: "Dahshur", abydos: "Abido", amarna: "Tell el-Amarna", memphis: "Menfi" },
+    artifacts: { djoser: "Piramide a gradoni di Djoser", khufu: "Piramide di Cheope", bent: "Piramide romboidale", "abu-simbel": "Templi di Abu Simbel", red: "Piramide Rossa", sphinx: "Grande Sfinge di Giza", narmer: "Tavolozza di Narmer", rosetta: "Stele di Rosetta", "tut-mask": "Maschera d’oro di Tutankhamon", senusret: "Statua di Sesostri I", "hat-shepsut": "Statue di Hatshepsut", canopic: "Vasi canopi", shabti: "Ushabti", merneptah: "Stele di Merenptah", senet: "Gioco del senet", palette: "Tavolozza dei cacciatori predinastici" }
+  },
+  de: {
+    sites: { giza: "Pyramidenfeld von Gizeh", karnak: "Tempelkomplex von Karnak", "abu-simbel": "Abu Simbel", saqqara: "Sakkara", hawara: "Pyramide von Lahun", tanis: "Tanis (San el-Hagar)", "luxor-west-bank": "Westufer von Luxor", "deir-el-medina": "Deir el-Medina", edfu: "Tempel von Edfu", philae: "Insel Philae", dahshur: "Dahschur", abydos: "Abydos", amarna: "Tell el-Amarna", memphis: "Memphis" },
+    artifacts: { djoser: "Stufenpyramide des Djoser", khufu: "Cheops-Pyramide", bent: "Knickpyramide", "abu-simbel": "Tempel von Abu Simbel", red: "Rote Pyramide", sphinx: "Große Sphinx von Gizeh", narmer: "Narmer-Palette", rosetta: "Stein von Rosette", "tut-mask": "Goldmaske des Tutanchamun", senusret: "Statue von Sesostris I.", "hat-shepsut": "Statuen der Hatschepsut", canopic: "Kanopengefäße", shabti: "Uschebtis", merneptah: "Merenptah-Stele", senet: "Senet-Spiel", palette: "Jägerpalette aus vordynastischer Zeit" }
+  },
+  ru: {
+    sites: { giza: "Плато Гиза", karnak: "Храмовый комплекс Карнака", "abu-simbel": "Абу-Симбел", saqqara: "Саккара", hawara: "Пирамида Лахуна", tanis: "Танис (Сан-эль-Хагар)", "luxor-west-bank": "Западный берег Луксора", "deir-el-medina": "Дейр-эль-Медина", edfu: "Храм Эдфу", philae: "Остров Филы", dahshur: "Дахшур", abydos: "Абидос", amarna: "Телль-эль-Амарна", memphis: "Мемфис" },
+    artifacts: { djoser: "Ступенчатая пирамида Джосера", khufu: "Пирамида Хеопса", bent: "Ломаная пирамида", "abu-simbel": "Храмы Абу-Симбела", red: "Красная пирамида", sphinx: "Большой сфинкс Гизы", narmer: "Палетка Нармера", rosetta: "Розеттский камень", "tut-mask": "Золотая маска Тутанхамона", senusret: "Статуя Сенусерта I", "hat-shepsut": "Статуи Хатшепсут", canopic: "Канопы", shabti: "Ушебти", merneptah: "Стела Мернептаха", senet: "Игра сенет", palette: "Палетка охотников додинастического периода" }
+  },
+  ja: {
+    sites: { giza: "ギザ台地", karnak: "カルナック神殿複合体", "abu-simbel": "アブ・シンベル", saqqara: "サッカラ", hawara: "ラフーンのピラミッド", tanis: "タニス（サン・エル・ハガル）", "luxor-west-bank": "ルクソール西岸", "deir-el-medina": "デル・エル・メディーナ", edfu: "エドフ神殿", philae: "フィラエ島", dahshur: "ダハシュール", abydos: "アビドス", amarna: "テル・エル・アマルナ", memphis: "メンフィス" },
+    artifacts: { djoser: "ジェセル王の階段ピラミッド", khufu: "クフ王のピラミッド", bent: "屈折ピラミッド", "abu-simbel": "アブ・シンベル神殿", red: "赤いピラミッド", sphinx: "ギザの大スフィンクス", narmer: "ナルメルのパレット", rosetta: "ロゼッタ・ストーン", "tut-mask": "ツタンカーメンの黄金マスク", senusret: "センウセレト1世立像", "hat-shepsut": "ハトシェプスト女王像", canopic: "カノプス壺", shabti: "シャブティ像", merneptah: "メルエンプタハ碑", senet: "セネト盤ゲーム", palette: "先王朝時代の狩猟者のパレット" }
+  },
+  zh: {
+    sites: { giza: "吉萨高原", karnak: "卡尔纳克神庙群", "abu-simbel": "阿布辛贝", saqqara: "萨卡拉", hawara: "拉洪金字塔", tanis: "塔尼斯（桑埃尔哈贾尔）", "luxor-west-bank": "卢克索西岸", "deir-el-medina": "代尔麦地那", edfu: "埃德富神庙", philae: "菲莱岛", dahshur: "代赫舒尔", abydos: "阿拜多斯", amarna: "阿玛尔纳遗址", memphis: "孟菲斯" },
+    artifacts: { djoser: "左塞尔阶梯金字塔", khufu: "胡夫金字塔", bent: "弯曲金字塔", "abu-simbel": "阿布辛贝神庙", red: "红色金字塔", sphinx: "吉萨大狮身人面像", narmer: "纳尔迈调色板", rosetta: "罗塞塔石碑", "tut-mask": "图坦卡蒙黄金面具", senusret: "辛努塞尔特一世立像", "hat-shepsut": "哈特谢普苏特雕像", canopic: "卡诺卜罐", shabti: "沙布提俑", merneptah: "梅尔内普塔石碑", senet: "塞尼特棋", palette: "前王朝时期猎人调色板" }
+  }
+} as const;
+
 type FeatureId = "timeline" | "map" | "compare" | "notebook" | "detective";
 
 type Site = {
@@ -367,6 +399,7 @@ const features: {
 export function HeritageExperiences() {
   const { lang } = useLanguage();
   const c = researcherLocaleCopy[lang] ?? researcherLocaleCopy.en;
+  const optionNames = researcherOptionNames[lang as keyof typeof researcherOptionNames] ?? null;
   const [active, setActive] = useState<FeatureId | null>(null);
   const [selectedSite, setSelectedSite] = useState(sites[0].id);
   const [period, setPeriod] = useState("all");
@@ -443,7 +476,7 @@ export function HeritageExperiences() {
               <div className="athara-feature-content">
                 <label className="athara-field-label">{c.chooseSite}
                   <select value={selectedSite} onChange={(event) => setSelectedSite(event.target.value)}>
-                    {sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
+                    {sites.map((site) => <option key={site.id} value={site.id}>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</option>)}
                   </select>
                 </label>
                 <div className="athara-timeline-hero">
@@ -477,8 +510,8 @@ export function HeritageExperiences() {
                 <div className="athara-schematic-map" role="group" aria-label={c.map}>
                   <span className="athara-map-compass">𓇳 N</span>
                   {visibleSites.map((site) => (
-                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={site.name}>
-                      <span>𓊹</span><small>{site.name}</small>
+                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}>
+                      <span>𓊹</span><small>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</small>
                     </button>
                   ))}
                 </div>
@@ -493,7 +526,7 @@ export function HeritageExperiences() {
               <div className="athara-feature-content">
                 <p className="athara-feature-note">{c.compareHint}</p>
                 <div className="athara-compare-selects">
-                  <label className="athara-field-label">{c.firstArtifact}<select value={firstArtifact} onChange={(event) => setFirstArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                  <label className="athara-field-label">{c.firstArtifact}<select value={firstArtifact} onChange={(event) => setFirstArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{optionNames?.artifacts[item.id as keyof typeof researcherOptionNames.fr.artifacts] ?? item.name}</option>)}</select></label>
                   <label className="athara-field-label">{c.secondArtifact}<select value={secondArtifact} onChange={(event) => setSecondArtifact(event.target.value)}>{artifacts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
                 </div>
                 <div className="athara-compare-grid">
