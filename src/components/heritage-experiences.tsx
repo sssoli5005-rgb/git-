@@ -144,7 +144,7 @@ const sites: Site[] = [
     name: "هضبة الجيزة",
     period: "oldKingdom",
     region: "الجيزة",
-    x: 70,
+    x: 60,
     y: 31,
     events: [
       { date: "نحو 2670 ق.م", title: "بدايات العمارة الهرمية", detail: "شهد عصر الأسرة الثالثة تطورًا مهمًا في بناء المقابر الملكية، وصولًا إلى هرم زوسر المدرج في سقارة." },
@@ -158,7 +158,7 @@ const sites: Site[] = [
     period: "newKingdom",
     region: "الأقصر",
     x: 55,
-    y: 66,
+    y: 78,
     events: [
       { date: "من الدولة الوسطى", title: "بدايات المجمع", detail: "تعود أقدم المنشآت المعروفة في الكرنك إلى الدولة الوسطى، ثم اتسع المجمع عبر قرون." },
       { date: "الدولة الحديثة", title: "توسعات الملوك", detail: "أضاف ملوك من بينهم تحتمس الثالث وأمنحتب الثالث ورمسيس الثاني منشآت وصروحًا ومسلات." },
@@ -170,8 +170,8 @@ const sites: Site[] = [
     name: "أبو سمبل",
     period: "newKingdom",
     region: "أسوان",
-    x: 38,
-    y: 88,
+    x: 51,
+    y: 96,
     events: [
       { date: "القرن 13 ق.م", title: "النحت في عهد رمسيس الثاني", detail: "نُحت المعبدان في عهد رمسيس الثاني ضمن مشهد ملكي وديني في النوبة." },
       { date: "القرن 19", title: "إعادة التعريف بالموقع", detail: "أصبح الموقع معروفًا على نطاق أوسع للباحثين والرحالة في العصر الحديث." },
@@ -183,8 +183,8 @@ const sites: Site[] = [
     name: "سقارة",
     period: "oldKingdom",
     region: "الجيزة",
-    x: 76,
-    y: 40,
+    x: 61,
+    y: 35,
     events: [
       { date: "نحو 2670 ق.م", title: "هرم زوسر المدرج", detail: "يمثل مجمع زوسر مرحلة محورية في تطور العمارة الحجرية الملكية." },
       { date: "الدولة القديمة", title: "جبانة ملكية ونخبوية", detail: "احتوت سقارة على أهرامات ومصاطب ومقابر لكبار المسؤولين عبر فترات مختلفة." },
@@ -196,8 +196,8 @@ const sites: Site[] = [
     name: "هرم اللاهون",
     period: "middleKingdom",
     region: "الفيوم",
-    x: 63,
-    y: 53,
+    x: 58,
+    y: 49,
     events: [
       { date: "نحو القرن 19 ق.م", title: "بناء هرم سنوسرت الثاني", detail: "ارتبط الموقع بالملك سنوسرت الثاني من الأسرة الثانية عشرة، ويُعد من مواقع الدولة الوسطى المهمة." },
       { date: "الدولة الوسطى", title: "مجمع هرمي ومقابر", detail: "تضم المنطقة آثارًا مرتبطة بالمجمع الجنائزي والجبانة المحيطة به." },
@@ -209,8 +209,8 @@ const sites: Site[] = [
     name: "تانيس (صان الحجر)",
     period: "latePeriods",
     region: "الشرقية",
-    x: 79,
-    y: 20,
+    x: 64,
+    y: 18,
     events: [
       { date: "العصر الانتقالي الثالث", title: "ازدهار تانيس", detail: "أصبحت تانيس مركزًا ملكيًا مهمًا في شمال شرق الدلتا خلال الأسرة الحادية والعشرين." },
       { date: "العصر المتأخر", title: "استمرار الأهمية", detail: "احتفظت المدينة بأهمية دينية وسياسية في فترات لاحقة من تاريخ مصر القديمة." },
@@ -219,7 +219,7 @@ const sites: Site[] = [
   },
 
   {
-    id: "luxor-west-bank", name: "البر الغربي بالأقصر", period: "newKingdom", region: "الأقصر", x: 52, y: 69,
+    id: "luxor-west-bank", name: "البر الغربي بالأقصر", period: "newKingdom", region: "الأقصر", x: 53, y: 78,
     events: [
       { date: "الدولة الحديثة", title: "جبانة الملوك والنبلاء", detail: "اختار ملوك من الأسرات الثامنة عشرة إلى العشرين وادي الملوك لدفنهم، كما انتشرت مقابر كبار المسؤولين في جبانات طيبة." },
       { date: "نحو 1500–1000 ق.م", title: "مقابر ملكية مزخرفة", detail: "حملت جدران مقابر ملكية نصوصًا دينية ومناظر مرتبطة برحلة الشمس والعالم الآخر." },
@@ -227,7 +227,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "deir-el-medina", name: "دير المدينة", period: "newKingdom", region: "الأقصر", x: 49, y: 72,
+    id: "deir-el-medina", name: "دير المدينة", period: "newKingdom", region: "الأقصر", x: 54, y: 81,
     events: [
       { date: "الدولة الحديثة", title: "قرية العمال المهرة", detail: "سكنها حرفيون متخصصون في إعداد وزخرفة المقابر الملكية في وادي الملوك ووادي الملكات." },
       { date: "عصر الرعامسة", title: "وثائق الحياة اليومية", detail: "حفظت البرديات والأوستراكا تفاصيل الأجور والغياب والنزاعات والعلاقات الاجتماعية." },
@@ -235,7 +235,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "edfu", name: "معبد إدفو", period: "latePeriods", region: "أسوان", x: 48, y: 79,
+    id: "edfu", name: "معبد إدفو", period: "latePeriods", region: "أسوان", x: 54, y: 86,
     events: [
       { date: "237 ق.م", title: "بداية البناء البطلمي", detail: "بدأ بناء المعبد في عهد بطليموس الثالث، واستمرت أعماله وإضافاته خلال العصر البطلمي." },
       { date: "العصر البطلمي", title: "معبد حورس", detail: "كرّس المعبد للإله حورس، وتوثق نقوشه الطقوس والأساطير والأعياد." },
@@ -243,7 +243,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "philae", name: "جزيرة فيلة", period: "latePeriods", region: "أسوان", x: 42, y: 91,
+    id: "philae", name: "جزيرة فيلة", period: "latePeriods", region: "أسوان", x: 52, y: 92,
     events: [
       { date: "العصر البطلمي", title: "ازدهار عبادة إيزيس", detail: "أصبحت فيلة مركزًا مهمًا لعبادة إيزيس، وضم مجمعها معابد ومنشآت من عصور متعددة." },
       { date: "العصر الروماني", title: "استمرار الشعائر", detail: "استمرت بعض الطقوس المرتبطة بإيزيس في فيلة خلال العصر الروماني." },
@@ -251,7 +251,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "dahshur", name: "دهشور", period: "oldKingdom", region: "الجيزة", x: 72, y: 38,
+    id: "dahshur", name: "دهشور", period: "oldKingdom", region: "الجيزة", x: 60, y: 39,
     events: [
       { date: "نحو 2600 ق.م", title: "الهرم المنحني", detail: "شيد الملك سنفرو الهرم المنحني، ويظهر تغير زاوية الميل في الجزء العلوي." },
       { date: "نحو 2590 ق.م", title: "الهرم الأحمر", detail: "يرتبط الهرم الأحمر بسنفرو ويعد من أقدم الأهرامات ذات الأوجه المستقيمة المكتملة." },
@@ -259,7 +259,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "abydos", name: "أبيدوس", period: "middleKingdom", region: "سوهاج", x: 54, y: 75,
+    id: "abydos", name: "أبيدوس", period: "middleKingdom", region: "سوهاج", x: 56, y: 70,
     events: [
       { date: "عصور مبكرة", title: "جبانة ملكية مبكرة", detail: "تضم أبيدوس مدافن ملكية من بدايات الأسرات، وأسهمت في فهم نشأة الدولة المصرية." },
       { date: "الدولة الوسطى", title: "مركز عبادة أوزير", detail: "ارتبطت أبيدوس بقوة بعبادة أوزير ورحلات الحج والطقوس الجنائزية." },
@@ -267,7 +267,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "amarna", name: "تل العمارنة", period: "newKingdom", region: "المنيا", x: 61, y: 58,
+    id: "amarna", name: "تل العمارنة", period: "newKingdom", region: "المنيا", x: 57, y: 60,
     events: [
       { date: "نحو 1346 ق.م", title: "تأسيس أخت آتون", detail: "أنشأ أخناتون عاصمة جديدة مكرسة لعبادة آتون في منطقة تل العمارنة." },
       { date: "عهد أخناتون", title: "تحول فني وديني", detail: "شهدت المدينة أساليب فنية ومناظر ملكية مختلفة، إلى جانب تغيرات في الخطاب الديني الرسمي." },
@@ -275,7 +275,7 @@ const sites: Site[] = [
     ]
   },
   {
-    id: "memphis", name: "منف", period: "oldKingdom", region: "الجيزة", x: 73, y: 45,
+    id: "memphis", name: "منف", period: "oldKingdom", region: "الجيزة", x: 60, y: 43,
     events: [
       { date: "بدايات الدولة", title: "مركز سياسي مبكر", detail: "كانت منف من أهم المراكز السياسية والإدارية في مصر القديمة، قرب ملتقى الوادي والدلتا." },
       { date: "الدولة القديمة", title: "مركز ديني وحرفي", detail: "ارتبطت منف بعبادة بتاح وبالورش ومؤسسات ملكية وحرفية واسعة." },
@@ -660,12 +660,19 @@ export function HeritageExperiences() {
                 </div>
                 <div className="athara-schematic-map" role="group" aria-label={c.map}>
                   <span className="athara-map-compass">𓇳 N</span>
-                  {visibleSites.map((site) => (
-                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}>
-                      <span>𓊹</span><small>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</small>
+                  {visibleSites.map((site, index) => (
+                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name} aria-label={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}>
+                      <span>{index + 1}</span><small>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</small>
                     </button>
                   ))}
                 </div>
+                <nav className="athara-map-site-list" aria-label={c.chooseSite}>
+                  {visibleSites.map((site, index) => (
+                    <button key={site.id} type="button" className={selectedSite === site.id ? "is-selected" : ""} onClick={() => setSelectedSite(site.id)}>
+                      <span>{index + 1}</span>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}
+                    </button>
+                  ))}
+                </nav>
                 <div className="athara-map-detail">
                   <Landmark size={20} /><div><strong>{currentSite.name}</strong><p>{currentSite.region} · {c[currentSite.period as keyof typeof c]}</p><small>{currentSite.events[0].detail}</small></div>
                 </div>
