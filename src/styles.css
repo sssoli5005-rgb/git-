@@ -1766,3 +1766,20 @@ body {
   }
   .athara-experience-copy small { font-size: 14px; }
 }
+
+
+/* Clear, navigable ancient Egypt map — isolated to the researcher map panel. */
+.athara-schematic-map { height:470px; background:#e9d8b3 url("/heritage-experiences/map.svg") center / 100% 100% no-repeat; border:2px solid #b28b4d; box-shadow:inset 0 0 24px #3a281333,0 8px 24px #0005; }
+.athara-schematic-map:after { border-color:#8d6a3d99; }
+.athara-map-pin { width:27px; height:27px; padding:0; display:grid; place-items:center; border:2px solid #fff0c9; border-radius:50%; background:#493018; color:#fff2cf; font-size:11px; font-weight:800; box-shadow:0 1px 6px #0009,0 0 0 2px #9d733c; white-space:normal; }
+.athara-map-pin span { font-size:11px; line-height:1; }
+.athara-map-pin small { display:none; position:absolute; inset-inline-start:30px; top:50%; transform:translateY(-50%); padding:6px 9px; border:1px solid #e1bd79; background:#25190f; color:#fff0cf; font-size:12px; box-shadow:0 3px 10px #0008; white-space:nowrap; }
+.athara-map-pin.is-selected { z-index:5; width:32px; height:32px; background:#a87936; border-color:#fff4d7; }
+.athara-map-pin.is-selected small { display:block; }
+.athara-map-site-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:12px; }
+.athara-map-site-list button { display:flex; align-items:center; gap:8px; min-width:0; padding:8px 10px; text-align:start; border:1px solid #96703c66; background:#21170f; color:#ead8b5; font-size:12px; }
+.athara-map-site-list button span { display:grid; place-items:center; flex:0 0 21px; height:21px; border-radius:50%; background:#6b4a22; color:#fff0c8; font-size:10px; }
+.athara-map-site-list button.is-selected { border-color:#e5bf76; background:#4c351c; color:#fff1cf; }
+.athara-map-site-list button.is-selected span { background:#d5a653; color:#24170b; }
+@media(max-width:760px) { .athara-schematic-map { height:390px; background-size:100% 100%; } .athara-map-site-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:430px) { .athara-schematic-map { height:310px; } .athara-map-pin { width:23px; height:23px; } .athara-map-pin.is-selected { width:28px; height:28px; } .athara-map-pin small { font-size:10px; } .athara-map-site-list { grid-template-columns:1fr; } }
