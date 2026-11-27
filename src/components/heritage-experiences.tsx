@@ -537,16 +537,15 @@ const quiz = [
 const features: {
   id: FeatureId;
   icon: typeof Clock3;
-  symbol: string;
   titleKey: keyof typeof heritageExperienceCopy.ar;
   descKey: keyof typeof heritageExperienceCopy.ar;
   art: string;
 }[] = [
-  { id: "timeline", icon: Clock3, symbol: "𓆣", titleKey: "timeline", descKey: "timelineDesc", art: "timeline" },
-  { id: "map", icon: MapPinned, symbol: "𓊹", titleKey: "map", descKey: "mapDesc", art: "map" },
-  { id: "compare", icon: GitCompareArrows, symbol: "𓏞", titleKey: "compare", descKey: "compareDesc", art: "compare" },
-  { id: "notebook", icon: NotebookPen, symbol: "𓏛", titleKey: "notebook", descKey: "notebookDesc", art: "notebook" },
-  { id: "detective", icon: SearchCheck, symbol: "𓂀", titleKey: "detective", descKey: "detectiveDesc", art: "detective" },
+  { id: "timeline", icon: Clock3, titleKey: "timeline", descKey: "timelineDesc", art: "timeline" },
+  { id: "map", icon: MapPinned, titleKey: "map", descKey: "mapDesc", art: "map" },
+  { id: "compare", icon: GitCompareArrows, titleKey: "compare", descKey: "compareDesc", art: "compare" },
+  { id: "notebook", icon: NotebookPen, titleKey: "notebook", descKey: "notebookDesc", art: "notebook" },
+  { id: "detective", icon: SearchCheck, titleKey: "detective", descKey: "detectiveDesc", art: "detective" },
 ];
 
 export function HeritageExperiences() {
@@ -600,10 +599,9 @@ export function HeritageExperiences() {
           <p>{c.toolsText}</p>
         </div>
         <div className="athara-experience-grid">
-          {features.map(({ id, icon: Icon, symbol, titleKey, descKey, art }) => (
-            <button key={id} type="button" className={`athara-experience-card athara-art-${art}`} onClick={() => setActive(id)}>
-              <span className="athara-experience-symbol" aria-hidden="true">{symbol}</span>
-              <span className="athara-experience-icon"><Icon size={20} /></span>
+          {features.map(({ id, icon: Icon, titleKey, descKey, art }) => (
+            <button key={id} type="button" className={`athara-experience-card athara-art-${art}`} onClick={() => setActive(id)} aria-label={`${c[titleKey]}: ${c[descKey]}`}>
+              <span className="athara-experience-icon" aria-hidden="true"><Icon size={24} strokeWidth={1.8} /></span>
               <span className="athara-experience-copy">
                 <strong>{c[titleKey]}</strong>
                 <small>{c[descKey]}</small>
