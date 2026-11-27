@@ -1,11 +1,81 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-label="Illustrated map of ancient Egypt with the Nile Delta, Nile Valley, Sinai and archaeological regions">
-<defs><pattern id="grain" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="4" cy="6" r="1.2" fill="#9b8050" opacity=".16"/><circle cx="19" cy="20" r=".8" fill="#9b8050" opacity=".12"/></pattern><linearGradient id="sand" x2="0" y2="1"><stop stop-color="#f3e6c7"/><stop offset="1" stop-color="#d9c59a"/></linearGradient><linearGradient id="land" x2="1" y2="1"><stop stop-color="#e6d4ac"/><stop offset="1" stop-color="#c9b184"/></linearGradient><linearGradient id="water" x2="0" y2="1"><stop stop-color="#8db9b4"/><stop offset="1" stop-color="#4d8888"/></linearGradient></defs>
-<rect width="1200" height="700" fill="url(#sand)"/><rect width="1200" height="700" fill="url(#grain)"/>
-<path d="M0 0H1200V75Q900 98 650 65Q350 38 0 82Z" fill="#8eb9b7" opacity=".88"/><text x="600" y="42" text-anchor="middle" font-family="Georgia,serif" font-size="24" letter-spacing="5" fill="#315f60">MEDITERRANEAN SEA</text>
-<path d="M1040 170Q1100 260 1060 380T1110 700H1200V140Z" fill="#83b5b1" opacity=".85"/><text x="1100" y="420" transform="rotate(78 1100 420)" text-anchor="middle" font-family="Georgia,serif" font-size="21" letter-spacing="4" fill="#315f60">RED SEA</text>
-<path d="M420 112L560 120L650 158L745 115L830 132L905 205L870 286L825 370L810 475L795 700H500L505 602L470 510L450 395L410 300L385 205Z" fill="url(#land)" stroke="#9c8051" stroke-width="5"/>
-<path d="M830 132L945 165L1010 250L950 320L865 285Z" fill="#e2cfaa" stroke="#9c8051" stroke-width="4"/>
-<path d="M665 178L610 135L540 93L575 80L675 144L740 88L780 99L695 164L665 178Z" fill="#d8c297" stroke="#9c8051" stroke-width="4"/>
-<path d="M666 178C652 238 690 276 672 330S660 420 678 480S680 590 674 700" fill="none" stroke="url(#water)" stroke-width="35" stroke-linecap="round"/><path d="M666 178L570 111M666 178L620 90M666 178L735 100M666 178L790 118" fill="none" stroke="#6ea6a1" stroke-width="20" stroke-linecap="round"/><path d="M666 178C652 238 690 276 672 330S660 420 678 480S680 590 674 700" fill="none" stroke="#dce9d8" stroke-width="3" stroke-dasharray="10 14"/>
-<g font-family="Georgia,serif" fill="#826a45" opacity=".88"><text x="260" y="245" font-size="30" letter-spacing="4">WESTERN DESERT</text><text x="900" y="515" font-size="25" letter-spacing="3">EASTERN DESERT</text><text x="535" y="225" font-size="22" font-weight="bold">NILE DELTA</text><text x="730" y="410" font-size="23" font-weight="bold">NILE VALLEY</text><text x="560" y="665" font-size="22">UPPER EGYPT</text><text x="855" y="210" font-size="20">SINAI</text></g>
-<g fill="none" stroke="#b0915d" stroke-width="2" opacity=".6"><path d="M110 170h130M110 520h130M930 100h90M920 610h120"/><circle cx="175" cy="170" r="35"/><circle cx="175" cy="520" r="35"/><circle cx="980" cy="100" r="30"/><circle cx="1010" cy="610" r="35"/></g><g font-family="Georgia,serif" fill="#806844" opacity=".8"><text x="55" y="650" font-size="18" letter-spacing="3">ANCIENT EGYPT</text><text x="1140" y="675" text-anchor="end" font-size="15">N ↑</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 820" role="img" aria-label="Antique illustrated map of ancient Egypt">
+<defs>
+ <linearGradient id="parchment" x2="0" y2="1"><stop stop-color="#f3e5c3"/><stop offset=".48" stop-color="#ead7ad"/><stop offset="1" stop-color="#d8c092"/></linearGradient>
+ <linearGradient id="river" x2="1" y2="0"><stop stop-color="#548e8a"/><stop offset=".5" stop-color="#8ab5a8"/><stop offset="1" stop-color="#477f7c"/></linearGradient>
+ <linearGradient id="ink" x2="0" y2="1"><stop stop-color="#987548"/><stop offset="1" stop-color="#634a2d"/></linearGradient>
+ <pattern id="papergrain" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M4 8l5-2m17 17l7-2M10 35l4 1" stroke="#987b4e" stroke-width="1" opacity=".13"/><circle cx="30" cy="8" r="1.2" fill="#8c7048" opacity=".18"/><circle cx="8" cy="27" r=".8" fill="#8c7048" opacity=".16"/></pattern>
+ <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><path d="M0 0V10" stroke="#a78a5d" stroke-width="1" opacity=".22"/></pattern>
+ <filter id="softshadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter>
+</defs>
+<!-- aged paper and ornamental cartographic frame -->
+<rect width="1400" height="820" fill="url(#parchment)"/><rect width="1400" height="820" fill="url(#papergrain)"/>
+<rect x="18" y="18" width="1364" height="784" rx="4" fill="none" stroke="#987748" stroke-width="5"/>
+<rect x="31" y="31" width="1338" height="758" fill="none" stroke="#b99a66" stroke-width="1.5"/>
+<path d="M45 65Q700 24 1355 65M45 755Q700 796 1355 755" fill="none" stroke="#b99a66" stroke-width="1" opacity=".65"/>
+<!-- sea at the north and the Red Sea -->
+<path d="M35 35H1365V112Q1120 134 920 109T520 106T35 125Z" fill="#8eb7ad" opacity=".78"/>
+<path d="M35 35H1365V112Q1120 134 920 109T520 106T35 125Z" fill="url(#hatch)"/>
+<g fill="none" stroke="#5d918b" opacity=".55" stroke-width="2"><path d="M70 78q35-18 70 0t70 0t70 0t70 0M890 74q35-18 70 0t70 0t70 0t70 0M1120 95q35-18 70 0t70 0"/></g>
+<path d="M1110 160Q1190 235 1160 330T1200 500T1190 780H1365V145Z" fill="#83b3aa" opacity=".7"/>
+<path d="M1110 160Q1190 235 1160 330T1200 500T1190 780H1365V145Z" fill="url(#hatch)"/>
+<!-- Egypt and desert regions as an old atlas illustration -->
+<path d="M500 128L650 128L742 151L830 119L923 132L1000 177L1050 238L1028 302L990 356L966 424L949 515L935 610L922 780L540 780L535 700L510 618L488 530L457 435L423 347L406 260L432 183Z" fill="#dfc99b" stroke="#947347" stroke-width="5"/>
+<path d="M500 128L650 128L742 151L830 119L923 132L1000 177L1050 238L1028 302L990 356L966 424L949 515L935 610L922 780L540 780L535 700L510 618L488 530L457 435L423 347L406 260L432 183Z" fill="url(#papergrain)" opacity=".8"/>
+<!-- Sinai peninsula -->
+<path d="M1000 177L1110 191L1180 270L1135 345L1050 330L990 270L1050 238Z" fill="#e7d4aa" stroke="#98794b" stroke-width="4"/>
+<path d="M1035 204l85 36-30 18-55-22m-4 58l65 22" fill="none" stroke="#b39768" stroke-width="2" opacity=".7"/>
+<!-- hills and desert contours -->
+<g fill="none" stroke="#b49a6c" stroke-width="2" opacity=".55">
+ <path d="M95 205q120-80 235 0t235 0M70 238q130-75 255 0t250 0M90 550q110-70 220 0t220 0M1050 470q100-60 205 0t100 0M1010 520q110-55 230 0"/>
+ <path d="M170 330l55-38 43 38-43-12zM250 370l70-46 60 46-60-16zM1080 590l60-38 52 38-52-13zM150 660l70-42 60 42-60-14z"/>
+</g>
+<!-- Nile river, delta and branches -->
+<path d="M742 780C738 712 752 655 734 595S716 495 738 432S750 333 735 274S750 194 744 153" fill="none" stroke="#477c79" stroke-width="44" stroke-linecap="round"/>
+<path d="M742 780C738 712 752 655 734 595S716 495 738 432S750 333 735 274S750 194 744 153" fill="none" stroke="url(#river)" stroke-width="34" stroke-linecap="round"/>
+<g fill="none" stroke="#78aaa0" stroke-width="18" stroke-linecap="round">
+ <path d="M744 153L655 112L590 93M744 153L688 91L675 66M744 153L788 92L838 68M744 153L850 112L916 94"/>
+</g>
+<g fill="none" stroke="#d6e4c9" stroke-width="3" stroke-dasharray="11 15" opacity=".9">
+ <path d="M742 780C738 712 752 655 734 595S716 495 738 432S750 333 735 274S750 194 744 153"/>
+ <path d="M744 153L655 112L590 93M744 153L688 91L675 66M744 153L788 92L838 68M744 153L850 112L916 94"/>
+</g>
+<!-- pyramids at Giza -->
+<g stroke="#73552f" stroke-width="3" stroke-linejoin="round">
+ <path d="M820 250l52-100 55 100z" fill="#c5a36a"/><path d="M872 150l0 100" fill="none" opacity=".55"/><path d="M882 250l42-76 45 76z" fill="#d2b47d"/><path d="M924 174v76" fill="none" opacity=".5"/><path d="M790 250l24-48 27 48z" fill="#b8955d"/>
+ <path d="M790 250h180" fill="none" stroke="#96754a" stroke-width="4"/>
+</g>
+<g fill="none" stroke="#80613b" stroke-width="3"><path d="M770 258q34-20 68 0M960 258q24-18 50 0"/><path d="M800 267h170" stroke-width="2"/></g>
+<!-- Sphinx silhouette -->
+<g fill="#ad8a55" stroke="#775a35" stroke-width="2"><path d="M815 278q20-16 43-8l25 13 36 4-12 12-55 2-42-7z"/><path d="M838 268l-2-19 14-17 13 19-4 17z"/><path d="M852 249l-3-17 11 7 6 15" fill="none"/></g>
+<!-- Saqqara stepped pyramid -->
+<g stroke="#795b35" stroke-width="2" fill="#c5a36a"><path d="M600 337h135l-12-18h-111l-12 18z"/><path d="M610 319h115l-12-17h-91z"/><path d="M621 302h92l-12-16h-68z"/><path d="M634 286h66l-12-15h-42z"/><path d="M647 271h40l-9-13h-23z"/></g>
+<!-- temple colonnades in Upper Egypt -->
+<g stroke="#795e3d" stroke-width="2" fill="#d0b27b">
+ <path d="M795 470h130v13H795zM805 484h8v46h-8zM829 484h8v46h-8zM853 484h8v46h-8zM877 484h8v46h-8zM901 484h8v46h-8zM795 530h130v9H795z"/>
+ <path d="M805 470l12-18 12 18M853 470l12-18 12 18M901 470l12-18 12 18" fill="none"/>
+</g>
+<g stroke="#795e3d" stroke-width="2" fill="#c7a66c">
+ <path d="M770 594h145v12H770zM780 606h7v42h-7zM808 606h7v42h-7zM836 606h7v42h-7zM864 606h7v42h-7zM892 606h7v42h-7zM770 648h145v10H770z"/>
+ <path d="M780 594l10-18 10 18M835 594l10-18 10 18M890 594l10-18 10 18" fill="none"/>
+</g>
+<!-- Abu Simbel rock-cut facade in the far south -->
+<g stroke="#765633" stroke-width="2" fill="#b99560">
+ <path d="M570 715l18-54 112-10 22 64z"/>
+ <path d="M594 707v-38q12-30 24 0v38M628 707v-40q12-30 24 0v40M662 707v-40q12-30 24 0v40" fill="#c9a874"/>
+ <path d="M588 714h123M602 680h94" fill="none"/>
+</g>
+<!-- obelisks and smaller archaeological silhouettes -->
+<g fill="#c5a36b" stroke="#795c38" stroke-width="2">
+ <path d="M995 400l11-74 11 74zM990 400h32v7h-32zM1022 470l9-59 9 59zM1017 470h28v6h-28z"/>
+ <path d="M510 470l10-58 10 58zM505 470h30v7h-30z"/>
+</g>
+<g fill="none" stroke="#98794e" stroke-width="2" opacity=".7">
+ <path d="M540 390q45-22 90 0M545 400q40-18 80 0M970 680q35-20 70 0M980 690q30-16 60 0"/>
+ <path d="M110 120l18-20 18 20m-36 0h36M1250 710l18-20 18 20m-36 0h36"/>
+</g>
+<!-- decorative cartographic compass and rosette -->
+<g transform="translate(180 145)" fill="none" stroke="#98784b" stroke-width="2" opacity=".8"><circle r="38"/><circle r="5" fill="#98784b"/><path d="M0-53L8-8 0 0-8-8zM53 0L8 8 0 0 8-8zM0 53L-8 8 0 0 8 8zM-53 0L-8-8 0 0-8 8z"/></g>
+<g transform="translate(1210 135)" fill="none" stroke="#a18352" stroke-width="2" opacity=".7"><circle r="28"/><circle r="18"/><path d="M0-42V42M-42 0H42M-29-29L29 29M29-29L-29 29"/></g>
+<!-- fine route dashes -->
+<g fill="none" stroke="#9b7948" stroke-width="2" stroke-dasharray="4 8" opacity=".55"><path d="M315 180Q410 230 470 315T590 450M960 300Q1030 390 1060 475T1100 630M330 610Q430 590 500 640"/></g>
+</svg>
