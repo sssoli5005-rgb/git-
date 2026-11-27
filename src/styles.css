@@ -1656,3 +1656,113 @@ body {
   background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Pyramid_of_Djoser_excavation.jpg?width=1400");
   background-position: center 42%;
 }
+
+
+/* Focused polish for the five independent ATHARA heritage experience cards only. */
+.athara-experiences-heading p {
+  color: #d5c3a2;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.athara-experience-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px;
+}
+.athara-experience-card {
+  grid-column: span 2;
+  min-height: 248px;
+  padding: 22px;
+  isolation: isolate;
+  background-size: cover;
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background-size .35s ease;
+}
+.athara-experience-card:nth-child(4) { grid-column: 2 / span 2; }
+.athara-experience-card:nth-child(5) { grid-column: 4 / span 2; }
+.athara-experience-card:before {
+  background: linear-gradient(180deg, #100b0830 0%, #100b0866 35%, #080604f2 100%);
+}
+.athara-experience-card:hover,
+.athara-experience-card:focus-visible {
+  z-index: 2;
+  transform: translateY(-5px);
+  border-color: #e7bd69;
+  box-shadow: 0 10px 28px #0009, 0 0 0 1px #d3a44f88, 0 0 22px #d3a44f35;
+  background-size: 108% 108%;
+  outline: none;
+}
+.athara-experience-card:focus-visible {
+  outline: 2px solid #f3d48f;
+  outline-offset: 3px;
+}
+.athara-experience-symbol { display: none !important; }
+.athara-experience-icon {
+  top: 19px;
+  inset-inline-start: 20px;
+  inset-inline-end: auto;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #e2bd75bb;
+  border-radius: 50%;
+  color: #ffe0a0;
+  background: #171008d9;
+  box-shadow: 0 3px 14px #0008;
+}
+.athara-experience-copy strong {
+  font-size: 18px;
+  line-height: 1.5;
+}
+.athara-experience-copy small {
+  color: #fff0d5;
+  font-size: 15px;
+  line-height: 1.75;
+  margin-top: 7px;
+  max-width: 100%;
+  text-shadow: 0 2px 7px #000;
+}
+.athara-experience-open {
+  font-size: 13px;
+  font-weight: 700;
+}
+.athara-art-map {
+  min-height: 270px;
+  border-color: #c29a58;
+}
+@media (max-width: 760px) {
+  .athara-experience-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 11px;
+  }
+  .athara-experience-card,
+  .athara-experience-card:nth-child(4),
+  .athara-experience-card:nth-child(5) {
+    grid-column: auto;
+    min-height: 205px;
+    padding: 16px;
+  }
+  .athara-experience-card:nth-child(5) {
+    grid-column: 1 / -1;
+    width: calc(50% - 6px);
+    justify-self: center;
+  }
+  .athara-experience-copy strong { font-size: 16px; }
+  .athara-experience-copy small { font-size: 14px; }
+  .athara-experiences-heading p { font-size: 14px; }
+}
+@media (max-width: 430px) {
+  .athara-experience-grid { grid-template-columns: 1fr; }
+  .athara-experience-card,
+  .athara-experience-card:nth-child(4),
+  .athara-experience-card:nth-child(5) {
+    grid-column: 1;
+    width: 100%;
+    min-height: 180px;
+  }
+  .athara-experience-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .athara-experience-copy small { font-size: 14px; }
+}
