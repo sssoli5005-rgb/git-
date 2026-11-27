@@ -1,22 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" role="img" aria-label="Simple map of ancient Egypt showing the Nile, Delta and archaeological regions">
-<defs>
- <pattern id="paper" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="4" cy="6" r="1" fill="#8e744c" opacity=".12"/></pattern>
-</defs>
-<rect width="800" height="560" rx="18" fill="#eee1c2"/>
-<rect width="800" height="560" rx="18" fill="url(#paper)"/>
-<path d="M245 48 L545 48 L585 118 L560 188 L525 250 L500 335 L490 505 L310 505 L300 410 L280 330 L250 255 L225 175 L225 95 Z" fill="#d7c49a" stroke="#96794d" stroke-width="5" stroke-linejoin="round"/>
-<path d="M400 112 L280 45 L250 25 L385 78 L400 112 L520 32 L555 20 L425 85 Z" fill="#d7c49a" stroke="#96794d" stroke-width="4" stroke-linejoin="round"/>
-<path d="M400 112 C390 165 420 210 400 265 S390 370 400 440 L400 500" fill="none" stroke="#4d9692" stroke-width="23" stroke-linecap="round"/>
-<path d="M400 112 L330 57 M400 112 L470 52 M400 112 L275 38 M400 112 L525 28" fill="none" stroke="#4d9692" stroke-width="12" stroke-linecap="round"/>
-<path d="M400 112 C390 165 420 210 400 265 S390 370 400 440 L400 500" fill="none" stroke="#d7efdc" stroke-width="3" stroke-dasharray="7 11" stroke-linecap="round"/>
-<g fill="#8b744f" font-family="Arial,sans-serif" font-size="20" font-weight="600">
- <text x="400" y="20" text-anchor="middle">دلتا النيل</text>
- <text x="435" y="310">وادي النيل</text>
- <text x="400" y="540" text-anchor="middle" font-size="16">مصر القديمة · خريطة مبسطة للمواقع الأثرية</text>
-</g>
-<g fill="none" stroke="#b99b68" stroke-width="2" opacity=".8">
- <path d="M115 150h90M595 150h90M115 410h90M595 410h90"/>
- <circle cx="155" cy="150" r="28"/><circle cx="645" cy="150" r="28"/>
- <circle cx="155" cy="410" r="28"/><circle cx="645" cy="410" r="28"/>
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-label="Illustrated map of ancient Egypt with the Nile Delta, Nile Valley, Sinai and archaeological regions">
+<defs><pattern id="grain" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="4" cy="6" r="1.2" fill="#9b8050" opacity=".16"/><circle cx="19" cy="20" r=".8" fill="#9b8050" opacity=".12"/></pattern><linearGradient id="sand" x2="0" y2="1"><stop stop-color="#f3e6c7"/><stop offset="1" stop-color="#d9c59a"/></linearGradient><linearGradient id="land" x2="1" y2="1"><stop stop-color="#e6d4ac"/><stop offset="1" stop-color="#c9b184"/></linearGradient><linearGradient id="water" x2="0" y2="1"><stop stop-color="#8db9b4"/><stop offset="1" stop-color="#4d8888"/></linearGradient></defs>
+<rect width="1200" height="700" fill="url(#sand)"/><rect width="1200" height="700" fill="url(#grain)"/>
+<path d="M0 0H1200V75Q900 98 650 65Q350 38 0 82Z" fill="#8eb9b7" opacity=".88"/><text x="600" y="42" text-anchor="middle" font-family="Georgia,serif" font-size="24" letter-spacing="5" fill="#315f60">MEDITERRANEAN SEA</text>
+<path d="M1040 170Q1100 260 1060 380T1110 700H1200V140Z" fill="#83b5b1" opacity=".85"/><text x="1100" y="420" transform="rotate(78 1100 420)" text-anchor="middle" font-family="Georgia,serif" font-size="21" letter-spacing="4" fill="#315f60">RED SEA</text>
+<path d="M420 112L560 120L650 158L745 115L830 132L905 205L870 286L825 370L810 475L795 700H500L505 602L470 510L450 395L410 300L385 205Z" fill="url(#land)" stroke="#9c8051" stroke-width="5"/>
+<path d="M830 132L945 165L1010 250L950 320L865 285Z" fill="#e2cfaa" stroke="#9c8051" stroke-width="4"/>
+<path d="M665 178L610 135L540 93L575 80L675 144L740 88L780 99L695 164L665 178Z" fill="#d8c297" stroke="#9c8051" stroke-width="4"/>
+<path d="M666 178C652 238 690 276 672 330S660 420 678 480S680 590 674 700" fill="none" stroke="url(#water)" stroke-width="35" stroke-linecap="round"/><path d="M666 178L570 111M666 178L620 90M666 178L735 100M666 178L790 118" fill="none" stroke="#6ea6a1" stroke-width="20" stroke-linecap="round"/><path d="M666 178C652 238 690 276 672 330S660 420 678 480S680 590 674 700" fill="none" stroke="#dce9d8" stroke-width="3" stroke-dasharray="10 14"/>
+<g font-family="Georgia,serif" fill="#826a45" opacity=".88"><text x="260" y="245" font-size="30" letter-spacing="4">WESTERN DESERT</text><text x="900" y="515" font-size="25" letter-spacing="3">EASTERN DESERT</text><text x="535" y="225" font-size="22" font-weight="bold">NILE DELTA</text><text x="730" y="410" font-size="23" font-weight="bold">NILE VALLEY</text><text x="560" y="665" font-size="22">UPPER EGYPT</text><text x="855" y="210" font-size="20">SINAI</text></g>
+<g fill="none" stroke="#b0915d" stroke-width="2" opacity=".6"><path d="M110 170h130M110 520h130M930 100h90M920 610h120"/><circle cx="175" cy="170" r="35"/><circle cx="175" cy="520" r="35"/><circle cx="980" cy="100" r="30"/><circle cx="1010" cy="610" r="35"/></g><g font-family="Georgia,serif" fill="#806844" opacity=".8"><text x="55" y="650" font-size="18" letter-spacing="3">ANCIENT EGYPT</text><text x="1140" y="675" text-anchor="end" font-size="15">N ↑</text></g></svg>
