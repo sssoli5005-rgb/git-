@@ -579,7 +579,7 @@ export function HeritageExperiences() {
   const [active, setActive] = useState<FeatureId | null>(null);
   const [selectedSite, setSelectedSite] = useState(sites[0].id);
   const [selectedMapPin, setSelectedMapPin] = useState("giza");
-  const [mapCategory, setMapCategory] = useState<keyof typeof siteMapCategories | "all">("all");
+  const [mapCategory, setMapCategory] = useState<keyof typeof mapLegendNames.en>("all");
   const [period, setPeriod] = useState("all");
   const [firstArtifact, setFirstArtifact] = useState("djoser");
   const [secondArtifact, setSecondArtifact] = useState("khufu");
