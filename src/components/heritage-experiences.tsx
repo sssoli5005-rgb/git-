@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import "./athara-illustrated-map.css";
 import {
   Clock3,
   MapPinned,
@@ -284,6 +285,29 @@ const sites: Site[] = [
   },
 ];
 
+const mapPins = [
+  { id: "alexandria", number: 1, name: "الإسكندرية", left: 39, top: 12.7, siteIds: ["tanis"] },
+  { id: "mansoura", number: 2, name: "المنصورة", left: 54, top: 13, siteIds: ["hawara"] },
+  { id: "giza", number: 3, name: "أهرامات الجيزة", left: 42.7, top: 28.5, siteIds: ["giza", "saqqara", "dahshur", "memphis"] },
+  { id: "suez", number: 4, name: "قناة السويس", left: 61.5, top: 22.7, siteIds: ["amarna"] },
+  { id: "luxor", number: 5, name: "الأقصر", left: 55.8, top: 45, siteIds: ["karnak", "luxor-west-bank", "deir-el-medina"] },
+  { id: "aswan", number: 6, name: "أسوان", left: 60.4, top: 59, siteIds: ["edfu", "philae", "abydos"] },
+  { id: "abu-simbel", number: 7, name: "معبد أبو سمبل", left: 40.3, top: 67.4, siteIds: ["abu-simbel"] },
+] as const;
+
+const siteMapCategories: Record<string, "temples" | "pyramids" | "tombs" | "museums" | "fortresses" | "other"> = {
+  giza: "pyramids", karnak: "temples", "abu-simbel": "temples", saqqara: "tombs",
+  hawara: "pyramids", tanis: "tombs", "luxor-west-bank": "tombs", "deir-el-medina": "tombs",
+  edfu: "temples", philae: "temples", dahshur: "pyramids", abydos: "temples",
+  amarna: "other", memphis: "temples",
+};
+
+const mapLegendNames = {
+  ar: { all: "الكل", temples: "المعابد", pyramids: "الأهرامات", tombs: "المقابر", museums: "المتاحف", fortresses: "القلاع", other: "الآثار الأخرى" },
+  en: { all: "All", temples: "Temples", pyramids: "Pyramids", tombs: "Tombs", museums: "Museums", fortresses: "Fortresses", other: "Other antiquities" },
+  de: { all: "Alle", temples: "Tempel", pyramids: "Pyramiden", tombs: "Gräber", museums: "Museen", fortresses: "Festungen", other: "Weitere Altertümer" },
+} as const;
+
 const artifacts = [
   { id: "djoser", name: "هرم زوسر المدرج", period: "الدولة القديمة – الأسرة الثالثة", function: "مجمع جنائزي ملكي", material: "الحجر الجيري", significance: "مرحلة مبكرة بارزة في تطور بناء الأهرامات والعمارة الحجرية." },
   { id: "khufu", name: "هرم خوفو", period: "الدولة القديمة – الأسرة الرابعة", function: "هرم جنائزي ملكي", material: "الحجر الجيري والجرانيت", significance: "أكبر أهرامات الجيزة، ويعكس قدرات تنظيمية وهندسية كبيرة." },
@@ -554,6 +578,8 @@ export function HeritageExperiences() {
   const optionNames = researcherOptionNames[lang as keyof typeof researcherOptionNames] ?? null;
   const [active, setActive] = useState<FeatureId | null>(null);
   const [selectedSite, setSelectedSite] = useState(sites[0].id);
+  const [selectedMapPin, setSelectedMapPin] = useState("giza");
+  const [mapCategory, setMapCategory] = useState<keyof typeof siteMapCategories | "all">("all");
   const [period, setPeriod] = useState("all");
   const [firstArtifact, setFirstArtifact] = useState("djoser");
   const [secondArtifact, setSecondArtifact] = useState("khufu");
@@ -658,16 +684,30 @@ export function HeritageExperiences() {
                     </select>
                   </label>
                 </div>
-                <div className="athara-schematic-map" role="group" aria-label={c.map}>
-                  <span className="athara-map-compass">𓇳 N</span>
-                  {visibleSites.map((site, index) => (
-                    <button key={site.id} type="button" className={`athara-map-pin ${selectedSite === site.id ? "is-selected" : ""}`} style={{ left: `${site.x}%`, top: `${site.y}%` }} onClick={() => setSelectedSite(site.id)} title={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name} aria-label={optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}>
-                      <span>{index + 1}</span><small>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}</small>
+                <div className="athara-map-legend" role="group" aria-label={c.map}>
+                  {(["all", "temples", "pyramids", "tombs", "museums", "fortresses", "other"] as const).map((category) => (
+                    <button key={category} type="button" className={mapCategory === category ? "is-active" : ""} aria-pressed={mapCategory === category} onClick={() => setMapCategory(category)}>
+                      {mapLegendNames[lang as keyof typeof mapLegendNames]?.[category] ?? mapLegendNames.en[category]}
+                    </button>
+                  ))}
+                </div>
+                <div className="athara-illustrated-map" role="group" aria-label={c.map}>
+                  <span className="athara-illustrated-map-title" aria-hidden="true">مصر · أرض الحضارة</span>
+                  {mapPins.filter((pin) => {
+                    const members = pin.siteIds.map((id) => sites.find((site) => site.id === id)).filter(Boolean) as Site[];
+                    return members.some((site) => visibleSites.some((visible) => visible.id === site.id) && (mapCategory === "all" || siteMapCategories[site.id] === mapCategory));
+                  }).map((pin) => (
+                    <button key={pin.id} type="button" className={`athara-illustrated-map-pin ${selectedMapPin === pin.id ? "is-selected" : ""}`} style={{ left: `${pin.left}%`, top: `${pin.top}%` }} onClick={() => {
+                      setSelectedMapPin(pin.id);
+                      const firstSite = pin.siteIds.map((id) => sites.find((site) => site.id === id)).find((site) => site && visibleSites.some((visible) => visible.id === site.id) && (mapCategory === "all" || siteMapCategories[site.id] === mapCategory));
+                      if (firstSite) setSelectedSite(firstSite.id);
+                    }} title={pin.name} aria-label={pin.name}>
+                      <span>{pin.number}</span><small>{pin.name}</small>
                     </button>
                   ))}
                 </div>
                 <nav className="athara-map-site-list" aria-label={c.chooseSite}>
-                  {visibleSites.map((site, index) => (
+                  {mapPins.filter((pin) => pin.id === selectedMapPin).flatMap((pin) => pin.siteIds.map((id) => sites.find((site) => site.id === id)).filter((site): site is Site => Boolean(site))).filter((site) => visibleSites.some((visible) => visible.id === site.id) && (mapCategory === "all" || siteMapCategories[site.id] === mapCategory)).map((site, index) => (
                     <button key={site.id} type="button" className={selectedSite === site.id ? "is-selected" : ""} onClick={() => setSelectedSite(site.id)}>
                       <span>{index + 1}</span>{optionNames?.sites[site.id as keyof typeof researcherOptionNames.fr.sites] ?? site.name}
                     </button>
