@@ -1,0 +1,74 @@
+.athara-map-legend {
+  display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px;
+}
+.athara-map-legend button {
+  padding:7px 12px; border:1px solid #98713d; border-radius:999px;
+  color:#e8d2a6; background:#21170f; font:inherit; font-size:12px;
+  transition:background .2s,border-color .2s,transform .2s;
+}
+.athara-map-legend button:hover,
+.athara-map-legend button.is-active {
+  color:#21170d; background:linear-gradient(135deg,#f0d18b,#bd873a);
+  border-color:#ffe3a4; transform:translateY(-1px);
+}
+.athara-illustrated-map {
+  position:relative; width:100%; aspect-ratio:3 / 2; min-height:0;
+  overflow:hidden; isolation:isolate; direction:ltr;
+  border:3px solid #bd914b; border-radius:8px;
+  background:#d5a85f url("/heritage-experiences/egypt-map.webp") center / 100% 100% no-repeat;
+  box-shadow:inset 0 0 22px #20120566,0 10px 28px #0007;
+}
+.athara-illustrated-map:after {
+  content:""; position:absolute; inset:7px; border:1px solid #f3d38a99;
+  pointer-events:none; z-index:1;
+}
+.athara-illustrated-map-title {
+  position:absolute; z-index:2; left:50%; bottom:2.4%;
+  transform:translateX(-50%); padding:5px 16px; border:1px solid #9b6c2e;
+  border-radius:6px; color:#4a2b0d; background:#f1d18cdd;
+  font-size:clamp(10px,1.5vw,17px); font-weight:900; white-space:nowrap;
+  box-shadow:0 2px 8px #29170766;
+}
+.athara-illustrated-map-pin {
+  position:absolute; z-index:3; left:0; top:0; transform:translate(-50%,-100%);
+  display:grid; place-items:center; width:clamp(25px,3.2vw,39px);
+  height:clamp(31px,4vw,47px); padding:0 0 5px; border:2px solid #fff1c9;
+  border-radius:55% 55% 55% 8%; rotate:-45deg;
+  color:#fff; background:linear-gradient(145deg,#2584db,#06427f);
+  box-shadow:0 2px 7px #000b,0 0 0 2px #a36f2d;
+  cursor:pointer; animation:athara-map-pin-pulse 3.8s ease-in-out infinite;
+  transition:filter .18s,scale .18s,box-shadow .18s;
+}
+.athara-illustrated-map-pin > span {
+  rotate:45deg; font-size:clamp(11px,1.5vw,16px); line-height:1; font-weight:900;
+}
+.athara-illustrated-map-pin small {
+  position:absolute; left:50%; bottom:calc(100% + 7px); transform:translateX(-50%) rotate(45deg);
+  padding:4px 8px; border:1px solid #e4bd70; border-radius:5px;
+  color:#2c1a0b; background:#f4dfb4; font:700 clamp(10px,1.2vw,13px)/1.3 "Cairo","Tajawal",sans-serif;
+  white-space:nowrap; opacity:0; visibility:hidden; pointer-events:none;
+  box-shadow:0 3px 10px #0008; transition:opacity .16s,visibility .16s;
+}
+.athara-illustrated-map-pin:hover,
+.athara-illustrated-map-pin:focus-visible,
+.athara-illustrated-map-pin.is-selected {
+  z-index:5; scale:1.18; filter:brightness(1.14);
+  box-shadow:0 3px 12px #000c,0 0 0 3px #f3d48c;
+  outline:none;
+}
+.athara-illustrated-map-pin:hover small,
+.athara-illustrated-map-pin:focus-visible small,
+.athara-illustrated-map-pin.is-selected small { opacity:1; visibility:visible; }
+.athara-illustrated-map-pin:focus-visible { outline:3px solid #fff; outline-offset:4px; }
+.athara-map-site-list:empty { display:none; }
+@keyframes athara-map-pin-pulse {
+  0%,100% { box-shadow:0 2px 7px #000b,0 0 0 2px #a36f2d; }
+  50% { box-shadow:0 2px 9px #000b,0 0 0 5px #e7c16c44; }
+}
+@media(max-width:760px) {
+  .athara-illustrated-map { width:100%; aspect-ratio:3 / 2; border-width:2px; }
+  .athara-illustrated-map-pin small { font-size:10px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .athara-illustrated-map-pin { animation:none; transition:none; }
+}
